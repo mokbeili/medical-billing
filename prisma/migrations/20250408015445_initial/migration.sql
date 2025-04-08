@@ -42,12 +42,21 @@ CREATE TABLE "billing_codes" (
     "title" TEXT NOT NULL,
     "description" TEXT,
     "section_id" INTEGER NOT NULL,
-    "openai_embedding" vector,
+    "openai_embedding" TEXT NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
-
+    "code_class" TEXT,
+    "anes" TEXT,
+    "details" TEXT,
+    "general_practice_cost" TEXT,
+    "specialist_price" TEXT,
+    "referred_price" TEXT,
+    "non_referred_price" TEXT,
     CONSTRAINT "billing_codes_pkey" PRIMARY KEY ("id")
 );
+
+-- CreateIndex
+CREATE INDEX "billing_codes_section_id_idx" ON "billing_codes"("section_id");
 
 -- AddForeignKey
 ALTER TABLE "jurisdictions" ADD CONSTRAINT "jurisdictions_provider_id_fkey" FOREIGN KEY ("provider_id") REFERENCES "providers"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

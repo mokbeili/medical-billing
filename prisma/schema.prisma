@@ -47,15 +47,41 @@ model Section {
 }
 
 model BillingCode {
-  id               Int      @id @default(autoincrement())
-  code             String
-  title            String
-  description      String?
-  openai_embedding String   @db.Text
-  section_id       Int
-  section          Section  @relation(fields: [section_id], references: [id])
-  created_at       DateTime @default(now())
-  updated_at       DateTime @updatedAt
+  id                    Int      @id @default(autoincrement())
+  code                  String
+  title                 String
+  description           String?
+  section_id            Int
+  openai_embedding      String   @db.Text
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+  code_class            String?
+  anes                  String?
+  details               String?
+  general_practice_cost String?
+  specialist_price      String?
+  referred_price        String?
+  non_referred_price    String?
+  section               Section  @relation(fields: [section_id], references: [id])
 
   @@index([section_id])
+  @@map("billing_codes")
+}
+
+enum Role {
+  PATIENT
+  PHYSICIAN
+  ADMIN
+}
+
+model User {
+  id                Int      @id @default(autoincrement())
+  email             String   @unique
+  password_hash     String
+  roles             Role[]
+  encrypted_address String?
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  @@map("users")
 }
