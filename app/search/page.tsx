@@ -26,33 +26,52 @@ interface SearchResponse {
     | "ai_refined";
   results: SearchResult[];
   refined_selection?: string;
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
 }
 
 export default function SearchPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 20;
 
   // Debounce the search query
-
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedQuery(searchQuery);
+      setCurrentPage(1); // Reset to first page on new search
     }, 300);
 
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
   const { data: searchResponse, isLoading } = useQuery<SearchResponse>({
-    queryKey: ["search", debouncedQuery],
+    queryKey: ["search", debouncedQuery, currentPage],
     queryFn: async () => {
-      if (!debouncedQuery) return { type: "exact_code", results: [] };
+      if (!debouncedQuery)
+        return {
+          type: "exact_code",
+          results: [],
+          pagination: { page: 1, limit: pageSize, total: 0, totalPages: 0 },
+        };
       const response = await axios.get(
-        `/api/search?query=${encodeURIComponent(debouncedQuery)}`
+        `/api/search?query=${encodeURIComponent(
+          debouncedQuery
+        )}&page=${currentPage}&limit=${pageSize}`
       );
       return response.data;
     },
     enabled: !!debouncedQuery,
   });
+
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(newPage);
+  };
 
   const getSearchTypeLabel = (type: string) => {
     switch (type) {
@@ -127,32 +146,49 @@ export default function SearchPage() {
             <div className="space-y-4">
               {searchResponse.results.map((result) => (
                 <div
-                  key={result.id}
-                  className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow"
+                  key={result.code}
+                  className="p-4 border rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   <div className="flex justify-between items-start">
                     <div>
-                      <h3 className="text-xl font-semibold text-blue-600">
-                        {result.code}
-                      </h3>
-                      <p className="text-gray-800 font-medium">
-                        {result.title}
-                      </p>
+                      <h3 className="text-lg font-semibold">{result.title}</h3>
+                      <p className="text-sm text-gray-600">{result.code}</p>
+                      {result.description && (
+                        <p className="mt-2 text-gray-700">
+                          {result.description}
+                        </p>
+                      )}
                     </div>
                     <div className="text-sm text-gray-500">
-                      Section: {result.section.code} - {result.section.title}
+                      {result.section.title} ({result.section.code})
                     </div>
                   </div>
-                  {result.description && (
-                    <p className="mt-2 text-gray-700">{result.description}</p>
-                  )}
-                  {result.similarity && (
-                    <div className="mt-2 text-sm text-gray-500">
-                      Similarity Score: {(result.similarity * 100).toFixed(1)}%
-                    </div>
-                  )}
                 </div>
               ))}
+
+              {searchResponse.pagination.totalPages > 1 && (
+                <div className="flex justify-center space-x-2 mt-6">
+                  <button
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="px-4 py-2 border rounded-md disabled:opacity-50"
+                  >
+                    Previous
+                  </button>
+                  <span className="px-4 py-2">
+                    Page {currentPage} of {searchResponse.pagination.totalPages}
+                  </span>
+                  <button
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={
+                      currentPage === searchResponse.pagination.totalPages
+                    }
+                    className="px-4 py-2 border rounded-md disabled:opacity-50"
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-center py-8 text-gray-500">

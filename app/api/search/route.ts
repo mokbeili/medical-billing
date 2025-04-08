@@ -7,9 +7,54 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+interface RawSearchResult {
+  id: number;
+  code: string;
+  title: string;
+  description: string | null;
+  section: {
+    code: string;
+    title: string;
+  };
+  similarity: number;
+}
+
+interface SearchResult {
+  code: string;
+  title: string;
+  description: string | null;
+  section: {
+    code: string;
+    title: string;
+  };
+}
+
+interface SearchResponse {
+  type:
+    | "exact_code"
+    | "partial_code"
+    | "exact_title"
+    | "synonym"
+    | "ai"
+    | "ai_strict"
+    | "ai_refined";
+  results: SearchResult[];
+  refined_selection?: string;
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+const VECTOR_SEARCH_LIMIT = 100;
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const query = searchParams.get("query");
+  const page = parseInt(searchParams.get("page") || "1");
+  const limit = parseInt(searchParams.get("limit") || "20");
 
   if (!query) {
     return NextResponse.json(
@@ -19,102 +64,161 @@ export async function GET(request: Request) {
   }
 
   try {
-    // 1. Exact code match
-    const exactCodeMatches = await prisma.billingCode.findMany({
+    // First try exact code match
+    const exactCodeMatch = await prisma.billingCode.findFirst({
       where: {
         code: query,
       },
       select: {
-        id: true,
         code: true,
         title: true,
         description: true,
-        section: {
-          select: {
-            code: true,
-            title: true,
-          },
-        },
+        section: true,
       },
     });
 
-    if (exactCodeMatches.length > 0) {
+    if (exactCodeMatch) {
       return NextResponse.json({
         type: "exact_code",
-        results: exactCodeMatches,
+        results: [exactCodeMatch],
+        pagination: {
+          page: 1,
+          limit: 1,
+          total: 1,
+          totalPages: 1,
+        },
       });
     }
 
-    // 2. Exact title match
-    const exactTitleMatches = await prisma.billingCode.findMany({
-      where: {
-        title: {
-          contains: query,
-          mode: "insensitive",
+    // Try partial code match if no exact match
+    const [partialCodeMatches, totalPartialMatches] = await Promise.all([
+      prisma.billingCode.findMany({
+        where: {
+          code: {
+            contains: query,
+            mode: "insensitive",
+          },
         },
+        select: {
+          code: true,
+          title: true,
+          description: true,
+          section: true,
+        },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.billingCode.count({
+        where: {
+          code: {
+            contains: query,
+            mode: "insensitive",
+          },
+        },
+      }),
+    ]);
+
+    if (partialCodeMatches.length > 0) {
+      return NextResponse.json({
+        type: "partial_code",
+        results: partialCodeMatches,
+        pagination: {
+          page,
+          limit,
+          total: totalPartialMatches,
+          totalPages: Math.ceil(totalPartialMatches / limit),
+        },
+      });
+    }
+
+    // Then try exact title match
+    const exactTitleMatch = await prisma.billingCode.findFirst({
+      where: {
+        title: query,
       },
       select: {
-        id: true,
         code: true,
         title: true,
         description: true,
-        section: {
-          select: {
-            code: true,
-            title: true,
-          },
-        },
+        section: true,
       },
     });
 
-    if (exactTitleMatches.length > 0) {
+    if (exactTitleMatch) {
       return NextResponse.json({
         type: "exact_title",
-        results: exactTitleMatches,
+        results: [exactTitleMatch],
+        pagination: {
+          page: 1,
+          limit: 1,
+          total: 1,
+          totalPages: 1,
+        },
       });
     }
 
-    // 3. Synonym search in title and description
-    const synonymMatches = await prisma.billingCode.findMany({
-      where: {
-        OR: [
-          {
-            title: {
-              contains: query,
-              mode: "insensitive",
+    // Then try synonym match
+    const [synonymMatches, totalSynonymMatches] = await Promise.all([
+      prisma.billingCode.findMany({
+        where: {
+          OR: [
+            {
+              title: {
+                contains: query,
+                mode: "insensitive",
+              },
             },
-          },
-          {
-            description: {
-              contains: query,
-              mode: "insensitive",
+            {
+              description: {
+                contains: query,
+                mode: "insensitive",
+              },
             },
-          },
-        ],
-      },
-      select: {
-        id: true,
-        code: true,
-        title: true,
-        description: true,
-        section: {
-          select: {
-            code: true,
-            title: true,
-          },
+          ],
         },
-      },
-      take: 100,
-    });
+        select: {
+          code: true,
+          title: true,
+          description: true,
+          section: true,
+        },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.billingCode.count({
+        where: {
+          OR: [
+            {
+              title: {
+                contains: query,
+                mode: "insensitive",
+              },
+            },
+            {
+              description: {
+                contains: query,
+                mode: "insensitive",
+              },
+            },
+          ],
+        },
+      }),
+    ]);
 
     if (synonymMatches.length > 0) {
       return NextResponse.json({
         type: "synonym",
         results: synonymMatches,
+        pagination: {
+          page,
+          limit,
+          total: totalSynonymMatches,
+          totalPages: Math.ceil(totalSynonymMatches / limit),
+        },
       });
     }
 
-    // 4. AI embeddings search - First try strict matching
+    // If no matches found, proceed with AI search
     const embedding = await openai.embeddings.create({
       model: "text-embedding-ada-002",
       input: query,
@@ -124,7 +228,7 @@ export async function GET(request: Request) {
     const embeddingString = `[${embeddingArray.join(",")}]`;
 
     // First try: Strict matching with high similarity threshold
-    const strictMatches = await prisma.$queryRaw`
+    const strictMatches = await prisma.$queryRaw<RawSearchResult[]>`
       SELECT 
         bc.id,
         bc.code,
@@ -140,18 +244,32 @@ export async function GET(request: Request) {
       WHERE bc.openai_embedding IS NOT NULL
         AND 1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) > 0.85
       ORDER BY similarity DESC
-      LIMIT 5
+      LIMIT ${limit}
+      OFFSET ${(page - 1) * limit}
     `;
 
     if (strictMatches.length > 0) {
+      const totalStrictMatches = await prisma.$queryRaw<{ count: number }[]>`
+        SELECT COUNT(*) as count
+        FROM billing_codes bc
+        WHERE bc.openai_embedding IS NOT NULL
+          AND 1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) > 0.85
+      `;
+
       return NextResponse.json({
         type: "ai_strict",
         results: strictMatches,
+        pagination: {
+          page,
+          limit,
+          total: Number(totalStrictMatches[0].count),
+          totalPages: Math.ceil(Number(totalStrictMatches[0].count) / limit),
+        },
       });
     }
 
     // Second try: Broader matching with GPT refinement
-    const broaderMatches = await prisma.$queryRaw`
+    const broaderMatches = await prisma.$queryRaw<RawSearchResult[]>`
       SELECT 
         bc.id,
         bc.code,
@@ -167,13 +285,13 @@ export async function GET(request: Request) {
       WHERE bc.openai_embedding IS NOT NULL
         AND 1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) > 0.1
       ORDER BY similarity DESC
-      LIMIT 100
+      LIMIT ${VECTOR_SEARCH_LIMIT}
     `;
 
     if (broaderMatches.length > 0) {
       const matchesText = broaderMatches
         .map(
-          (match: any) =>
+          (match) =>
             `Code: ${match.code}\nTitle: ${match.title}\nDescription: ${
               match.description || "N/A"
             }\nSection: ${match.section.title}\nSimilarity: ${(
@@ -215,14 +333,26 @@ Selected Codes:
 
       return NextResponse.json({
         type: "ai_refined",
-        results: broaderMatches,
+        results: broaderMatches.slice(0 + page * limit, 20 + page * limit),
         refined_selection: completion.choices[0].message.content,
+        pagination: {
+          page,
+          limit,
+          total: Number(broaderMatches.length),
+          totalPages: Math.ceil(Number(broaderMatches.length) / limit),
+        },
       });
     }
 
     return NextResponse.json({
       type: "ai",
       results: [],
+      pagination: {
+        page: 1,
+        limit,
+        total: 0,
+        totalPages: 0,
+      },
     });
   } catch (error) {
     console.error("Search error:", error);
