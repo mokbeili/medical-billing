@@ -2,10 +2,33 @@
 
 import { Menu } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 export default function Navbar({ onMenuClick }: { onMenuClick: () => void }) {
   const pathname = usePathname();
+  const router = useRouter();
+
+  const handleSignOut = async () => {
+    try {
+      const res = await fetch("/api/auth/logout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error("Logout failed");
+      }
+
+      // Redirect to login page after successful logout
+      router.push("/login");
+      router.refresh(); // Refresh the page to clear any cached data
+    } catch (error) {
+      console.error("Logout error:", error);
+      // Optionally show an error message to the user
+    }
+  };
 
   return (
     <nav className="fixed top-0 w-full bg-white shadow-md z-50">
@@ -42,7 +65,10 @@ export default function Navbar({ onMenuClick }: { onMenuClick: () => void }) {
 
           {/* User Menu */}
           <div className="flex items-center">
-            <button className="ml-4 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+            <button
+              onClick={handleSignOut}
+              className="ml-4 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
+            >
               Sign Out
             </button>
           </div>
