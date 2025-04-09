@@ -1,15 +1,12 @@
-import { verify } from "jsonwebtoken";
+import { jwtVerify } from "jose";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 export async function middleware(request: NextRequest) {
   // Debug environment variables
-  console.log("JWT_SECRET length:", process.env.JWT_SECRET?.length);
   if (!process.env.JWT_SECRET) {
     console.error("JWT_SECRET is not set");
   }
-
-  const token = request.cookies.get("auth_token")?.value;
 
   // Paths that don't require authentication
   const publicPaths = [
@@ -21,16 +18,22 @@ export async function middleware(request: NextRequest) {
     "/api/auth/login",
   ];
 
+  // If it's a public path, allow access without token verification
   if (publicPaths.some((path) => request.nextUrl.pathname.startsWith(path))) {
     return NextResponse.next();
   }
+
+  // For protected routes, verify the token
+  const token = request.cookies.get("auth_token")?.value;
 
   if (!token) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
   try {
-    verify(token, process.env.JWT_SECRET!);
+    // Convert JWT_SECRET to Uint8Array for jose
+    const secret = new TextEncoder().encode(process.env.JWT_SECRET);
+    await jwtVerify(token, secret);
     return NextResponse.next();
   } catch (error) {
     console.error("JWT verification error:", error);
