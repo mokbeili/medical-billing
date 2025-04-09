@@ -7,7 +7,7 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Medical Billing Code Search",
-  description: "Search medical billing codes with multiple search capabilities",
+  description: "Professional medical billing code search platform",
 };
 
 export default function RootLayout({
@@ -16,8 +16,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className={inter.className}>
+    <html lang="en" className="h-full bg-gray-50">
+      <body className={`${inter.className} h-full`}>
         <Providers>{children}</Providers>
       </body>
     </html>

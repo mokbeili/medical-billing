@@ -48,7 +48,7 @@ interface SearchResponse {
   };
 }
 
-const VECTOR_SEARCH_LIMIT = 100;
+const VECTOR_SEARCH_LIMIT = 80;
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
