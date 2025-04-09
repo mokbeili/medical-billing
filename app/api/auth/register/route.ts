@@ -8,7 +8,6 @@ const prisma = new PrismaClient();
 export async function POST(request: Request) {
   try {
     // Debug environment variables
-    console.log("ENCRYPTION_KEY length:", process.env.ENCRYPTION_KEY?.length);
     if (!process.env.ENCRYPTION_KEY) {
       throw new Error("ENCRYPTION_KEY is not set");
     }
@@ -16,7 +15,6 @@ export async function POST(request: Request) {
     const { email, password, address, roles } = await request.json();
 
     // Debug request data
-    console.log("Received registration request for:", email);
 
     // Validate input
     if (!email || !password || !address) {
@@ -29,7 +27,6 @@ export async function POST(request: Request) {
     // Test encryption
     try {
       const testEncryption = encrypt("test");
-      console.log("Encryption test successful");
     } catch (encryptError) {
       console.error("Encryption test failed:", encryptError);
       throw encryptError;
@@ -41,7 +38,6 @@ export async function POST(request: Request) {
     });
 
     if (existingUser) {
-      console.log("Email already registered");
       return NextResponse.json(
         { error: "Email already registered" },
         { status: 400 }
@@ -52,7 +48,6 @@ export async function POST(request: Request) {
     const hashedPassword = await bcrypt.hash(password, 12);
     const encryptedAddress = encrypt(address);
 
-    console.log("Creating user");
     // Create user
     const user = await prisma.user.create({
       data: {
@@ -69,7 +64,6 @@ export async function POST(request: Request) {
       },
     });
 
-    console.log("User created successfully");
     return NextResponse.json(user, { status: 201 });
   } catch (error) {
     console.error("Registration error:", error);

@@ -33,13 +33,6 @@ async function populateVectors(
         code: true,
         title: true,
         description: true,
-        code_class: true,
-        anes: true,
-        details: true,
-        general_practice_cost: true,
-        specialist_price: true,
-        referred_price: true,
-        non_referred_price: true,
         section: {
           select: {
             title: true,
@@ -57,13 +50,6 @@ async function populateVectors(
         `Code: ${code.code}`,
         `Title: ${code.title}`,
         `Description: ${code.description || ""}`,
-        `Class: ${code.code_class || ""}`,
-        `Anesthesia: ${code.anes || ""}`,
-        `Details: ${code.details || ""}`,
-        `General Practice Cost: ${code.general_practice_cost || ""}`,
-        `Specialist Price: ${code.specialist_price || ""}`,
-        `Referred Price: ${code.referred_price || ""}`,
-        `Non-referred Price: ${code.non_referred_price || ""}`,
       ].join(" ");
 
       console.log(`Processing code ${code.code}`);
