@@ -75,13 +75,15 @@ enum Role {
 }
 
 model User {
-  id                Int      @id @default(autoincrement())
-  email             String   @unique
-  password_hash     String
-  roles             Role[]
-  encrypted_address String?
-  created_at        DateTime @default(now())
-  updated_at        DateTime @updatedAt
+  id                  Int       @id @default(autoincrement())
+  email               String    @unique
+  password_hash       String
+  encrypted_address   String?
+  roles               Role[]
+  reset_token         String?
+  reset_token_expires DateTime?
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
 
   @@map("users")
 }

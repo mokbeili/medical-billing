@@ -9,7 +9,6 @@ export const metadata: Metadata = {
   title: "Medical Billing Code Search",
   description: "Professional medical billing code search platform",
 };
-
 export default function RootLayout({
   children,
 }: {

@@ -1,11 +1,8 @@
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { sign } from "jsonwebtoken";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-
-const prisma = new PrismaClient();
-
 export async function POST(request: Request) {
   try {
     const { email, password } = await request.json();
@@ -64,6 +61,7 @@ export async function POST(request: Request) {
         email: user.email,
         roles: user.roles,
       },
+      redirectUrl: "/search",
     });
   } catch (error) {
     console.error("Login error:", error);

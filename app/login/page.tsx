@@ -31,7 +31,7 @@ export default function LoginPage() {
         throw new Error(data.error || "Login failed");
       }
 
-      router.push("/dashboard"); // Redirect to dashboard after login
+      router.push("/search"); // Redirect to dashboard after login
       router.refresh(); // Refresh to update auth state
     } catch (err: any) {
       setError(err.message);
