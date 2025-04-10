@@ -4,10 +4,19 @@ import { decrypt, encrypt } from "../utils/encryption";
 
 const prisma = new PrismaClient();
 
+interface Address {
+  street: string;
+  unit?: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+}
+
 interface CreateUserInput {
   email: string;
   password: string;
-  address: string;
+  address: Address;
   roles: Role[];
 }
 
@@ -18,13 +27,17 @@ export async function createUser({
   roles,
 }: CreateUserInput) {
   const hashedPassword = await bcrypt.hash(password, 12);
-  const encryptedAddress = encrypt(address);
 
   return prisma.user.create({
     data: {
       email,
       password_hash: hashedPassword,
-      encrypted_address: encryptedAddress,
+      encrypted_street: encrypt(address.street),
+      encrypted_unit: address.unit ? encrypt(address.unit) : null,
+      encrypted_city: encrypt(address.city),
+      encrypted_state: encrypt(address.state),
+      encrypted_postal_code: encrypt(address.postalCode),
+      encrypted_country: encrypt(address.country),
       roles,
     },
   });
@@ -39,7 +52,16 @@ export async function validateUser(email: string, password: string) {
 
   return {
     ...user,
-    address: user.encrypted_address ? decrypt(user.encrypted_address) : null,
+    address: {
+      street: user.encrypted_street ? decrypt(user.encrypted_street) : "",
+      unit: user.encrypted_unit ? decrypt(user.encrypted_unit) : "",
+      city: user.encrypted_city ? decrypt(user.encrypted_city) : "",
+      state: user.encrypted_state ? decrypt(user.encrypted_state) : "",
+      postalCode: user.encrypted_postal_code
+        ? decrypt(user.encrypted_postal_code)
+        : "",
+      country: user.encrypted_country ? decrypt(user.encrypted_country) : "",
+    },
   };
 }
 
@@ -49,6 +71,15 @@ export async function getUserById(id: number) {
 
   return {
     ...user,
-    address: user.encrypted_address ? decrypt(user.encrypted_address) : null,
+    address: {
+      street: user.encrypted_street ? decrypt(user.encrypted_street) : "",
+      unit: user.encrypted_unit ? decrypt(user.encrypted_unit) : "",
+      city: user.encrypted_city ? decrypt(user.encrypted_city) : "",
+      state: user.encrypted_state ? decrypt(user.encrypted_state) : "",
+      postalCode: user.encrypted_postal_code
+        ? decrypt(user.encrypted_postal_code)
+        : "",
+      country: user.encrypted_country ? decrypt(user.encrypted_country) : "",
+    },
   };
 }

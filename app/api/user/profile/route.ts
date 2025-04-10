@@ -2,6 +2,7 @@ import { decrypt, encrypt } from "@/utils/encryption";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 const prisma = new PrismaClient();
@@ -9,7 +10,8 @@ const prisma = new PrismaClient();
 // GET /api/user/profile
 export async function GET(request: Request) {
   try {
-    const token = request.cookies.get("auth_token")?.value;
+    const cookieStore = cookies();
+    const token = cookieStore.get("auth_token")?.value;
     if (!token) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -62,7 +64,8 @@ export async function GET(request: Request) {
 // PUT /api/user/profile
 export async function PUT(request: Request) {
   try {
-    const token = request.cookies.get("auth_token")?.value;
+    const cookieStore = cookies();
+    const token = cookieStore.get("auth_token")?.value;
     if (!token) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

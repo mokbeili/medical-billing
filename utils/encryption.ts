@@ -54,11 +54,11 @@ export function decryptAddress(encryptedAddress: {
   encrypted_unit: string | null;
 }): Partial<Address> {
   return {
-    street: decrypt(encryptedAddress.encrypted_street),
-    city: decrypt(encryptedAddress.encrypted_city),
-    state: decrypt(encryptedAddress.encrypted_state),
-    postalCode: decrypt(encryptedAddress.encrypted_postal_code),
-    country: decrypt(encryptedAddress.encrypted_country),
-    unit: decrypt(encryptedAddress.encrypted_unit),
+    street: decrypt(encryptedAddress.encrypted_street) || undefined,
+    city: decrypt(encryptedAddress.encrypted_city) || undefined,
+    state: decrypt(encryptedAddress.encrypted_state) || undefined,
+    postalCode: decrypt(encryptedAddress.encrypted_postal_code) || undefined,
+    country: decrypt(encryptedAddress.encrypted_country) || undefined,
+    unit: decrypt(encryptedAddress.encrypted_unit) || undefined,
   };
 }
