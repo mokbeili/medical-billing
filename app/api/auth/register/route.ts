@@ -1,7 +1,7 @@
+import { encryptAddress } from "@/utils/encryption";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
-import { encrypt } from "../../../../utils/encryption";
 
 const prisma = new PrismaClient();
 
@@ -12,12 +12,25 @@ export async function POST(request: Request) {
       throw new Error("ENCRYPTION_KEY is not set");
     }
 
-    const { email, password, address, roles } = await request.json();
+    const {
+      email,
+      password,
+      roles,
+      address: { street, city, state, postalCode, country, unit },
+    } = await request.json();
 
     // Debug request data
 
     // Validate input
-    if (!email || !password || !address) {
+    if (
+      !email ||
+      !password ||
+      !street ||
+      !city ||
+      !state ||
+      !postalCode ||
+      !country
+    ) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
@@ -26,7 +39,14 @@ export async function POST(request: Request) {
 
     // Test encryption
     try {
-      const testEncryption = encrypt("test");
+      const testEncryption = encryptAddress({
+        street: "test",
+        city: "test",
+        state: "test",
+        postalCode: "test",
+        country: "test",
+        unit: "test",
+      });
     } catch (encryptError) {
       console.error("Encryption test failed:", encryptError);
       throw encryptError;
@@ -46,15 +66,21 @@ export async function POST(request: Request) {
 
     // Hash password and encrypt address
     const hashedPassword = await bcrypt.hash(password, 12);
-    const encryptedAddress = encrypt(address);
-
+    const encryptedAddressFields = encryptAddress({
+      street,
+      city,
+      state,
+      postalCode,
+      country,
+      unit,
+    });
     // Create user
     const user = await prisma.user.create({
       data: {
         email,
         password_hash: hashedPassword,
-        encrypted_address: encryptedAddress,
         roles: roles || ["PATIENT"],
+        ...encryptedAddressFields,
       },
       select: {
         id: true,
