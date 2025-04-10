@@ -11,9 +11,9 @@ model Provider {
   id                 Int            @id @default(autoincrement())
   name               String
   generalInformation String?        @map("general_information")
-  jurisdictions      Jurisdiction[]
   createdAt          DateTime       @default(now()) @map("created_at")
   updatedAt          DateTime       @updatedAt @map("updated_at")
+  jurisdictions      Jurisdiction[]
 
   @@map("providers")
 }
@@ -24,10 +24,10 @@ model Jurisdiction {
   region             String
   providerId         Int       @map("provider_id")
   generalInformation String?   @map("general_information")
-  provider           Provider  @relation(fields: [providerId], references: [id])
-  sections           Section[]
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")
+  provider           Provider  @relation(fields: [providerId], references: [id])
+  sections           Section[]
 
   @@map("jurisdictions")
 }
@@ -38,10 +38,10 @@ model Section {
   title          String
   description    String?
   jurisdictionId Int           @map("jurisdiction_id")
-  jurisdiction   Jurisdiction  @relation(fields: [jurisdictionId], references: [id])
-  billingCodes   BillingCode[]
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
+  billingCodes   BillingCode[]
+  jurisdiction   Jurisdiction  @relation(fields: [jurisdictionId], references: [id])
 
   @@map("sections")
 }
@@ -52,7 +52,7 @@ model BillingCode {
   title                 String
   description           String?
   section_id            Int
-  openai_embedding      String   @db.Text
+  openai_embedding      String
   created_at            DateTime @default(now())
   updated_at            DateTime @updatedAt
   code_class            String?
@@ -68,30 +68,39 @@ model BillingCode {
   @@map("billing_codes")
 }
 
+model User {
+  id                    Int       @id @default(autoincrement())
+  email                 String    @unique
+  password_hash         String
+  roles                 Role[]
+  created_at            DateTime  @default(now())
+  updated_at            DateTime  @updatedAt
+  reset_token           String?
+  reset_token_expires   DateTime?
+  encrypted_city        String?
+  encrypted_country     String?
+  encrypted_postal_code String?
+  encrypted_state       String?
+  encrypted_street      String?
+  encrypted_unit        String?
+
+  @@map("users")
+}
+
+model AIPrompt {
+  id             Int      @id @default(autoincrement())
+  jurisdiction   String
+  provider       String
+  promptTemplate String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([jurisdiction, provider])
+  @@map("ai_prompts")
+}
+
 enum Role {
   PATIENT
   PHYSICIAN
   ADMIN
-}
-
-model User {
-  id            Int    @id @default(autoincrement())
-  email         String @unique
-  password_hash String
-  roles         Role[]
-
-  // These fields already exist in the database
-  encrypted_street      String?
-  encrypted_city        String?
-  encrypted_state       String?
-  encrypted_postal_code String?
-  encrypted_country     String?
-  encrypted_unit        String?
-  reset_token           String?
-  reset_token_expires   DateTime?
-
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-
-  @@map("users")
 }
