@@ -6,6 +6,8 @@ import { prisma } from "./prisma";
 
 declare module "next-auth" {
   interface User {
+    id: string;
+    email: string;
     roles: string[];
   }
   interface Session {
@@ -19,12 +21,14 @@ declare module "next-auth" {
 
 declare module "next-auth/jwt" {
   interface JWT {
+    id: string;
+    email: string;
     roles: string[];
   }
 }
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma),
+  adapter: PrismaAdapter(prisma) as any,
   session: {
     strategy: "jwt",
   },

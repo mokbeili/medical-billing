@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "buildCommand": "npx prisma generate && next build",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "build": {
+    "env": {
+      "PRISMA_SCHEMA_PATH": "prisma/schema.prisma"
+    }
+  }
+}
