@@ -19,15 +19,18 @@ model Provider {
 }
 
 model Jurisdiction {
-  id                 Int       @id @default(autoincrement())
+  id                 Int            @id @default(autoincrement())
   country            String
   region             String
-  providerId         Int       @map("provider_id")
-  generalInformation String?   @map("general_information")
-  createdAt          DateTime  @default(now()) @map("created_at")
-  updatedAt          DateTime  @updatedAt @map("updated_at")
-  provider           Provider  @relation(fields: [providerId], references: [id])
+  providerId         Int            @map("provider_id")
+  generalInformation String?        @map("general_information")
+  createdAt          DateTime       @default(now()) @map("created_at")
+  updatedAt          DateTime       @updatedAt @map("updated_at")
+  provider           Provider       @relation(fields: [providerId], references: [id])
   sections           Section[]
+  physicians         Physician[]
+  patients           Patient[]
+  billingClaims      BillingClaim[]
 
   @@map("jurisdictions")
 }
@@ -47,14 +50,14 @@ model Section {
 }
 
 model BillingCode {
-  id                    Int      @id @default(autoincrement())
+  id                    Int                @id @default(autoincrement())
   code                  String
   title                 String
   description           String?
   section_id            Int
   openai_embedding      String
-  created_at            DateTime @default(now())
-  updated_at            DateTime @updatedAt
+  created_at            DateTime           @default(now())
+  updated_at            DateTime           @updatedAt
   code_class            String?
   anes                  String?
   details               String?
@@ -62,19 +65,20 @@ model BillingCode {
   specialist_price      String?
   referred_price        String?
   non_referred_price    String?
-  section               Section  @relation(fields: [section_id], references: [id])
+  section               Section            @relation(fields: [section_id], references: [id])
+  claimCodes            BillingClaimCode[]
 
   @@index([section_id])
   @@map("billing_codes")
 }
 
 model User {
-  id                    Int       @id @default(autoincrement())
-  email                 String    @unique
+  id                    Int         @id @default(autoincrement())
+  email                 String      @unique
   password_hash         String
   roles                 Role[]
-  created_at            DateTime  @default(now())
-  updated_at            DateTime  @updatedAt
+  created_at            DateTime    @default(now())
+  updated_at            DateTime    @updatedAt
   reset_token           String?
   reset_token_expires   DateTime?
   encrypted_city        String?
@@ -83,6 +87,7 @@ model User {
   encrypted_state       String?
   encrypted_street      String?
   encrypted_unit        String?
+  physicians            Physician[]
 
   @@map("users")
 }
@@ -99,8 +104,83 @@ model AIPrompt {
   @@map("ai_prompts")
 }
 
+model Patient {
+  id             String         @id
+  firstName      String         @map("first_name")
+  lastName       String         @map("last_name")
+  middleInitial  String?        @map("middle_initial")
+  billingNumber  String         @map("billing_number")
+  jurisdictionId Int            @map("jurisdiction_id")
+  physicianId    String         @map("physician_id")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  jurisdiction   Jurisdiction   @relation(fields: [jurisdictionId], references: [id])
+  physician      Physician      @relation(fields: [physicianId], references: [id])
+  billingClaims  BillingClaim[]
+
+  @@map("patients")
+}
+
+model Physician {
+  id             String         @id
+  firstName      String         @map("first_name")
+  lastName       String         @map("last_name")
+  middleInitial  String?        @map("middle_initial")
+  billingNumber  String         @map("billing_number")
+  userId         Int            @map("user_id")
+  jurisdictionId Int            @map("jurisdiction_id")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  user           User           @relation(fields: [userId], references: [id])
+  jurisdiction   Jurisdiction   @relation(fields: [jurisdictionId], references: [id])
+  patients       Patient[]
+  billingClaims  BillingClaim[]
+
+  @@map("physicians")
+}
+
+model BillingClaim {
+  id                String             @id
+  friendlyId        String             @unique @map("friendly_id")
+  physicianId       String             @map("physician_id")
+  patientId         String             @map("patient_id")
+  jurisdictionId    Int                @map("jurisdiction_id")
+  summary           String             @db.Text
+  openaiEmbedding   String             @map("openai_embedding")
+  openaiSuggestions String?            @map("openai_suggestions") @db.Text
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+  physician         Physician          @relation(fields: [physicianId], references: [id])
+  patient           Patient            @relation(fields: [patientId], references: [id])
+  jurisdiction      Jurisdiction       @relation(fields: [jurisdictionId], references: [id])
+  claimCodes        BillingClaimCode[]
+
+  @@map("billing_claims")
+}
+
+model BillingClaimCode {
+  id        Int          @id @default(autoincrement())
+  claimId   String       @map("claim_id")
+  codeId    Int          @map("code_id")
+  status    ClaimStatus
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+  claim     BillingClaim @relation(fields: [claimId], references: [id])
+  code      BillingCode  @relation(fields: [codeId], references: [id])
+
+  @@map("billing_claim_codes")
+}
+
 enum Role {
   PATIENT
   PHYSICIAN
   ADMIN
+}
+
+enum ClaimStatus {
+  PENDING
+  GENERATED
+  SENT
+  APPROVED
+  REJECTED
 }

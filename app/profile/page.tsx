@@ -47,7 +47,6 @@ export default function ProfilePage() {
       const data = await res.json();
 
       if (!res.ok) throw new Error(data.error);
-
       setProfile(data);
     } catch (err: any) {
       setError(err.message);
