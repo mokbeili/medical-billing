@@ -9,14 +9,15 @@ export const metadata: Metadata = {
   title: "Medical Billing Code Search",
   description: "Professional medical billing code search platform",
 };
+
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="h-full bg-gray-50">
-      <body className={`${inter.className} h-full`}>
+    <html lang="en">
+      <body className={inter.className}>
         <Providers>{children}</Providers>
       </body>
     </html>

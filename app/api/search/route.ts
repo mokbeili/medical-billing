@@ -70,6 +70,7 @@ export async function GET(request: Request) {
         code: query,
       },
       select: {
+        id: true,
         code: true,
         title: true,
         description: true,
@@ -100,6 +101,7 @@ export async function GET(request: Request) {
           },
         },
         select: {
+          id: true,
           code: true,
           title: true,
           description: true,
@@ -137,6 +139,7 @@ export async function GET(request: Request) {
         title: query,
       },
       select: {
+        id: true,
         code: true,
         title: true,
         description: true,
@@ -177,6 +180,7 @@ export async function GET(request: Request) {
           ],
         },
         select: {
+          id: true,
           code: true,
           title: true,
           description: true,
