@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import bcrypt from "bcryptjs";
+import bcrypt from "bcrypt";
 import { sign } from "jsonwebtoken";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
