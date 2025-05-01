@@ -78,6 +78,12 @@ export default function CreateBillingClaimPage() {
         const response = await fetch("/api/physicians");
         if (response.ok) {
           const data = await response.json();
+          if (data.length === 1) {
+            setFormData({
+              ...formData,
+              physicianId: data[0].id,
+            });
+          }
           setPhysicians(data);
         }
       } catch (error) {
@@ -206,6 +212,7 @@ export default function CreateBillingClaimPage() {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
+    console.log(formData);
     e.preventDefault();
 
     if (!validateForm()) {
@@ -222,7 +229,6 @@ export default function CreateBillingClaimPage() {
       router.push("/auth/signin");
       return;
     }
-
     try {
       const response = await fetch("/api/billing-claims", {
         method: "POST",
@@ -271,39 +277,42 @@ export default function CreateBillingClaimPage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="space-y-2">
-                <label className="block text-sm font-medium">Physician</label>
-                <Select
-                  value={formData.physicianId}
-                  onValueChange={(value: string) => {
-                    setFormData({ ...formData, physicianId: value });
-                    setErrors({ ...errors, physician: false });
-                  }}
-                >
-                  <SelectTrigger
-                    className={errors.physician ? "border-red-500" : ""}
+              {physicians.length !== 1 && (
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium">
+                    Physician Profile
+                  </label>
+                  <Select
+                    value={formData.physicianId}
+                    onValueChange={(value: string) => {
+                      setFormData({ ...formData, physicianId: value });
+                      setErrors({ ...errors, physician: false });
+                    }}
                   >
-                    <SelectValue placeholder="Select physician" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {physicians.map((physician) => (
-                      <SelectItem key={physician.id} value={physician.id}>
-                        {`${physician.firstName} ${physician.lastName}${
-                          physician.middleInitial
-                            ? ` ${physician.middleInitial}`
-                            : ""
-                        }`}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.physician && (
-                  <p className="text-sm text-red-500">
-                    Please select a physician
-                  </p>
-                )}
-              </div>
-
+                    <SelectTrigger
+                      className={errors.physician ? "border-red-500" : ""}
+                    >
+                      <SelectValue placeholder="Select physician" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {physicians.map((physician) => (
+                        <SelectItem key={physician.id} value={physician.id}>
+                          {`${physician.firstName} ${physician.lastName}${
+                            physician.middleInitial
+                              ? ` ${physician.middleInitial}`
+                              : ""
+                          }`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.physician && (
+                    <p className="text-sm text-red-500">
+                      Please select a physician
+                    </p>
+                  )}
+                </div>
+              )}
               <div className="space-y-2">
                 <label className="block text-sm font-medium">Patient</label>
                 {!isCreatingPatient ? (

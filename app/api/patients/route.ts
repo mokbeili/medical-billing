@@ -1,26 +1,21 @@
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import jwt from "jsonwebtoken";
-import { cookies } from "next/headers";
+import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 
 export async function GET() {
   try {
-    const cookieStore = cookies();
-    const token = cookieStore.get("auth_token")?.value;
-    if (!token) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
-      userId: number;
-    };
 
     const patients = await prisma.patient.findMany({
       where: {
         physician: {
           user: {
-            id: decoded.userId,
+            id: parseInt(session.user.id),
           },
         },
       },
@@ -42,15 +37,10 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const cookieStore = cookies();
-    const token = cookieStore.get("auth_token")?.value;
-    if (!token) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
-      userId: number;
-    };
 
     const body = await request.json();
     const { firstName, lastName, middleInitial, billingNumber, physicianId } =

@@ -1,8 +1,9 @@
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcrypt";
-import { sign } from "jsonwebtoken";
-import { cookies } from "next/headers";
+import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
+
 export async function POST(request: Request) {
   try {
     const { email, password } = await request.json();
@@ -40,20 +41,14 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create session token
-    const token = sign(
-      { userId: user.id, email: user.email, roles: user.roles },
-      process.env.JWT_SECRET!,
-      { expiresIn: "24h" }
-    );
-
-    // Set cookie
-    cookies().set("auth_token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 86400, // 24 hours
-    });
+    // Create a session using NextAuth.js
+    const session = await getServerSession(authOptions);
+    if (!session) {
+      return NextResponse.json(
+        { error: "Failed to create session" },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       user: {

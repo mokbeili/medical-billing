@@ -1,7 +1,7 @@
-import { cookies } from "next/headers";
+import { signOut } from "next-auth/react";
 import { NextResponse } from "next/server";
 
 export async function POST() {
-  cookies().delete("auth_token");
+  await signOut({ redirect: false });
   return NextResponse.json({ message: "Logged out successfully" });
 }

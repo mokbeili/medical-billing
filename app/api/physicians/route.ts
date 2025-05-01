@@ -1,25 +1,19 @@
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import jwt from "jsonwebtoken";
-import { cookies } from "next/headers";
+import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
-    const cookieStore = cookies();
-    const token = cookieStore.get("auth_token")?.value;
-
-    if (!token) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
-      userId: number;
-    };
 
     const physicians = await prisma.physician.findMany({
       where: {
         user: {
-          id: decoded.userId,
+          id: parseInt(session.user.id),
         },
       },
       select: {
