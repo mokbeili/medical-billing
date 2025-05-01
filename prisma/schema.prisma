@@ -26,11 +26,11 @@ model Jurisdiction {
   generalInformation String?        @map("general_information")
   createdAt          DateTime       @default(now()) @map("created_at")
   updatedAt          DateTime       @updatedAt @map("updated_at")
-  provider           Provider       @relation(fields: [providerId], references: [id])
-  sections           Section[]
-  physicians         Physician[]
-  patients           Patient[]
   billingClaims      BillingClaim[]
+  provider           Provider       @relation(fields: [providerId], references: [id])
+  patients           Patient[]
+  physicians         Physician[]
+  sections           Section[]
 
   @@map("jurisdictions")
 }
@@ -65,8 +65,8 @@ model BillingCode {
   specialist_price      String?
   referred_price        String?
   non_referred_price    String?
-  section               Section            @relation(fields: [section_id], references: [id])
   claimCodes            BillingClaimCode[]
+  section               Section            @relation(fields: [section_id], references: [id])
 
   @@index([section_id])
   @@map("billing_codes")
@@ -114,9 +114,9 @@ model Patient {
   physicianId    String         @map("physician_id")
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
+  billingClaims  BillingClaim[]
   jurisdiction   Jurisdiction   @relation(fields: [jurisdictionId], references: [id])
   physician      Physician      @relation(fields: [physicianId], references: [id])
-  billingClaims  BillingClaim[]
 
   @@map("patients")
 }
@@ -131,10 +131,10 @@ model Physician {
   jurisdictionId Int            @map("jurisdiction_id")
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
-  user           User           @relation(fields: [userId], references: [id])
-  jurisdiction   Jurisdiction   @relation(fields: [jurisdictionId], references: [id])
-  patients       Patient[]
   billingClaims  BillingClaim[]
+  patients       Patient[]
+  jurisdiction   Jurisdiction   @relation(fields: [jurisdictionId], references: [id])
+  user           User           @relation(fields: [userId], references: [id])
 
   @@map("physicians")
 }
@@ -145,15 +145,15 @@ model BillingClaim {
   physicianId       String             @map("physician_id")
   patientId         String             @map("patient_id")
   jurisdictionId    Int                @map("jurisdiction_id")
-  summary           String             @db.Text
+  summary           String
   openaiEmbedding   String             @map("openai_embedding")
-  openaiSuggestions String?            @map("openai_suggestions") @db.Text
+  openaiSuggestions String?            @map("openai_suggestions")
   createdAt         DateTime           @default(now()) @map("created_at")
   updatedAt         DateTime           @updatedAt @map("updated_at")
-  physician         Physician          @relation(fields: [physicianId], references: [id])
-  patient           Patient            @relation(fields: [patientId], references: [id])
-  jurisdiction      Jurisdiction       @relation(fields: [jurisdictionId], references: [id])
   claimCodes        BillingClaimCode[]
+  jurisdiction      Jurisdiction       @relation(fields: [jurisdictionId], references: [id])
+  patient           Patient            @relation(fields: [patientId], references: [id])
+  physician         Physician          @relation(fields: [physicianId], references: [id])
 
   @@map("billing_claims")
 }
@@ -179,7 +179,6 @@ enum Role {
 
 enum ClaimStatus {
   PENDING
-  GENERATED
   SENT
   APPROVED
   REJECTED
