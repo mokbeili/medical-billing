@@ -1,7 +1,30 @@
 "use client";
 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import Link from "next/link";
 import { useState } from "react";
+
+const CANADIAN_PROVINCES = [
+  { code: "AB", name: "Alberta" },
+  { code: "BC", name: "British Columbia" },
+  { code: "MB", name: "Manitoba" },
+  { code: "NB", name: "New Brunswick" },
+  { code: "NL", name: "Newfoundland and Labrador" },
+  { code: "NS", name: "Nova Scotia" },
+  { code: "ON", name: "Ontario" },
+  { code: "PE", name: "Prince Edward Island" },
+  { code: "QC", name: "Quebec" },
+  { code: "SK", name: "Saskatchewan" },
+  { code: "NT", name: "Northwest Territories" },
+  { code: "NU", name: "Nunavut" },
+  { code: "YT", name: "Yukon" },
+];
 
 interface FormData {
   email: string;
@@ -28,7 +51,7 @@ export default function RegisterPage() {
       city: "",
       state: "",
       postalCode: "",
-      country: "",
+      country: "Canada",
     },
   });
   const [error, setError] = useState("");
@@ -62,9 +85,10 @@ export default function RegisterPage() {
         throw new Error(data.error || "Registration failed");
       }
 
-      window.location.href = "/login?registered=true";
+      window.location.href = "/auth/signin?registered=true";
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || "An error occurred during registration");
+      console.error("Registration error:", err);
     } finally {
       setLoading(false);
     }
@@ -167,14 +191,21 @@ export default function RegisterPage() {
                   value={formData.address.city}
                   onChange={(e) => updateAddress("city", e.target.value)}
                 />
-                <input
-                  type="text"
-                  required
-                  className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  placeholder="State/Province"
+                <Select
                   value={formData.address.state}
-                  onChange={(e) => updateAddress("state", e.target.value)}
-                />
+                  onValueChange={(value) => updateAddress("state", value)}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select Province" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CANADIAN_PROVINCES.map((province) => (
+                      <SelectItem key={province.code} value={province.code}>
+                        {province.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <input
@@ -192,6 +223,7 @@ export default function RegisterPage() {
                   placeholder="Country"
                   value={formData.address.country}
                   onChange={(e) => updateAddress("country", e.target.value)}
+                  disabled
                 />
               </div>
             </div>
@@ -235,7 +267,7 @@ export default function RegisterPage() {
 
           <div className="text-center">
             <Link
-              href="/login"
+              href="/auth/signin"
               className="font-medium text-blue-600 hover:text-blue-500"
             >
               Already have an account? Sign in

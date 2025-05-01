@@ -99,6 +99,9 @@ export default function SearchPage() {
         <h1 className="text-3xl font-bold text-gray-900 mb-8">
           Medical Billing Code Search
         </h1>
+        <h4 className="text-m text-gray-900 mb-8 pl-2">
+          Search for medical billing codes by code, title, or visit description.
+        </h4>
 
         <div className="bg-white shadow-sm rounded-lg p-6">
           <div className="mb-6">

@@ -1,5 +1,6 @@
 "use client";
 
+import Layout from "@/app/components/layout/Layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -106,7 +107,6 @@ export default function CreateBillingClaimPage() {
         setSearchResults([]);
         return;
       }
-
       setIsSearching(true);
       try {
         const response = await fetch(
@@ -122,7 +122,6 @@ export default function CreateBillingClaimPage() {
         setIsSearching(false);
       }
     };
-    console.log(searchQuery);
     const debounceTimer = setTimeout(searchBillingCodes, 300);
     return () => clearTimeout(debounceTimer);
   }, [searchQuery]);
@@ -130,31 +129,43 @@ export default function CreateBillingClaimPage() {
   const handleCreatePatient = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      if (!formData.physicianId) {
+        setErrors({ ...errors, physician: true });
+        return;
+      }
+
       const response = await fetch("/api/patients", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          ...newPatient,
+          firstName: newPatient.firstName,
+          lastName: newPatient.lastName,
+          middleInitial: newPatient.middleInitial || null,
+          billingNumber: newPatient.billingNumber,
           physicianId: formData.physicianId,
         }),
       });
 
-      if (response.ok) {
-        const createdPatient = await response.json();
-        setPatients([...patients, createdPatient]);
-        setFormData({ ...formData, patientId: createdPatient.id });
-        setIsCreatingPatient(false);
-        setNewPatient({
-          firstName: "",
-          lastName: "",
-          middleInitial: "",
-          billingNumber: "",
-        });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to create patient");
       }
+
+      const createdPatient = await response.json();
+      setPatients([...patients, createdPatient]);
+      setFormData({ ...formData, patientId: createdPatient.id });
+      setIsCreatingPatient(false);
+      setNewPatient({
+        firstName: "",
+        lastName: "",
+        middleInitial: "",
+        billingNumber: "",
+      });
     } catch (error) {
       console.error("Error creating patient:", error);
+      // You might want to show an error message to the user here
     }
   };
 
@@ -234,13 +245,15 @@ export default function CreateBillingClaimPage() {
 
   if (status === "loading") {
     return (
-      <div className="container mx-auto py-8">
-        <Card>
-          <CardContent className="flex items-center justify-center p-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-          </CardContent>
-        </Card>
-      </div>
+      <Layout>
+        <div className="container mx-auto">
+          <Card>
+            <CardContent className="flex items-center justify-center p-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+            </CardContent>
+          </Card>
+        </div>
+      </Layout>
     );
   }
 
@@ -250,258 +263,262 @@ export default function CreateBillingClaimPage() {
   }
 
   return (
-    <div className="container mx-auto py-8">
-      <Card>
-        <CardHeader>
-          <CardTitle>Create New Billing Claim</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">Physician</label>
-              <Select
-                value={formData.physicianId}
-                onValueChange={(value: string) => {
-                  setFormData({ ...formData, physicianId: value });
-                  setErrors({ ...errors, physician: false });
-                }}
-              >
-                <SelectTrigger
-                  className={errors.physician ? "border-red-500" : ""}
+    <Layout>
+      <div className="container mx-auto">
+        <Card>
+          <CardHeader>
+            <CardTitle>Create New Billing Claim</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="space-y-2">
+                <label className="block text-sm font-medium">Physician</label>
+                <Select
+                  value={formData.physicianId}
+                  onValueChange={(value: string) => {
+                    setFormData({ ...formData, physicianId: value });
+                    setErrors({ ...errors, physician: false });
+                  }}
                 >
-                  <SelectValue placeholder="Select physician" />
-                </SelectTrigger>
-                <SelectContent>
-                  {physicians.map((physician) => (
-                    <SelectItem key={physician.id} value={physician.id}>
-                      {`${physician.firstName} ${physician.lastName}${
-                        physician.middleInitial
-                          ? ` ${physician.middleInitial}`
-                          : ""
-                      }`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.physician && (
-                <p className="text-sm text-red-500">
-                  Please select a physician
-                </p>
-              )}
-            </div>
+                  <SelectTrigger
+                    className={errors.physician ? "border-red-500" : ""}
+                  >
+                    <SelectValue placeholder="Select physician" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {physicians.map((physician) => (
+                      <SelectItem key={physician.id} value={physician.id}>
+                        {`${physician.firstName} ${physician.lastName}${
+                          physician.middleInitial
+                            ? ` ${physician.middleInitial}`
+                            : ""
+                        }`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.physician && (
+                  <p className="text-sm text-red-500">
+                    Please select a physician
+                  </p>
+                )}
+              </div>
 
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">Patient</label>
-              {!isCreatingPatient ? (
-                <>
-                  <Select
-                    value={formData.patientId}
-                    onValueChange={(value: string) => {
-                      setFormData({ ...formData, patientId: value });
-                      setErrors({ ...errors, patient: false });
-                    }}
-                  >
-                    <SelectTrigger
-                      className={errors.patient ? "border-red-500" : ""}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium">Patient</label>
+                {!isCreatingPatient ? (
+                  <>
+                    <Select
+                      value={formData.patientId}
+                      onValueChange={(value: string) => {
+                        setFormData({ ...formData, patientId: value });
+                        setErrors({ ...errors, patient: false });
+                      }}
                     >
-                      <SelectValue placeholder="Select patient" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {patients.map((patient) => (
-                        <SelectItem key={patient.id} value={patient.id}>
-                          {`${patient.firstName} ${patient.lastName}${
-                            patient.middleInitial
-                              ? ` ${patient.middleInitial}`
-                              : ""
-                          }`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {errors.patient && (
-                    <p className="text-sm text-red-500">
-                      Please select a patient
-                    </p>
-                  )}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="mt-2"
-                    onClick={() => setIsCreatingPatient(true)}
-                  >
-                    Create New Patient
-                  </Button>
-                </>
-              ) : (
-                <div className="space-y-4 p-4 border rounded-lg">
-                  <h3 className="font-medium">Create New Patient</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="block text-sm font-medium">
-                        First Name
-                      </label>
-                      <Input
-                        value={newPatient.firstName}
-                        onChange={(e) =>
-                          setNewPatient({
-                            ...newPatient,
-                            firstName: e.target.value,
-                          })
-                        }
-                        placeholder="First name"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="block text-sm font-medium">
-                        Last Name
-                      </label>
-                      <Input
-                        value={newPatient.lastName}
-                        onChange={(e) =>
-                          setNewPatient({
-                            ...newPatient,
-                            lastName: e.target.value,
-                          })
-                        }
-                        placeholder="Last name"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="block text-sm font-medium">
-                        Middle Initial
-                      </label>
-                      <Input
-                        value={newPatient.middleInitial}
-                        onChange={(e) =>
-                          setNewPatient({
-                            ...newPatient,
-                            middleInitial: e.target.value,
-                          })
-                        }
-                        placeholder="M.I."
-                        maxLength={1}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="block text-sm font-medium">
-                        Billing Number
-                      </label>
-                      <Input
-                        value={newPatient.billingNumber}
-                        onChange={(e) =>
-                          setNewPatient({
-                            ...newPatient,
-                            billingNumber: e.target.value,
-                          })
-                        }
-                        placeholder="Billing number"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex justify-end space-x-2">
+                      <SelectTrigger
+                        className={errors.patient ? "border-red-500" : ""}
+                      >
+                        <SelectValue placeholder="Select patient" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {patients.map((patient) => (
+                          <SelectItem key={patient.id} value={patient.id}>
+                            {`${patient.firstName} ${patient.lastName}${
+                              patient.middleInitial
+                                ? ` ${patient.middleInitial}`
+                                : ""
+                            }`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {errors.patient && (
+                      <p className="text-sm text-red-500">
+                        Please select a patient
+                      </p>
+                    )}
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={() => setIsCreatingPatient(false)}
+                      className="mt-2"
+                      onClick={() => setIsCreatingPatient(true)}
                     >
-                      Cancel
+                      Create New Patient
                     </Button>
-                    <Button
-                      type="button"
-                      onClick={handleCreatePatient}
-                      disabled={
-                        !newPatient.firstName ||
-                        !newPatient.lastName ||
-                        !newPatient.billingNumber
-                      }
-                    >
-                      Create Patient
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">Summary</label>
-              <Textarea
-                value={formData.summary}
-                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                  setFormData({ ...formData, summary: e.target.value })
-                }
-                placeholder="Enter claim summary"
-                className="min-h-[200px]"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">Billing Codes</label>
-              <div className="relative">
-                <Input
-                  placeholder="Search billing codes..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className={errors.billingCodes ? "border-red-500" : ""}
-                />
-                {isSearching && (
-                  <div className="absolute right-2 top-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
+                  </>
+                ) : (
+                  <div className="space-y-4 p-4 border rounded-lg">
+                    <h3 className="font-medium">Create New Patient</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium">
+                          First Name
+                        </label>
+                        <Input
+                          value={newPatient.firstName}
+                          onChange={(e) =>
+                            setNewPatient({
+                              ...newPatient,
+                              firstName: e.target.value,
+                            })
+                          }
+                          placeholder="First name"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium">
+                          Last Name
+                        </label>
+                        <Input
+                          value={newPatient.lastName}
+                          onChange={(e) =>
+                            setNewPatient({
+                              ...newPatient,
+                              lastName: e.target.value,
+                            })
+                          }
+                          placeholder="Last name"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium">
+                          Middle Initial
+                        </label>
+                        <Input
+                          value={newPatient.middleInitial}
+                          onChange={(e) =>
+                            setNewPatient({
+                              ...newPatient,
+                              middleInitial: e.target.value,
+                            })
+                          }
+                          placeholder="M.I."
+                          maxLength={1}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium">
+                          Billing Number
+                        </label>
+                        <Input
+                          value={newPatient.billingNumber}
+                          onChange={(e) =>
+                            setNewPatient({
+                              ...newPatient,
+                              billingNumber: e.target.value,
+                            })
+                          }
+                          placeholder="Billing number"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end space-x-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setIsCreatingPatient(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={handleCreatePatient}
+                        disabled={
+                          !newPatient.firstName ||
+                          !newPatient.lastName ||
+                          !newPatient.billingNumber
+                        }
+                      >
+                        Create Patient
+                      </Button>
+                    </div>
                   </div>
                 )}
-                {searchResults.length > 0 && (
-                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
-                    {searchResults.map((code) => (
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium">Summary</label>
+                <Textarea
+                  value={formData.summary}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                    setFormData({ ...formData, summary: e.target.value })
+                  }
+                  placeholder="Enter claim summary"
+                  className="min-h-[200px]"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium">
+                  Billing Codes
+                </label>
+                <div className="relative">
+                  <Input
+                    placeholder="Search billing codes..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className={errors.billingCodes ? "border-red-500" : ""}
+                  />
+                  {isSearching && (
+                    <div className="absolute right-2 top-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
+                    </div>
+                  )}
+                  {searchResults.length > 0 && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
+                      {searchResults.map((code) => (
+                        <div
+                          key={code.id}
+                          className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                          onClick={() => handleAddCode(code)}
+                        >
+                          <div className="font-medium">{code.code}</div>
+                          <div className="text-sm text-gray-600">
+                            {code.title}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {errors.billingCodes && (
+                  <p className="text-sm text-red-500">
+                    Please add at least one billing code
+                  </p>
+                )}
+
+                {selectedCodes.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    {selectedCodes.map((code) => (
                       <div
                         key={code.id}
-                        className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                        onClick={() => handleAddCode(code)}
+                        className="flex items-center justify-between p-2 bg-gray-50 rounded-md"
                       >
-                        <div className="font-medium">{code.code}</div>
-                        <div className="text-sm text-gray-600">
+                        <div>
+                          <span className="font-medium">{code.code}</span> -{" "}
                           {code.title}
                         </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveCode(code.id)}
+                        >
+                          Remove
+                        </Button>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
-              {errors.billingCodes && (
-                <p className="text-sm text-red-500">
-                  Please add at least one billing code
-                </p>
-              )}
 
-              {selectedCodes.length > 0 && (
-                <div className="mt-4 space-y-2">
-                  {selectedCodes.map((code) => (
-                    <div
-                      key={code.id}
-                      className="flex items-center justify-between p-2 bg-gray-50 rounded-md"
-                    >
-                      <div>
-                        <span className="font-medium">{code.code}</span> -{" "}
-                        {code.title}
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleRemoveCode(code.id)}
-                      >
-                        Remove
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-end">
-              <Button type="submit">Create Claim</Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
+              <div className="flex justify-end">
+                <Button type="submit">Create Claim</Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    </Layout>
   );
 }

@@ -1,8 +1,8 @@
+import { authOptions } from "@/lib/auth";
 import { decrypt, encrypt } from "@/utils/encryption";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
-import { cookies } from "next/headers";
+import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
 const prisma = new PrismaClient();
@@ -10,18 +10,13 @@ const prisma = new PrismaClient();
 // GET /api/user/profile
 export async function GET(request: Request) {
   try {
-    const cookieStore = cookies();
-    const token = cookieStore.get("auth_token")?.value;
-    if (!token) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
-      userId: number;
-    };
-
     const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
+      where: { id: parseInt(session.user.id) },
       select: {
         email: true,
         roles: true,
@@ -64,15 +59,10 @@ export async function GET(request: Request) {
 // PUT /api/user/profile
 export async function PUT(request: Request) {
   try {
-    const cookieStore = cookies();
-    const token = cookieStore.get("auth_token")?.value;
-    if (!token) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
-      userId: number;
-    };
 
     const { email, password, roles, address } = await request.json();
 
@@ -97,7 +87,7 @@ export async function PUT(request: Request) {
 
     // Update user
     const user = await prisma.user.update({
-      where: { id: decoded.userId },
+      where: { id: parseInt(session.user.id) },
       data: updateData,
       select: {
         email: true,

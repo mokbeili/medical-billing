@@ -7,49 +7,27 @@ const prisma = new PrismaClient();
 
 export async function POST(request: Request) {
   try {
-    // Debug environment variables
     if (!process.env.ENCRYPTION_KEY) {
       throw new Error("ENCRYPTION_KEY is not set");
     }
 
-    const {
-      email,
-      password,
-      roles,
-      address: { street, city, state, postalCode, country, unit },
-    } = await request.json();
-
-    // Debug request data
+    const { email, password, address } = await request.json();
 
     // Validate input
-    if (
-      !email ||
-      !password ||
-      !street ||
-      !city ||
-      !state ||
-      !postalCode ||
-      !country
-    ) {
+    if (!email || !password || !address) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
       );
     }
 
-    // Test encryption
-    try {
-      const testEncryption = encryptAddress({
-        street: "test",
-        city: "test",
-        state: "test",
-        postalCode: "test",
-        country: "test",
-        unit: "test",
-      });
-    } catch (encryptError) {
-      console.error("Encryption test failed:", encryptError);
-      throw encryptError;
+    const { street, city, state, postalCode, country, unit } = address;
+
+    if (!street || !city || !state || !postalCode || !country) {
+      return NextResponse.json(
+        { error: "Missing required address fields" },
+        { status: 400 }
+      );
     }
 
     // Check if user already exists
@@ -72,14 +50,15 @@ export async function POST(request: Request) {
       state,
       postalCode,
       country,
-      unit,
+      unit: unit || null,
     });
+
     // Create user
     const user = await prisma.user.create({
       data: {
         email,
         password_hash: hashedPassword,
-        roles: roles || ["PATIENT"],
+        roles: ["PATIENT"],
         ...encryptedAddressFields,
       },
       select: {
@@ -97,10 +76,6 @@ export async function POST(request: Request) {
       {
         error: "Error creating user",
         details: error instanceof Error ? error.message : String(error),
-        env_check: {
-          has_encryption_key: !!process.env.ENCRYPTION_KEY,
-          encryption_key_length: process.env.ENCRYPTION_KEY?.length,
-        },
       },
       { status: 500 }
     );

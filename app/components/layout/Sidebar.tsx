@@ -41,7 +41,7 @@ export default function Sidebar({
 
         <nav className="flex-1 px-2 py-4 space-y-1">
           <SidebarLink href="/search" active={pathname === "/search"}>
-            Search Codes
+            AI Code Search
           </SidebarLink>
           <SidebarLink href="/dashboard" active={pathname === "/dashboard"}>
             Dashboard

@@ -1,12 +1,21 @@
 "use client";
 
 import { Menu } from "lucide-react";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
 export default function Navbar({ onMenuClick }: { onMenuClick: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { data: session, status } = useSession({
+    required: true,
+    onUnauthenticated() {
+      router.push("/auth/signin");
+    },
+  });
+
+  const userRoles = session?.user?.roles || [];
 
   const handleSignOut = async () => {
     try {
@@ -22,13 +31,31 @@ export default function Navbar({ onMenuClick }: { onMenuClick: () => void }) {
       }
 
       // Redirect to login page after successful logout
-      router.push("/login");
+      router.push("/auth/signin");
       router.refresh(); // Refresh the page to clear any cached data
     } catch (error) {
       console.error("Logout error:", error);
       // Optionally show an error message to the user
     }
   };
+
+  if (status === "loading") {
+    return (
+      <nav className="fixed top-0 w-full bg-white shadow-md z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16">
+            <div className="flex items-center">
+              <div className="w-8 h-8 bg-gray-200 rounded-full animate-pulse"></div>
+            </div>
+          </div>
+        </div>
+      </nav>
+    );
+  }
+
+  if (!session) {
+    return null;
+  }
 
   return (
     <nav className="fixed top-0 w-full bg-white shadow-md z-50">
@@ -52,11 +79,23 @@ export default function Navbar({ onMenuClick }: { onMenuClick: () => void }) {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex md:items-center md:space-x-8">
+            {userRoles.includes("PHYSICIAN") && (
+              <>
+                <NavLink
+                  href="/billing-claims"
+                  active={pathname === "/billing-claims"}
+                >
+                  Billing Claims
+                </NavLink>
+              </>
+            )}
+            {userRoles.includes("ADMIN") && (
+              <NavLink href="/dashboard" active={pathname === "/dashboard"}>
+                Dashboard
+              </NavLink>
+            )}
             <NavLink href="/search" active={pathname === "/search"}>
-              Search Codes
-            </NavLink>
-            <NavLink href="/dashboard" active={pathname === "/dashboard"}>
-              Dashboard
+              AI Code Search
             </NavLink>
             <NavLink href="/profile" active={pathname === "/profile"}>
               Profile

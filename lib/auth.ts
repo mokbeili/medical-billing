@@ -31,6 +31,7 @@ export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma) as any,
   session: {
     strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
   },
   pages: {
     signIn: "/auth/signin",
@@ -94,6 +95,17 @@ export const authOptions: NextAuthOptions = {
           roles: token.roles,
         },
       };
+    },
+  },
+  cookies: {
+    sessionToken: {
+      name: "auth_token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+      },
     },
   },
 };
