@@ -34,7 +34,14 @@ function SignInForm() {
         return;
       }
 
-      router.push("/profile");
+      // Wait for the session to be established
+      const session = await fetch("/api/auth/session");
+      if (session.ok) {
+        router.push("/search");
+        router.refresh();
+      } else {
+        setError("Failed to establish session");
+      }
     } catch (error) {
       setError("An error occurred. Please try again.");
     } finally {
