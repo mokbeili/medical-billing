@@ -1,7 +1,7 @@
 "use client";
 
 import { Menu } from "lucide-react";
-import { useSession } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -19,23 +19,11 @@ export default function Navbar({ onMenuClick }: { onMenuClick: () => void }) {
 
   const handleSignOut = async () => {
     try {
-      const res = await fetch("/api/auth/logout", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!res.ok) {
-        throw new Error("Logout failed");
-      }
-
-      // Redirect to login page after successful logout
+      await signOut({ redirect: false });
       router.push("/auth/signin");
-      router.refresh(); // Refresh the page to clear any cached data
+      router.refresh();
     } catch (error) {
       console.error("Logout error:", error);
-      // Optionally show an error message to the user
     }
   };
 
