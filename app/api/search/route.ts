@@ -1,8 +1,9 @@
-import { PrismaClient } from "@prisma/client";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
-const prisma = new PrismaClient();
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
@@ -50,20 +51,28 @@ interface SearchResponse {
 
 const VECTOR_SEARCH_LIMIT = 80;
 
+// Mark this route as dynamic
+export const dynamic = "force-dynamic";
+
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const query = searchParams.get("query");
-  const page = parseInt(searchParams.get("page") || "1");
-  const limit = parseInt(searchParams.get("limit") || "20");
-
-  if (!query) {
-    return NextResponse.json(
-      { error: "Query parameter is required" },
-      { status: 400 }
-    );
-  }
-
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return new NextResponse("Unauthorized", { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const query = searchParams.get("query");
+    const page = parseInt(searchParams.get("page") || "1");
+    const limit = parseInt(searchParams.get("limit") || "20");
+
+    if (!query) {
+      return NextResponse.json(
+        { error: "Query parameter is required" },
+        { status: 400 }
+      );
+    }
+
     // First try exact code match
     const exactCodeMatch = await prisma.billingCode.findFirst({
       where: {
