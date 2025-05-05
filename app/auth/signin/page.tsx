@@ -22,6 +22,8 @@ function SignInForm() {
   useEffect(() => {
     if (errorParam === "SessionError") {
       setError("Your session has expired. Please sign in again.");
+    } else if (errorParam === "CredentialsSignin") {
+      setError("Invalid email or password.");
     }
   }, [errorParam]);
 
@@ -60,7 +62,7 @@ function SignInForm() {
       }
 
       if (result?.error) {
-        setError("Invalid email or password");
+        setError(result.error);
         return;
       }
 
@@ -114,6 +116,7 @@ function SignInForm() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="Enter your email"
                   required
+                  autoComplete="email"
                 />
               </div>
               <div className="space-y-2">
@@ -124,6 +127,7 @@ function SignInForm() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
                   required
+                  autoComplete="current-password"
                 />
               </div>
               {error && <p className="text-sm text-red-500">{error}</p>}
