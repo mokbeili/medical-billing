@@ -25,21 +25,6 @@ export async function middleware(request: NextRequest) {
       secret: process.env.NEXTAUTH_SECRET,
     });
 
-    // Debug logging in development
-    if (process.env.NODE_ENV === "development") {
-      console.log("Middleware - Path:", request.nextUrl.pathname);
-      console.log("Middleware - Token exists:", !!token);
-      console.log("Middleware - Token:", token);
-    }
-
-    // In development, allow access to API routes without token for testing
-    if (
-      process.env.NODE_ENV === "development" &&
-      request.nextUrl.pathname.startsWith("/api/")
-    ) {
-      return NextResponse.next();
-    }
-
     if (!token) {
       const signInUrl = new URL("/auth/signin", request.url);
       signInUrl.searchParams.set("callbackUrl", request.url);
@@ -80,6 +65,6 @@ export const config = {
      * - favicon.ico (favicon file)
      * - public folder
      */
-    "/((?!_next/static|_next/image|favicon.ico|public/).*)",
+    "/((?!api/auth|_next/static|_next/image|favicon.ico|public/).*)",
   ],
 };
