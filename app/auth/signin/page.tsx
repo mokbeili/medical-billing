@@ -35,6 +35,7 @@ function SignInForm() {
         console.log("Redirecting to:", callbackUrl);
       }
       router.push(callbackUrl);
+      router.refresh();
     }
   }, [status, session, router, searchParams]);
 
@@ -54,7 +55,6 @@ function SignInForm() {
         email,
         password,
         redirect: false,
-        callbackUrl,
       });
 
       if (process.env.NODE_ENV === "development") {
@@ -66,7 +66,10 @@ function SignInForm() {
         return;
       }
 
-      // The session will be handled by the useEffect above
+      if (result?.ok) {
+        router.push(callbackUrl);
+        router.refresh();
+      }
     } catch (error) {
       console.error("Sign in error:", error);
       setError("An error occurred. Please try again.");
@@ -144,7 +147,13 @@ function SignInForm() {
 
 export default function SignInPage() {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+        </div>
+      }
+    >
       <SignInForm />
     </Suspense>
   );
