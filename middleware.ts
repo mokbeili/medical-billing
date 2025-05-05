@@ -18,32 +18,68 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Get the token from the request
-  const token = await getToken({ req: request });
+  try {
+    // Get the token from the request
+    const token = await getToken({
+      req: request,
+      secret: process.env.NEXTAUTH_SECRET,
+    });
 
-  if (!token) {
-    return NextResponse.redirect(new URL("/auth/signin", request.url));
+    // Debug logging in development
+    if (process.env.NODE_ENV === "development") {
+      console.log("Middleware - Path:", request.nextUrl.pathname);
+      console.log("Middleware - Token exists:", !!token);
+      console.log("Middleware - Token:", token);
+    }
+
+    // In development, allow access to API routes without token for testing
+    if (
+      process.env.NODE_ENV === "development" &&
+      request.nextUrl.pathname.startsWith("/api/")
+    ) {
+      return NextResponse.next();
+    }
+
+    if (!token) {
+      const signInUrl = new URL("/auth/signin", request.url);
+      signInUrl.searchParams.set("callbackUrl", request.url);
+      return NextResponse.redirect(signInUrl);
+    }
+
+    // Add token to request headers for API routes
+    if (request.nextUrl.pathname.startsWith("/api/")) {
+      const requestHeaders = new Headers(request.headers);
+      requestHeaders.set("x-user-id", token.id as string);
+      requestHeaders.set("x-user-email", token.email as string);
+      requestHeaders.set("x-user-roles", JSON.stringify(token.roles));
+
+      return NextResponse.next({
+        request: {
+          headers: requestHeaders,
+        },
+      });
+    }
+
+    return NextResponse.next();
+  } catch (error) {
+    console.error("Middleware error:", error);
+    // In case of error, redirect to signin
+    const signInUrl = new URL("/auth/signin", request.url);
+    signInUrl.searchParams.set("error", "SessionError");
+    return NextResponse.redirect(signInUrl);
   }
-
-  // Check if the path exists
-  const response = await fetch(request.url);
-  if (response.status === 404) {
-    return NextResponse.redirect(new URL("/profile", request.url));
-  }
-
-  return NextResponse.next();
 }
 
+// Configure which paths the middleware should run on
 export const config = {
   matcher: [
     /*
-     * Match all request paths except:
+     * Match all request paths except for the ones starting with:
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - public folder
-     * - api/auth routes
      */
-    "/((?!_next/static|_next/image|favicon.ico|public|api/auth).*)",
+    "/((?!_next/static|_next/image|favicon.ico|public/).*)",
   ],
 };

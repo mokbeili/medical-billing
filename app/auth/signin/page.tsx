@@ -3,19 +3,38 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 
 function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { data: session, status } = useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const registered = searchParams?.get("registered");
+  const errorParam = searchParams?.get("error");
+
+  useEffect(() => {
+    if (errorParam === "SessionError") {
+      setError("Your session has expired. Please sign in again.");
+    }
+  }, [errorParam]);
+
+  useEffect(() => {
+    if (status === "authenticated" && session) {
+      const callbackUrl = searchParams?.get("callbackUrl") || "/search";
+      if (process.env.NODE_ENV === "development") {
+        console.log("Session authenticated:", session);
+        console.log("Redirecting to:", callbackUrl);
+      }
+      router.push(callbackUrl);
+    }
+  }, [status, session, router, searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,31 +42,44 @@ function SignInForm() {
     setError("");
 
     try {
+      const callbackUrl = searchParams?.get("callbackUrl") || "/search";
+
+      if (process.env.NODE_ENV === "development") {
+        console.log("Attempting sign in with:", { email, callbackUrl });
+      }
+
       const result = await signIn("credentials", {
         email,
         password,
         redirect: false,
+        callbackUrl,
       });
+
+      if (process.env.NODE_ENV === "development") {
+        console.log("Sign in result:", result);
+      }
 
       if (result?.error) {
         setError("Invalid email or password");
         return;
       }
 
-      // Wait for the session to be established
-      const session = await fetch("/api/auth/session");
-      if (session.ok) {
-        router.push("/search");
-        router.refresh();
-      } else {
-        setError("Failed to establish session");
-      }
+      // The session will be handled by the useEffect above
     } catch (error) {
+      console.error("Sign in error:", error);
       setError("An error occurred. Please try again.");
     } finally {
       setIsLoading(false);
     }
   };
+
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
