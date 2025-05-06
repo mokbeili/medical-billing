@@ -30,10 +30,6 @@ function SignInForm() {
   useEffect(() => {
     if (status === "authenticated" && session) {
       const callbackUrl = searchParams?.get("callbackUrl") || "/search";
-      if (process.env.NODE_ENV === "development") {
-        console.log("Session authenticated:", session);
-        console.log("Redirecting to:", callbackUrl);
-      }
       router.push(callbackUrl);
       router.refresh();
     }
