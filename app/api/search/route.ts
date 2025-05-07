@@ -8,7 +8,7 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-interface RawSearchResult {
+interface BaseSearchResult {
   id: number;
   code: string;
   title: string;
@@ -17,29 +17,20 @@ interface RawSearchResult {
     code: string;
     title: string;
   };
+}
+
+interface RawSearchResult extends BaseSearchResult {
   similarity: number;
 }
 
-interface SearchResult {
-  code: string;
-  title: string;
-  description: string | null;
-  section: {
-    code: string;
-    title: string;
-  };
+interface SearchResult extends BaseSearchResult {
+  displayCode: string;
 }
 
 interface SearchResponse {
-  type:
-    | "exact_code"
-    | "partial_code"
-    | "exact_title"
-    | "synonym"
-    | "ai"
-    | "ai_strict"
-    | "ai_refined";
+  type: "combined";
   results: SearchResult[];
+  search_types_used: string[];
   refined_selection?: string;
   pagination: {
     page: number;
@@ -50,6 +41,7 @@ interface SearchResponse {
 }
 
 const VECTOR_SEARCH_LIMIT = 80;
+const TARGET_RESULTS = 10;
 
 // Mark this route as dynamic
 export const dynamic = "force-dynamic";
@@ -73,7 +65,35 @@ export async function GET(request: Request) {
       );
     }
 
-    // First try exact code match
+    let allResults: SearchResult[] = [];
+    const searchTypesUsed: string[] = [];
+    const usedCodes = new Set<string>();
+
+    // Helper function to add unique results
+    const addUniqueResults = (
+      results: BaseSearchResult[],
+      searchType: string
+    ) => {
+      const uniqueResults = results
+        .filter((result) => {
+          if (usedCodes.has(result.code)) {
+            return false;
+          }
+          usedCodes.add(result.code);
+          return true;
+        })
+        .map((result) => ({
+          ...result,
+          displayCode: `${result.section.code} - ${result.code}`,
+        }));
+
+      if (uniqueResults.length > 0) {
+        allResults = [...allResults, ...uniqueResults];
+        searchTypesUsed.push(searchType);
+      }
+    };
+
+    // 1. Try exact code match
     const exactCodeMatch = await prisma.billingCode.findFirst({
       where: {
         code: query,
@@ -83,26 +103,22 @@ export async function GET(request: Request) {
         code: true,
         title: true,
         description: true,
-        section: true,
+        section: {
+          select: {
+            code: true,
+            title: true,
+          },
+        },
       },
     });
 
     if (exactCodeMatch) {
-      return NextResponse.json({
-        type: "exact_code",
-        results: [exactCodeMatch],
-        pagination: {
-          page: 1,
-          limit: 1,
-          total: 1,
-          totalPages: 1,
-        },
-      });
+      addUniqueResults([exactCodeMatch], "exact_code");
     }
 
-    // Try partial code match if no exact match
-    const [partialCodeMatches, totalPartialMatches] = await Promise.all([
-      prisma.billingCode.findMany({
+    // 2. Try partial code match if we need more results
+    if (allResults.length < TARGET_RESULTS) {
+      const partialCodeMatches = await prisma.billingCode.findMany({
         where: {
           code: {
             contains: query,
@@ -114,64 +130,46 @@ export async function GET(request: Request) {
           code: true,
           title: true,
           description: true,
-          section: true,
-        },
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      prisma.billingCode.count({
-        where: {
-          code: {
-            contains: query,
-            mode: "insensitive",
+          section: {
+            select: {
+              code: true,
+              title: true,
+            },
           },
         },
-      }),
-    ]);
-
-    if (partialCodeMatches.length > 0) {
-      return NextResponse.json({
-        type: "partial_code",
-        results: partialCodeMatches,
-        pagination: {
-          page,
-          limit,
-          total: totalPartialMatches,
-          totalPages: Math.ceil(totalPartialMatches / limit),
-        },
+        take: TARGET_RESULTS - allResults.length,
       });
+
+      addUniqueResults(partialCodeMatches, "partial_code");
     }
 
-    // Then try exact title match
-    const exactTitleMatch = await prisma.billingCode.findFirst({
-      where: {
-        title: query,
-      },
-      select: {
-        id: true,
-        code: true,
-        title: true,
-        description: true,
-        section: true,
-      },
-    });
-
-    if (exactTitleMatch) {
-      return NextResponse.json({
-        type: "exact_title",
-        results: [exactTitleMatch],
-        pagination: {
-          page: 1,
-          limit: 1,
-          total: 1,
-          totalPages: 1,
+    // 3. Try exact title match if we need more results
+    if (allResults.length < TARGET_RESULTS) {
+      const exactTitleMatches = await prisma.billingCode.findMany({
+        where: {
+          title: query,
         },
+        select: {
+          id: true,
+          code: true,
+          title: true,
+          description: true,
+          section: {
+            select: {
+              code: true,
+              title: true,
+            },
+          },
+        },
+        take: TARGET_RESULTS - allResults.length,
       });
+
+      addUniqueResults(exactTitleMatches, "exact_title");
     }
 
-    // Then try synonym match
-    const [synonymMatches, totalSynonymMatches] = await Promise.all([
-      prisma.billingCode.findMany({
+    // 4. Try synonym match if we need more results
+    if (allResults.length < TARGET_RESULTS) {
+      const synonymMatches = await prisma.billingCode.findMany({
         where: {
           OR: [
             {
@@ -193,127 +191,88 @@ export async function GET(request: Request) {
           code: true,
           title: true,
           description: true,
-          section: true,
-        },
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      prisma.billingCode.count({
-        where: {
-          OR: [
-            {
-              title: {
-                contains: query,
-                mode: "insensitive",
-              },
+          section: {
+            select: {
+              code: true,
+              title: true,
             },
-            {
-              description: {
-                contains: query,
-                mode: "insensitive",
-              },
-            },
-          ],
+          },
         },
-      }),
-    ]);
-
-    if (synonymMatches.length > 0) {
-      return NextResponse.json({
-        type: "synonym",
-        results: synonymMatches,
-        pagination: {
-          page,
-          limit,
-          total: totalSynonymMatches,
-          totalPages: Math.ceil(totalSynonymMatches / limit),
-        },
+        take: TARGET_RESULTS - allResults.length,
       });
+
+      addUniqueResults(synonymMatches, "synonym");
     }
 
-    // If no matches found, proceed with AI search
-    const embedding = await openai.embeddings.create({
-      model: "text-embedding-ada-002",
-      input: query,
-    });
+    // 5. If still need more results, try AI search
+    if (allResults.length < TARGET_RESULTS) {
+      const embedding = await openai.embeddings.create({
+        model: "text-embedding-ada-002",
+        input: query,
+      });
 
-    const embeddingArray = embedding.data[0].embedding;
-    const embeddingString = `[${embeddingArray.join(",")}]`;
+      const embeddingArray = embedding.data[0].embedding;
+      const embeddingString = `[${embeddingArray.join(",")}]`;
 
-    // First try: Strict matching with high similarity threshold
-    const strictMatches = await prisma.$queryRaw<RawSearchResult[]>`
-      SELECT 
-        bc.id,
-        bc.code,
-        bc.title,
-        bc.description,
-        json_build_object(
-          'code', s.code,
-          'title', s.title
-        ) as section,
-        1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) as similarity
-      FROM billing_codes bc
-      JOIN sections s ON bc.section_id = s.id
-      WHERE bc.openai_embedding IS NOT NULL
-        AND 1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) > 0.85
-      ORDER BY similarity DESC
-      LIMIT ${limit}
-      OFFSET ${(page - 1) * limit}
-    `;
-
-    if (strictMatches.length > 0) {
-      const totalStrictMatches = await prisma.$queryRaw<{ count: number }[]>`
-        SELECT COUNT(*) as count
+      // First try strict matching
+      const strictMatches = await prisma.$queryRaw<RawSearchResult[]>`
+        SELECT 
+          bc.id,
+          bc.code,
+          bc.title,
+          bc.description,
+          json_build_object(
+            'code', s.code,
+            'title', s.title
+          ) as section,
+          1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) as similarity
         FROM billing_codes bc
+        JOIN sections s ON bc.section_id = s.id
         WHERE bc.openai_embedding IS NOT NULL
           AND 1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) > 0.85
+        ORDER BY similarity DESC
+        LIMIT ${TARGET_RESULTS - allResults.length}
       `;
 
-      return NextResponse.json({
-        type: "ai_strict",
-        results: strictMatches,
-        pagination: {
-          page,
-          limit,
-          total: Number(totalStrictMatches[0].count),
-          totalPages: Math.ceil(Number(totalStrictMatches[0].count) / limit),
-        },
-      });
-    }
+      addUniqueResults(strictMatches, "ai_strict");
 
-    // Second try: Broader matching with GPT refinement
-    const broaderMatches = await prisma.$queryRaw<RawSearchResult[]>`
-      SELECT 
-        bc.id,
-        bc.code,
-        bc.title,
-        bc.description,
-        json_build_object(
-          'code', s.code,
-          'title', s.title
-        ) as section,
-        1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) as similarity
-      FROM billing_codes bc
-      JOIN sections s ON bc.section_id = s.id
-      WHERE bc.openai_embedding IS NOT NULL
-        AND 1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) > 0.1
-      ORDER BY similarity DESC
-      LIMIT ${VECTOR_SEARCH_LIMIT}
-    `;
+      // If still need more results, try broader matching
+      if (allResults.length < TARGET_RESULTS) {
+        const broaderMatches = await prisma.$queryRaw<RawSearchResult[]>`
+          SELECT 
+            bc.id,
+            bc.code,
+            bc.title,
+            bc.description,
+            json_build_object(
+              'code', s.code,
+              'title', s.title
+            ) as section,
+            1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) as similarity
+          FROM billing_codes bc
+          JOIN sections s ON bc.section_id = s.id
+          WHERE bc.openai_embedding IS NOT NULL
+            AND 1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) > 0.1
+          ORDER BY similarity DESC
+          LIMIT ${TARGET_RESULTS - allResults.length}
+        `;
 
-    if (broaderMatches.length > 0) {
-      const matchesText = broaderMatches
-        .map(
-          (match) =>
-            `Code: ${match.code}\nTitle: ${match.title}\nDescription: ${
-              match.description || "N/A"
-            }\nSection: ${match.section.title}\nSimilarity: ${(
-              match.similarity * 100
-            ).toFixed(1)}%\n---`
-        )
-        .join("\n");
+        addUniqueResults(broaderMatches, "ai_broader");
 
-      const prompt = `You are a medical billing expert. Given the following search query and potential matches, select the most relevant billing codes that exactly match the medical procedure or service being searched for.
+        // If we have broader matches, get GPT refinement
+        if (broaderMatches.length > 0) {
+          const matchesText = broaderMatches
+            .map(
+              (match) =>
+                `Code: ${match.section.code} - ${match.code}\nTitle: ${
+                  match.title
+                }\nDescription: ${match.description || "N/A"}\nSection: ${
+                  match.section.title
+                }\nSimilarity: ${(match.similarity * 100).toFixed(1)}%\n---`
+            )
+            .join("\n");
+
+          const prompt = `You are a medical billing expert. Given the following search query and potential matches, select the most relevant billing codes that exactly match the medical procedure or service being searched for.
 
 Search Query: "${query}"
 
@@ -327,44 +286,48 @@ Selected Codes:
 2. [CODE] - [BRIEF EXPLANATION]
 ...`;
 
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a medical billing expert helping to find the most relevant billing codes for medical procedures and services.",
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        temperature: 0.3,
-        max_tokens: 500,
-      });
+          const completion = await openai.chat.completions.create({
+            model: "gpt-4",
+            messages: [
+              {
+                role: "system",
+                content:
+                  "You are a medical billing expert helping to find the most relevant billing codes for medical procedures and services.",
+              },
+              {
+                role: "user",
+                content: prompt,
+              },
+            ],
+            temperature: 0.3,
+            max_tokens: 500,
+          });
 
-      return NextResponse.json({
-        type: "ai_refined",
-        results: broaderMatches.slice(0 + page * limit, 20 + page * limit),
-        refined_selection: completion.choices[0].message.content,
-        pagination: {
-          page,
-          limit,
-          total: Number(broaderMatches.length),
-          totalPages: Math.ceil(Number(broaderMatches.length) / limit),
-        },
-      });
+          return NextResponse.json({
+            type: "combined",
+            results: allResults,
+            search_types_used: searchTypesUsed,
+            refined_selection: completion.choices[0].message.content,
+            pagination: {
+              page: 1,
+              limit: allResults.length,
+              total: allResults.length,
+              totalPages: 1,
+            },
+          });
+        }
+      }
     }
 
     return NextResponse.json({
-      type: "ai",
-      results: [],
+      type: "combined",
+      results: allResults,
+      search_types_used: searchTypesUsed,
       pagination: {
         page: 1,
-        limit,
-        total: 0,
-        totalPages: 0,
+        limit: allResults.length,
+        total: allResults.length,
+        totalPages: 1,
       },
     });
   } catch (error) {

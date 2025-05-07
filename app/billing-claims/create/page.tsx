@@ -481,7 +481,9 @@ export default function CreateBillingClaimPage() {
                           className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
                           onClick={() => handleAddCode(code)}
                         >
-                          <div className="font-medium">{code.code}</div>
+                          <div className="font-medium">
+                            {code.code} ({code.section.title})
+                          </div>
                           <div className="text-sm text-gray-600">
                             {code.title}
                           </div>
