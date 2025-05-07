@@ -128,6 +128,7 @@ export default function CreateBillingClaimPage() {
         setIsSearching(false);
       }
     };
+    setSearchResults([]);
     const debounceTimer = setTimeout(searchBillingCodes, 300);
     return () => clearTimeout(debounceTimer);
   }, [searchQuery]);

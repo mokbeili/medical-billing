@@ -56,7 +56,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get("query");
     const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "20");
+    const limit = parseInt(searchParams.get("limit") || `${TARGET_RESULTS}`);
 
     if (!query) {
       return NextResponse.json(
@@ -117,7 +117,7 @@ export async function GET(request: Request) {
     }
 
     // 2. Try partial code match if we need more results
-    if (allResults.length < TARGET_RESULTS) {
+    if (allResults.length < limit && !exactCodeMatch) {
       const partialCodeMatches = await prisma.billingCode.findMany({
         where: {
           code: {
@@ -137,14 +137,14 @@ export async function GET(request: Request) {
             },
           },
         },
-        take: TARGET_RESULTS - allResults.length,
+        take: limit - allResults.length,
       });
 
       addUniqueResults(partialCodeMatches, "partial_code");
     }
 
     // 3. Try exact title match if we need more results
-    if (allResults.length < TARGET_RESULTS) {
+    if (allResults.length < limit) {
       const exactTitleMatches = await prisma.billingCode.findMany({
         where: {
           title: query,
@@ -161,15 +161,15 @@ export async function GET(request: Request) {
             },
           },
         },
-        take: TARGET_RESULTS - allResults.length,
+        take: limit - allResults.length,
       });
 
       addUniqueResults(exactTitleMatches, "exact_title");
     }
 
     // 4. Try synonym match if we need more results
-    if (allResults.length < TARGET_RESULTS) {
-      const synonymMatches = await prisma.billingCode.findMany({
+    if (allResults.length < limit && !exactCodeMatch) {
+      const partialMatches = await prisma.billingCode.findMany({
         where: {
           OR: [
             {
@@ -198,21 +198,22 @@ export async function GET(request: Request) {
             },
           },
         },
-        take: TARGET_RESULTS - allResults.length,
+        take: limit - allResults.length,
       });
-
-      addUniqueResults(synonymMatches, "synonym");
+      addUniqueResults(partialMatches, "synonym");
     }
 
+    let embeddingString: string = "";
+
     // 5. If still need more results, try AI search
-    if (allResults.length < TARGET_RESULTS) {
+    if (allResults.length < limit && !exactCodeMatch) {
       const embedding = await openai.embeddings.create({
         model: "text-embedding-ada-002",
         input: query,
       });
 
       const embeddingArray = embedding.data[0].embedding;
-      const embeddingString = `[${embeddingArray.join(",")}]`;
+      embeddingString = `[${embeddingArray.join(",")}]`;
 
       // First try strict matching
       const strictMatches = await prisma.$queryRaw<RawSearchResult[]>`
@@ -229,102 +230,98 @@ export async function GET(request: Request) {
         FROM billing_codes bc
         JOIN sections s ON bc.section_id = s.id
         WHERE bc.openai_embedding IS NOT NULL
-          AND 1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) > 0.85
+          AND 1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) > 0.80
         ORDER BY similarity DESC
-        LIMIT ${TARGET_RESULTS - allResults.length}
+        LIMIT ${limit - allResults.length}
       `;
 
       addUniqueResults(strictMatches, "ai_strict");
-
-      // If still need more results, try broader matching
-      if (allResults.length < TARGET_RESULTS) {
-        const broaderMatches = await prisma.$queryRaw<RawSearchResult[]>`
-          SELECT 
-            bc.id,
-            bc.code,
-            bc.title,
-            bc.description,
-            json_build_object(
-              'code', s.code,
-              'title', s.title
-            ) as section,
-            1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) as similarity
-          FROM billing_codes bc
-          JOIN sections s ON bc.section_id = s.id
-          WHERE bc.openai_embedding IS NOT NULL
-            AND 1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) > 0.1
-          ORDER BY similarity DESC
-          LIMIT ${TARGET_RESULTS - allResults.length}
-        `;
-
-        addUniqueResults(broaderMatches, "ai_broader");
-
-        // If we have broader matches, get GPT refinement
-        if (broaderMatches.length > 0) {
-          const matchesText = broaderMatches
-            .map(
-              (match) =>
-                `Code: ${match.section.code} - ${match.code}\nTitle: ${
-                  match.title
-                }\nDescription: ${match.description || "N/A"}\nSection: ${
-                  match.section.title
-                }\nSimilarity: ${(match.similarity * 100).toFixed(1)}%\n---`
-            )
-            .join("\n");
-
-          const prompt = `You are a medical billing expert. Given the following search query and potential matches, select the most relevant billing codes that exactly match the medical procedure or service being searched for.
-
-Search Query: "${query}"
-
-Potential Matches:
-${matchesText}
-
-Please analyze these matches and return ONLY the billing codes that are most relevant to the search query. For each selected code, explain briefly why it matches. Format your response as:
-
-Selected Codes:
-1. [CODE] - [BRIEF EXPLANATION]
-2. [CODE] - [BRIEF EXPLANATION]
-...`;
-
-          const completion = await openai.chat.completions.create({
-            model: "gpt-4",
-            messages: [
-              {
-                role: "system",
-                content:
-                  "You are a medical billing expert helping to find the most relevant billing codes for medical procedures and services.",
-              },
-              {
-                role: "user",
-                content: prompt,
-              },
-            ],
-            temperature: 0.3,
-            max_tokens: 500,
-          });
-
-          return NextResponse.json({
-            type: "combined",
-            results: allResults,
-            search_types_used: searchTypesUsed,
-            refined_selection: completion.choices[0].message.content,
-            pagination: {
-              page: 1,
-              limit: allResults.length,
-              total: allResults.length,
-              totalPages: 1,
-            },
-          });
-        }
-      }
     }
+    // If still need more results, try broader matching
+    // if (allResults.length < limit && !exactCodeMatch) {
+    //   const broaderMatches = await prisma.$queryRaw<RawSearchResult[]>`
+    //       SELECT
+    //         bc.id,
+    //         bc.code,
+    //         bc.title,
+    //         bc.description,
+    //         json_build_object(
+    //           'code', s.code,
+    //           'title', s.title
+    //         ) as section,
+    //         1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) as similarity
+    //       FROM billing_codes bc
+    //       JOIN sections s ON bc.section_id = s.id
+    //       WHERE bc.openai_embedding IS NOT NULL
+    //         AND 1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) > 0.1
+    //       ORDER BY similarity DESC
+    //       LIMIT ${limit - allResults.length}
+    //     `;
+
+    //   if (broaderMatches.length > 0) {
+    //     const matchesText = broaderMatches
+    //       .map(
+    //         (match) =>
+    //           `Code: ${match.section.code} - ${match.code}\nTitle: ${
+    //             match.title
+    //           }\nDescription: ${match.description || "N/A"}\nSection: ${
+    //             match.section.title
+    //           }\nSimilarity: ${(match.similarity * 100).toFixed(1)}%\n---`
+    //       )
+    //       .join("\n");
+
+    //     const prompt = `You are a medical billing expert. Given the following search query and potential matches, select the most relevant billing codes that exactly match the medical procedure or service being searched for.
+
+    //         Search Query: "${query}"
+
+    //         Potential Matches:
+    //         ${matchesText}
+
+    //         Please analyze these matches and return ONLY the billing codes that are most relevant to the search query. For each selected code, explain briefly why it matches. Format your response as:
+
+    //         Selected Codes:
+    //         1. [CODE] - [BRIEF EXPLANATION]
+    //         2. [CODE] - [BRIEF EXPLANATION]
+    //         ...`;
+
+    //     const completion = await openai.chat.completions.create({
+    //       model: "gpt-4",
+    //       messages: [
+    //         {
+    //           role: "system",
+    //           content:
+    //             "You are a medical billing expert helping to find the most relevant billing codes for medical procedures and services.",
+    //         },
+    //         {
+    //           role: "user",
+    //           content: prompt,
+    //         },
+    //       ],
+    //       temperature: 0.3,
+    //       max_tokens: 500,
+    //     });
+
+    //     return NextResponse.json({
+    //       type: "combined",
+    //       results: allResults,
+    //       search_types_used: searchTypesUsed,
+    //       refined_selection: completion.choices[0].message.content,
+    //       pagination: {
+    //         page,
+    //         limit: allResults.length,
+    //         total: allResults.length,
+    //         totalPages: 1,
+    //       },
+    //     });
+    //   }
+    // }
 
     return NextResponse.json({
       type: "combined",
       results: allResults,
       search_types_used: searchTypesUsed,
       pagination: {
-        page: 1,
+        page,
         limit: allResults.length,
         total: allResults.length,
         totalPages: 1,
