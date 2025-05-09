@@ -15,18 +15,13 @@ interface SearchResult {
     title: string;
   };
   similarity?: number;
+  displayCode: string;
 }
 
 interface SearchResponse {
-  type:
-    | "exact_code"
-    | "exact_title"
-    | "synonym"
-    | "ai"
-    | "ai_strict"
-    | "ai_refined";
+  type: "combined";
   results: SearchResult[];
-  refined_selection?: string;
+  search_types_used: string[];
   pagination: {
     page: number;
     limit: number;
@@ -127,7 +122,7 @@ export default function SearchPage() {
                 Search Type: {getSearchTypeLabel(searchResponse.type)}
               </div>
 
-              {searchResponse.type === "ai_strict" && (
+              {searchResponse.search_types_used.includes("ai_strict") && (
                 <div className="bg-green-50 p-4 rounded-lg mb-6">
                   <h3 className="text-lg font-semibold text-green-800 mb-2">
                     High Confidence Matches
@@ -138,18 +133,6 @@ export default function SearchPage() {
                   </p>
                 </div>
               )}
-
-              {searchResponse.type === "ai_refined" &&
-                searchResponse.refined_selection && (
-                  <div className="bg-blue-50 p-4 rounded-lg mb-6">
-                    <h3 className="text-lg font-semibold text-blue-800 mb-2">
-                      AI Refined Selection
-                    </h3>
-                    <pre className="whitespace-pre-wrap text-sm text-blue-900">
-                      {searchResponse.refined_selection}
-                    </pre>
-                  </div>
-                )}
 
               {searchResponse.results.length > 0 ? (
                 <div className="space-y-4">
@@ -163,7 +146,9 @@ export default function SearchPage() {
                           <h3 className="text-lg font-semibold">
                             {result.title}
                           </h3>
-                          <p className="text-sm text-gray-600">{result.code}</p>
+                          <p className="text-sm text-gray-600">
+                            {result.displayCode}
+                          </p>
                           {result.description && (
                             <p className="mt-2 text-gray-700">
                               {result.description}

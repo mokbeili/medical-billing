@@ -1,8 +1,9 @@
 "use client";
 
 import { X } from "lucide-react";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 export default function Sidebar({
   isOpen,
@@ -12,6 +13,15 @@ export default function Sidebar({
   onClose: () => void;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { data: session } = useSession({
+    required: true,
+    onUnauthenticated() {
+      router.push("/auth/signin");
+    },
+  });
+
+  const userRoles = session?.user?.roles || [];
 
   return (
     <>
@@ -43,9 +53,21 @@ export default function Sidebar({
           <SidebarLink href="/search" active={pathname === "/search"}>
             AI Code Search
           </SidebarLink>
-          <SidebarLink href="/dashboard" active={pathname === "/dashboard"}>
-            Dashboard
-          </SidebarLink>
+          {userRoles.includes("PHYSICIAN") && (
+            <>
+              <SidebarLink
+                href="/billing-claims"
+                active={pathname === "/billing-claims"}
+              >
+                Billing Claims
+              </SidebarLink>
+            </>
+          )}
+          {userRoles.includes("ADMIN") && (
+            <SidebarLink href="/dashboard" active={pathname === "/dashboard"}>
+              Dashboard
+            </SidebarLink>
+          )}
           <SidebarLink href="/profile" active={pathname === "/profile"}>
             Profile
           </SidebarLink>

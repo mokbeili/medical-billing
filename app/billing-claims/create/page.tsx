@@ -213,7 +213,6 @@ export default function CreateBillingClaimPage() {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    console.log(formData);
     e.preventDefault();
 
     if (!validateForm()) {

@@ -31,7 +31,6 @@ interface SearchResponse {
   type: "combined";
   results: SearchResult[];
   search_types_used: string[];
-  refined_selection?: string;
   pagination: {
     page: number;
     limit: number;
@@ -230,91 +229,100 @@ export async function GET(request: Request) {
         FROM billing_codes bc
         JOIN sections s ON bc.section_id = s.id
         WHERE bc.openai_embedding IS NOT NULL
-          AND 1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) > 0.80
+          AND 1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) > 0.90
         ORDER BY similarity DESC
         LIMIT ${limit - allResults.length}
       `;
 
       addUniqueResults(strictMatches, "ai_strict");
     }
-    // If still need more results, try broader matching
-    // if (allResults.length < limit && !exactCodeMatch) {
-    //   const broaderMatches = await prisma.$queryRaw<RawSearchResult[]>`
-    //       SELECT
-    //         bc.id,
-    //         bc.code,
-    //         bc.title,
-    //         bc.description,
-    //         json_build_object(
-    //           'code', s.code,
-    //           'title', s.title
-    //         ) as section,
-    //         1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) as similarity
-    //       FROM billing_codes bc
-    //       JOIN sections s ON bc.section_id = s.id
-    //       WHERE bc.openai_embedding IS NOT NULL
-    //         AND 1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) > 0.1
-    //       ORDER BY similarity DESC
-    //       LIMIT ${limit - allResults.length}
-    //     `;
+    if (allResults.length < limit && !exactCodeMatch) {
+      const broaderMatches = await prisma.$queryRaw<RawSearchResult[]>`
+          SELECT
+            bc.id,
+            bc.code,
+            bc.title,
+            bc.description,
+            json_build_object(
+              'code', s.code,
+              'title', s.title
+            ) as section,
+            1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) as similarity
+          FROM billing_codes bc
+          JOIN sections s ON bc.section_id = s.id
+          WHERE bc.openai_embedding IS NOT NULL
+            AND 1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) > 0.20
+          ORDER BY similarity DESC
+          LIMIT ${limit - allResults.length}
+        `;
 
-    //   if (broaderMatches.length > 0) {
-    //     const matchesText = broaderMatches
-    //       .map(
-    //         (match) =>
-    //           `Code: ${match.section.code} - ${match.code}\nTitle: ${
-    //             match.title
-    //           }\nDescription: ${match.description || "N/A"}\nSection: ${
-    //             match.section.title
-    //           }\nSimilarity: ${(match.similarity * 100).toFixed(1)}%\n---`
-    //       )
-    //       .join("\n");
+      if (broaderMatches.length > 0) {
+        const matchesText = broaderMatches
+          .map(
+            (match) =>
+              `Code:${match.code}\nTitle:${match.title}\nDescription:${
+                match.description || "N/A"
+              }\nSection: ${match.section.title}\n---`
+          )
+          .join("\n");
 
-    //     const prompt = `You are a medical billing expert. Given the following search query and potential matches, select the most relevant billing codes that exactly match the medical procedure or service being searched for.
+        const prompt = `You are a medical billing expert. Given the following search query and potential matches, select the most relevant billing codes that exactly match the medical procedure or service being searched for.
 
-    //         Search Query: "${query}"
+            Search Query: "${query}"
 
-    //         Potential Matches:
-    //         ${matchesText}
+            Potential Matches:
+            ${matchesText}
 
-    //         Please analyze these matches and return ONLY the billing codes that are most relevant to the search query. For each selected code, explain briefly why it matches. Format your response as:
+            Please analyze these matches and return ONLY the billing codes that are most relevant to the search query. 
+            return results as an array of strings (billing codes)`;
 
-    //         Selected Codes:
-    //         1. [CODE] - [BRIEF EXPLANATION]
-    //         2. [CODE] - [BRIEF EXPLANATION]
-    //         ...`;
+        const completion = await openai.chat.completions.create({
+          model: "gpt-4",
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a medical billing expert helping to find the most relevant billing codes for medical procedures and services.",
+            },
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+          temperature: 0.3,
+          max_tokens: 100,
+        });
 
-    //     const completion = await openai.chat.completions.create({
-    //       model: "gpt-4",
-    //       messages: [
-    //         {
-    //           role: "system",
-    //           content:
-    //             "You are a medical billing expert helping to find the most relevant billing codes for medical procedures and services.",
-    //         },
-    //         {
-    //           role: "user",
-    //           content: prompt,
-    //         },
-    //       ],
-    //       temperature: 0.3,
-    //       max_tokens: 500,
-    //     });
+        // Parse the JSON array from the completion
+        const selectedCodes: string[] = JSON.parse(
+          completion.choices[0].message.content || "[]"
+        );
 
-    //     return NextResponse.json({
-    //       type: "combined",
-    //       results: allResults,
-    //       search_types_used: searchTypesUsed,
-    //       refined_selection: completion.choices[0].message.content,
-    //       pagination: {
-    //         page,
-    //         limit: allResults.length,
-    //         total: allResults.length,
-    //         totalPages: 1,
-    //       },
-    //     });
-    //   }
-    // }
+        // Find the corresponding billing codes from the broader matches
+        const selectedResults = broaderMatches
+          .filter((match) => selectedCodes.includes(match.code))
+          .map((match) => {
+            return {
+              ...match,
+              displayCode: `${match.section.code} - ${match.code}`,
+            };
+          });
+
+        addUniqueResults(selectedResults, "ai_refined");
+
+        return NextResponse.json({
+          type: "combined",
+          results: allResults,
+          search_types_used: searchTypesUsed,
+          pagination: {
+            page,
+            limit: allResults.length,
+            total: allResults.length,
+            totalPages: 1,
+          },
+        });
+      }
+    }
 
     return NextResponse.json({
       type: "combined",
