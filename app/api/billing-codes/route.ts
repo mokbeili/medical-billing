@@ -1,5 +1,6 @@
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
@@ -14,11 +15,14 @@ export async function GET(request: Request) {
     const provider = searchParams.get("provider");
     const jurisdiction = searchParams.get("jurisdiction");
     const title = searchParams.get("title");
+    const code = searchParams.get("code");
     const sectionCode = searchParams.get("sectionCode");
     const sectionTitle = searchParams.get("sectionTitle");
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "10");
     const skip = (page - 1) * limit;
+    const sortBy = searchParams.get("sortBy")?.split(",") || ["code"];
+    const sortOrder = searchParams.get("sortOrder")?.split(",") || ["asc"];
 
     const where: any = {};
     if (provider) {
@@ -48,6 +52,12 @@ export async function GET(request: Request) {
     if (title) {
       where.title = {
         contains: title,
+        mode: "insensitive",
+      };
+    }
+    if (code) {
+      where.code = {
+        contains: code,
         mode: "insensitive",
       };
     }
@@ -89,9 +99,16 @@ export async function GET(request: Request) {
             },
           },
         },
-        orderBy: {
-          code: "asc",
-        },
+        orderBy: [
+          {
+            section: {
+              code: sortOrder[0] as Prisma.SortOrder,
+            },
+          },
+          {
+            code: sortOrder[1] as Prisma.SortOrder,
+          },
+        ],
         skip,
         take: limit,
       }),

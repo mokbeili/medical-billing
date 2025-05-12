@@ -28,6 +28,7 @@ interface BillingCode {
   title: string;
   description: string | null;
   section: {
+    id: number;
     code: string;
     title: string;
     jurisdiction: {
@@ -50,9 +51,21 @@ interface PaginationInfo {
 export function BillingCodesTable() {
   const [billingCodes, setBillingCodes] = useState<BillingCode[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editValues, setEditValues] = useState<{
+    code: string;
+    title: string;
+    description: string;
+    sectionId: number;
+  }>({
+    code: "",
+    title: "",
+    description: "",
+    sectionId: 0,
+  });
+  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState({
-    provider: "",
-    jurisdiction: "",
+    code: "",
     title: "",
     sectionCode: "",
     sectionTitle: "",
@@ -83,18 +96,86 @@ export function BillingCodesTable() {
     setNewBillingCode((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleEdit = (code: BillingCode) => {
+    setEditingId(code.id);
+    setEditValues({
+      code: code.code,
+      title: code.title,
+      description: code.description || "",
+      sectionId: code.section.id,
+    });
+    setError(null);
+  };
+
+  const handleEditChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    const { name, value } = e.target;
+    setEditValues((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleEditSave = async (id: number) => {
+    try {
+      // Check for duplicates
+      const duplicateCheck = await fetch(
+        `/api/billing-codes/check-duplicates?code=${editValues.code}&title=${editValues.title}&excludeId=${id}`
+      );
+      const duplicateData = await duplicateCheck.json();
+
+      if (duplicateData.duplicate) {
+        setError(duplicateData.message);
+        return;
+      }
+
+      const response = await fetch(`/api/billing-codes/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          code: editValues.code,
+          title: editValues.title,
+          description: editValues.description,
+          sectionId: editValues.sectionId,
+        }),
+      });
+
+      if (!response.ok) {
+        console.log(response);
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to update billing code");
+      }
+
+      await fetchBillingCodes();
+      setEditingId(null);
+      setError(null);
+    } catch (error) {
+      console.error("Error updating billing code:", error);
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Failed to update billing code. Please try again."
+      );
+    }
+  };
+
+  const handleEditCancel = () => {
+    setEditingId(null);
+    setError(null);
+  };
+
   const fetchBillingCodes = async () => {
     try {
       const params = new URLSearchParams();
-      if (filter.provider) params.append("provider", filter.provider);
-      if (filter.jurisdiction)
-        params.append("jurisdiction", filter.jurisdiction);
+      if (filter.code) params.append("code", filter.code);
       if (filter.title) params.append("title", filter.title);
       if (filter.sectionCode) params.append("sectionCode", filter.sectionCode);
       if (filter.sectionTitle)
         params.append("sectionTitle", filter.sectionTitle);
       params.append("page", pagination.page.toString());
       params.append("limit", pagination.limit.toString());
+      params.append("sortBy", "section.code,code");
+      params.append("sortOrder", "asc,asc");
 
       const response = await fetch(`/api/billing-codes?${params.toString()}`);
       if (!response.ok) throw new Error("Failed to fetch billing codes");
@@ -144,16 +225,9 @@ export function BillingCodesTable() {
       <div className="flex items-center justify-between">
         <div className="flex gap-4">
           <Input
-            placeholder="Filter by provider..."
-            name="provider"
-            value={filter.provider}
-            onChange={handleFilterChange}
-            className="max-w-xs"
-          />
-          <Input
-            placeholder="Filter by jurisdiction..."
-            name="jurisdiction"
-            value={filter.jurisdiction}
+            placeholder="Filter by code..."
+            name="code"
+            value={filter.code}
             onChange={handleFilterChange}
             className="max-w-xs"
           />
@@ -243,27 +317,60 @@ export function BillingCodesTable() {
               <TableHead>Provider</TableHead>
               <TableHead>Jurisdiction</TableHead>
               <TableHead>Section</TableHead>
+              <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center">
+                <TableCell colSpan={7} className="text-center">
                   Loading...
                 </TableCell>
               </TableRow>
             ) : billingCodes.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center">
+                <TableCell colSpan={7} className="text-center">
                   No billing codes found
                 </TableCell>
               </TableRow>
             ) : (
               billingCodes.map((code) => (
                 <TableRow key={code.id}>
-                  <TableCell>{code.code}</TableCell>
-                  <TableCell>{code.title}</TableCell>
-                  <TableCell>{code.description || "-"}</TableCell>
+                  <TableCell>
+                    {editingId === code.id ? (
+                      <Input
+                        name="code"
+                        value={editValues.code}
+                        onChange={handleEditChange}
+                        className={error ? "border-red-500" : ""}
+                      />
+                    ) : (
+                      code.code
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {editingId === code.id ? (
+                      <Input
+                        name="title"
+                        value={editValues.title}
+                        onChange={handleEditChange}
+                        className={error ? "border-red-500" : ""}
+                      />
+                    ) : (
+                      code.title
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {editingId === code.id ? (
+                      <Textarea
+                        name="description"
+                        value={editValues.description}
+                        onChange={handleEditChange}
+                      />
+                    ) : (
+                      code.description || "-"
+                    )}
+                  </TableCell>
                   <TableCell>
                     {code.section.jurisdiction.provider.name}
                   </TableCell>
@@ -274,12 +381,41 @@ export function BillingCodesTable() {
                   <TableCell>
                     {code.section.code} - {code.section.title}
                   </TableCell>
+                  <TableCell>
+                    {editingId === code.id ? (
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => handleEditSave(code.id)}
+                        >
+                          Save
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={handleEditCancel}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleEdit(code)}
+                      >
+                        Edit
+                      </Button>
+                    )}
+                  </TableCell>
                 </TableRow>
               ))
             )}
           </TableBody>
         </Table>
       </div>
+
+      {error && <div className="text-red-500 text-sm mt-2">{error}</div>}
 
       {/* Pagination */}
       <div className="flex items-center justify-between px-2">
