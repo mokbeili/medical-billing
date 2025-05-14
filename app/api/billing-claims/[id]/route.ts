@@ -26,6 +26,7 @@ export async function GET(
         physician: true,
         patient: true,
         jurisdiction: true,
+        icdCode: true,
         claimCodes: {
           include: {
             code: {

@@ -139,12 +139,26 @@ model Physician {
   @@map("physicians")
 }
 
+model ICDCode {
+  id          Int            @id @default(autoincrement())
+  version     String
+  code        String
+  description String
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+  claims      BillingClaim[]
+
+  @@index([code])
+  @@map("icd_codes")
+}
+
 model BillingClaim {
   id                String             @id
   friendlyId        String             @unique @map("friendly_id")
   physicianId       String             @map("physician_id")
   patientId         String             @map("patient_id")
   jurisdictionId    Int                @map("jurisdiction_id")
+  icdCodeId         Int?               @map("icd_code_id")
   summary           String
   openaiEmbedding   String             @map("openai_embedding")
   openaiSuggestions String?            @map("openai_suggestions")
@@ -154,6 +168,7 @@ model BillingClaim {
   jurisdiction      Jurisdiction       @relation(fields: [jurisdictionId], references: [id])
   patient           Patient            @relation(fields: [patientId], references: [id])
   physician         Physician          @relation(fields: [physicianId], references: [id])
+  icdCode           ICDCode?           @relation(fields: [icdCodeId], references: [id])
 
   @@map("billing_claims")
 }

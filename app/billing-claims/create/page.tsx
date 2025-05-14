@@ -43,6 +43,13 @@ interface BillingCode {
   };
 }
 
+interface ICDCode {
+  id: number;
+  version: string;
+  code: string;
+  description: string;
+}
+
 export default function CreateBillingClaimPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
@@ -53,6 +60,10 @@ export default function CreateBillingClaimPage() {
   const [searchResults, setSearchResults] = useState<BillingCode[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [selectedCodes, setSelectedCodes] = useState<BillingCode[]>([]);
+  const [icdSearchQuery, setIcdSearchQuery] = useState("");
+  const [icdSearchResults, setIcdSearchResults] = useState<ICDCode[]>([]);
+  const [isSearchingIcd, setIsSearchingIcd] = useState(false);
+  const [selectedIcdCode, setSelectedIcdCode] = useState<ICDCode | null>(null);
   const [newPatient, setNewPatient] = useState({
     firstName: "",
     lastName: "",
@@ -64,6 +75,7 @@ export default function CreateBillingClaimPage() {
     patientId: "",
     summary: "",
     billingCodes: [] as { codeId: number; status: string }[],
+    icdCodeId: null as number | null,
   });
 
   const [errors, setErrors] = useState({
@@ -133,6 +145,33 @@ export default function CreateBillingClaimPage() {
     return () => clearTimeout(debounceTimer);
   }, [searchQuery]);
 
+  useEffect(() => {
+    const searchIcdCodes = async () => {
+      if (icdSearchQuery.length < 2) {
+        setIcdSearchResults([]);
+        return;
+      }
+      setIsSearchingIcd(true);
+      try {
+        const response = await fetch(
+          `/api/icd-codes?search=${encodeURIComponent(icdSearchQuery)}`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setIcdSearchResults(data);
+        }
+      } catch (error) {
+        console.error("Error searching ICD codes:", error);
+      } finally {
+        setIsSearchingIcd(false);
+      }
+    };
+
+    setIcdSearchResults([]);
+    const debounceTimer = setTimeout(searchIcdCodes, 300);
+    return () => clearTimeout(debounceTimer);
+  }, [icdSearchQuery]);
+
   const handleCreatePatient = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -199,6 +238,24 @@ export default function CreateBillingClaimPage() {
       billingCodes: formData.billingCodes.filter(
         (code) => code.codeId !== codeId
       ),
+    });
+  };
+
+  const handleSelectIcdCode = (icdCode: ICDCode) => {
+    setSelectedIcdCode(icdCode);
+    setFormData({
+      ...formData,
+      icdCodeId: icdCode.id,
+    });
+    setIcdSearchQuery("");
+    setIcdSearchResults([]);
+  };
+
+  const handleRemoveIcdCode = () => {
+    setSelectedIcdCode(null);
+    setFormData({
+      ...formData,
+      icdCodeId: null,
     });
   };
 
@@ -270,49 +327,43 @@ export default function CreateBillingClaimPage() {
 
   return (
     <Layout>
-      <div className="container mx-auto">
-        <Card>
-          <CardHeader>
-            <CardTitle>Create New Billing Claim</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {physicians.length !== 1 && (
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium">
-                    Physician Profile
-                  </label>
-                  <Select
-                    value={formData.physicianId}
-                    onValueChange={(value: string) => {
-                      setFormData({ ...formData, physicianId: value });
-                      setErrors({ ...errors, physician: false });
-                    }}
+      <div className="container mx-auto p-4">
+        <h1 className="text-2xl font-bold mb-6">Create New Billing Claim</h1>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Claim Information</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <label className="block text-sm font-medium">Physician</label>
+                <Select
+                  value={formData.physicianId}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, physicianId: value })
+                  }
+                >
+                  <SelectTrigger
+                    className={errors.physician ? "border-red-500" : ""}
                   >
-                    <SelectTrigger
-                      className={errors.physician ? "border-red-500" : ""}
-                    >
-                      <SelectValue placeholder="Select physician" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {physicians.map((physician) => (
-                        <SelectItem key={physician.id} value={physician.id}>
-                          {`${physician.firstName} ${physician.lastName}${
-                            physician.middleInitial
-                              ? ` ${physician.middleInitial}`
-                              : ""
-                          }`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {errors.physician && (
-                    <p className="text-sm text-red-500">
-                      Please select a physician
-                    </p>
-                  )}
-                </div>
-              )}
+                    <SelectValue placeholder="Select a physician" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {physicians.map((physician) => (
+                      <SelectItem key={physician.id} value={physician.id}>
+                        {physician.firstName} {physician.lastName} (
+                        {physician.billingNumber})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.physician && (
+                  <p className="text-sm text-red-500">
+                    Please select a physician
+                  </p>
+                )}
+              </div>
+
               <div className="space-y-2">
                 <label className="block text-sm font-medium">Patient</label>
                 {!isCreatingPatient ? (
@@ -446,15 +497,67 @@ export default function CreateBillingClaimPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="block text-sm font-medium">Summary</label>
+                <label className="block text-sm font-medium">Description</label>
                 <Textarea
+                  placeholder="Enter a detailed description of the claim"
                   value={formData.summary}
-                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                  onChange={(e) =>
                     setFormData({ ...formData, summary: e.target.value })
                   }
-                  placeholder="Enter claim summary"
-                  className="min-h-[200px]"
+                  rows={4}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium">ICD Code</label>
+                <div className="relative">
+                  <Input
+                    placeholder="Search ICD codes..."
+                    value={icdSearchQuery}
+                    onChange={(e) => setIcdSearchQuery(e.target.value)}
+                  />
+                  {isSearchingIcd && (
+                    <div className="absolute right-2 top-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
+                    </div>
+                  )}
+                  {icdSearchResults.length > 0 && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
+                      {icdSearchResults.map((code) => (
+                        <div
+                          key={code.id}
+                          className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                          onClick={() => handleSelectIcdCode(code)}
+                        >
+                          <div className="font-medium">
+                            {code.code} - {code.description}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {selectedIcdCode && (
+                  <div className="mt-4 space-y-2">
+                    <div className="flex items-center justify-between p-2 bg-gray-50 rounded-md">
+                      <div>
+                        <span className="font-medium">
+                          {selectedIcdCode.code}
+                        </span>{" "}
+                        - {selectedIcdCode.description}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleRemoveIcdCode}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -524,11 +627,11 @@ export default function CreateBillingClaimPage() {
               </div>
 
               <div className="flex justify-end">
-                <Button type="submit">Create Claim</Button>
+                <Button type="submit">Create Billing Claim</Button>
               </div>
-            </form>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </form>
       </div>
     </Layout>
   );

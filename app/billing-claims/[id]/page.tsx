@@ -24,6 +24,12 @@ interface BillingClaim {
     middleInitial: string | null;
     billingNumber: string;
   };
+  icdCode?: {
+    id: number;
+    version: string;
+    code: string;
+    description: string;
+  } | null;
   claimCodes: {
     id: number;
     status: ClaimStatus;
@@ -205,6 +211,30 @@ export default function BillingClaimDetailsPage({
             </p>
           </CardContent>
         </Card>
+
+        {claim.icdCode && (
+          <Card>
+            <CardHeader>
+              <CardTitle>ICD Diagnosis Code</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <h3 className="text-sm font-medium text-gray-500">Code</h3>
+                <p className="mt-1 text-sm text-gray-900">
+                  {claim.icdCode.code} ({claim.icdCode.version})
+                </p>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-gray-500">
+                  Description
+                </h3>
+                <p className="mt-1 text-sm text-gray-900">
+                  {claim.icdCode.description}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card className="md:col-span-2">
           <CardHeader>

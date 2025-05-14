@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { physicianId, patientId, summary, billingCodes } = body;
+    const { physicianId, patientId, summary, billingCodes, icdCodeId } = body;
 
     // Validate required fields
     if (!physicianId || !patientId) {
@@ -78,6 +78,7 @@ export async function POST(request: Request) {
         physicianId,
         patientId,
         jurisdictionId: physician.jurisdictionId,
+        icdCodeId: icdCodeId || null,
         summary,
         openaiEmbedding: "", // This will be populated by a background job
         claimCodes: {
@@ -91,6 +92,7 @@ export async function POST(request: Request) {
         physician: true,
         patient: true,
         jurisdiction: true,
+        icdCode: true,
         claimCodes: {
           include: {
             code: true,
