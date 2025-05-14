@@ -49,10 +49,17 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { physicianId, patientId, summary, billingCodes, icdCodeId } = body;
+    const {
+      physicianId,
+      patientId,
+      summary,
+      billingCodes,
+      icdCodeId,
+      serviceDate,
+    } = body;
 
     // Validate required fields
-    if (!physicianId || !patientId) {
+    if (!physicianId || !patientId || !serviceDate) {
       return new NextResponse("Missing required fields", { status: 400 });
     }
 
@@ -80,6 +87,7 @@ export async function POST(request: Request) {
         jurisdictionId: physician.jurisdictionId,
         icdCodeId: icdCodeId || null,
         summary,
+        serviceDate: new Date(serviceDate),
         openaiEmbedding: "", // This will be populated by a background job
         claimCodes: {
           create: billingCodes.map((code: { codeId: number }) => ({

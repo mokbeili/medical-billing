@@ -12,6 +12,7 @@ interface BillingClaim {
   id: string;
   friendlyId: string;
   summary: string;
+  serviceDate: string;
   physician: {
     firstName: string;
     lastName: string;
@@ -131,6 +132,14 @@ export default function BillingClaimDetailsPage({
             <div>
               <h3 className="text-sm font-medium text-gray-500">Claim ID</h3>
               <p className="mt-1 text-sm text-gray-900">{claim.friendlyId}</p>
+            </div>
+            <div>
+              <h3 className="text-sm font-medium text-gray-500">
+                Service Date and Time
+              </h3>
+              <p className="mt-1 text-sm text-gray-900">
+                {new Date(claim.serviceDate).toLocaleString()}
+              </p>
             </div>
             <div>
               <h3 className="text-sm font-medium text-gray-500">Created At</h3>

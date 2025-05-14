@@ -34,6 +34,7 @@ interface BillingClaim {
     status: ClaimStatus;
   }[];
   createdAt: string;
+  serviceDate: string;
 }
 
 export default function BillingClaimsPage() {
@@ -42,9 +43,11 @@ export default function BillingClaimsPage() {
   const [claims, setClaims] = useState<BillingClaim[]>([]);
   const [filteredClaims, setFilteredClaims] = useState<BillingClaim[]>([]);
   const [filters, setFilters] = useState({
-    status: "PENDING",
+    claimId: "",
     patientName: "",
     billingNumber: "",
+    status: "",
+    serviceDate: "",
   });
 
   useEffect(() => {
@@ -88,6 +91,14 @@ export default function BillingClaimsPage() {
       const searchTerm = filters.billingNumber.toLowerCase();
       filtered = filtered.filter((claim) =>
         claim.patient.billingNumber.toLowerCase().includes(searchTerm)
+      );
+    }
+
+    if (filters.serviceDate) {
+      const searchTerm = filters.serviceDate.toLowerCase();
+      filtered = filtered.filter(
+        (claim) =>
+          new Date(claim.serviceDate).toISOString().slice(0, 16) === searchTerm
       );
     }
 
@@ -166,6 +177,19 @@ export default function BillingClaimsPage() {
                 }
               />
             </div>
+
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">
+                Service Date and Time
+              </label>
+              <Input
+                type="datetime-local"
+                value={filters.serviceDate}
+                onChange={(e) =>
+                  setFilters({ ...filters, serviceDate: e.target.value })
+                }
+              />
+            </div>
           </div>
         </div>
 
@@ -192,6 +216,9 @@ export default function BillingClaimsPage() {
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Service Date and Time
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Created At
@@ -231,6 +258,9 @@ export default function BillingClaimsPage() {
                         >
                           {claim.claimCodes[0]?.status || "PENDING"}
                         </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {new Date(claim.serviceDate).toLocaleString()}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {new Date(claim.createdAt).toLocaleDateString()}

@@ -74,6 +74,15 @@ export default function CreateBillingClaimPage() {
     physicianId: "",
     patientId: "",
     summary: "",
+    serviceDate: new Date()
+      .toLocaleString("sv-SE", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+      .replace(" ", "T"),
     billingCodes: [] as { codeId: number; status: string }[],
     icdCodeId: null as number | null,
   });
@@ -82,6 +91,7 @@ export default function CreateBillingClaimPage() {
     physician: false,
     patient: false,
     billingCodes: false,
+    serviceDate: false,
   });
 
   useEffect(() => {
@@ -264,6 +274,7 @@ export default function CreateBillingClaimPage() {
       physician: !formData.physicianId,
       patient: !formData.patientId,
       billingCodes: formData.billingCodes.length === 0,
+      serviceDate: !formData.serviceDate,
     };
     setErrors(newErrors);
     return !Object.values(newErrors).some(Boolean);
@@ -506,6 +517,25 @@ export default function CreateBillingClaimPage() {
                   }
                   rows={4}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium">
+                  Service Date and Time
+                </label>
+                <Input
+                  type="datetime-local"
+                  value={formData.serviceDate}
+                  onChange={(e) =>
+                    setFormData({ ...formData, serviceDate: e.target.value })
+                  }
+                  className={errors.serviceDate ? "border-red-500" : ""}
+                />
+                {errors.serviceDate && (
+                  <p className="text-sm text-red-500">
+                    Please select a service date and time
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">

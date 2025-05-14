@@ -160,6 +160,7 @@ model BillingClaim {
   jurisdictionId    Int                @map("jurisdiction_id")
   icdCodeId         Int?               @map("icd_code_id")
   summary           String
+  serviceDate       DateTime           @map("service_date")
   openaiEmbedding   String             @map("openai_embedding")
   openaiSuggestions String?            @map("openai_suggestions")
   createdAt         DateTime           @default(now()) @map("created_at")
