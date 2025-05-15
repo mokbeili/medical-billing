@@ -19,18 +19,19 @@ model Provider {
 }
 
 model Jurisdiction {
-  id                 Int            @id @default(autoincrement())
-  country            String
-  region             String
-  providerId         Int            @map("provider_id")
-  generalInformation String?        @map("general_information")
-  createdAt          DateTime       @default(now()) @map("created_at")
-  updatedAt          DateTime       @updatedAt @map("updated_at")
-  billingClaims      BillingClaim[]
-  provider           Provider       @relation(fields: [providerId], references: [id])
-  patients           Patient[]
-  physicians         Physician[]
-  sections           Section[]
+  id                  Int                  @id @default(autoincrement())
+  country             String
+  region              String
+  providerId          Int                  @map("provider_id")
+  generalInformation  String?              @map("general_information")
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
+  billingClaims       BillingClaim[]
+  provider            Provider             @relation(fields: [providerId], references: [id])
+  patients            Patient[]
+  physicians          Physician[]
+  sections            Section[]
+  referringPhysicians ReferringPhysician[]
 
   @@map("jurisdictions")
 }
@@ -122,19 +123,20 @@ model Patient {
 }
 
 model Physician {
-  id             String         @id
-  firstName      String         @map("first_name")
-  lastName       String         @map("last_name")
-  middleInitial  String?        @map("middle_initial")
-  billingNumber  String         @map("billing_number")
-  userId         Int            @map("user_id")
-  jurisdictionId Int            @map("jurisdiction_id")
-  createdAt      DateTime       @default(now()) @map("created_at")
-  updatedAt      DateTime       @updatedAt @map("updated_at")
-  billingClaims  BillingClaim[]
-  patients       Patient[]
-  jurisdiction   Jurisdiction   @relation(fields: [jurisdictionId], references: [id])
-  user           User           @relation(fields: [userId], references: [id])
+  id                  String               @id
+  firstName           String               @map("first_name")
+  lastName            String               @map("last_name")
+  middleInitial       String?              @map("middle_initial")
+  billingNumber       String               @map("billing_number")
+  userId              Int                  @map("user_id")
+  jurisdictionId      Int                  @map("jurisdiction_id")
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
+  billingClaims       BillingClaim[]
+  patients            Patient[]
+  jurisdiction        Jurisdiction         @relation(fields: [jurisdictionId], references: [id])
+  user                User                 @relation(fields: [userId], references: [id])
+  referringPhysicians ReferringPhysician[]
 
   @@map("physicians")
 }
@@ -153,23 +155,25 @@ model ICDCode {
 }
 
 model BillingClaim {
-  id                String             @id
-  friendlyId        String             @unique @map("friendly_id")
-  physicianId       String             @map("physician_id")
-  patientId         String             @map("patient_id")
-  jurisdictionId    Int                @map("jurisdiction_id")
-  icdCodeId         Int?               @map("icd_code_id")
-  summary           String
-  serviceDate       DateTime           @map("service_date")
-  openaiEmbedding   String             @map("openai_embedding")
-  openaiSuggestions String?            @map("openai_suggestions")
-  createdAt         DateTime           @default(now()) @map("created_at")
-  updatedAt         DateTime           @updatedAt @map("updated_at")
-  claimCodes        BillingClaimCode[]
-  jurisdiction      Jurisdiction       @relation(fields: [jurisdictionId], references: [id])
-  patient           Patient            @relation(fields: [patientId], references: [id])
-  physician         Physician          @relation(fields: [physicianId], references: [id])
-  icdCode           ICDCode?           @relation(fields: [icdCodeId], references: [id])
+  id                   String              @id
+  friendlyId           String              @unique @map("friendly_id")
+  physicianId          String              @map("physician_id")
+  patientId            String              @map("patient_id")
+  jurisdictionId       Int                 @map("jurisdiction_id")
+  icdCodeId            Int?                @map("icd_code_id")
+  referringPhysicianId Int?                @map("referring_physician_id")
+  summary              String
+  serviceDate          DateTime            @map("service_date")
+  openaiEmbedding      String              @map("openai_embedding")
+  openaiSuggestions    String?             @map("openai_suggestions")
+  createdAt            DateTime            @default(now()) @map("created_at")
+  updatedAt            DateTime            @updatedAt @map("updated_at")
+  claimCodes           BillingClaimCode[]
+  jurisdiction         Jurisdiction        @relation(fields: [jurisdictionId], references: [id])
+  patient              Patient             @relation(fields: [patientId], references: [id])
+  physician            Physician           @relation(fields: [physicianId], references: [id])
+  icdCode              ICDCode?            @relation(fields: [icdCodeId], references: [id])
+  referringPhysician   ReferringPhysician? @relation(fields: [referringPhysicianId], references: [id])
 
   @@map("billing_claims")
 }
@@ -185,6 +189,23 @@ model BillingClaimCode {
   code      BillingCode  @relation(fields: [codeId], references: [id])
 
   @@map("billing_claim_codes")
+}
+
+model ReferringPhysician {
+  id             Int            @id @default(autoincrement())
+  jurisdictionId Int            @map("jurisdiction_id")
+  code           String
+  name           String
+  location       String
+  specialty      String
+  physicianId    String?        @map("physician_id")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  jurisdiction   Jurisdiction   @relation(fields: [jurisdictionId], references: [id])
+  physician      Physician?     @relation(fields: [physicianId], references: [id])
+  BillingClaim   BillingClaim[]
+
+  @@map("referring_physicians")
 }
 
 enum Role {

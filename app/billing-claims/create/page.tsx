@@ -50,11 +50,30 @@ interface ICDCode {
   description: string;
 }
 
+interface ReferringPhysician {
+  id: number;
+  code: string;
+  name: string;
+  location: string;
+  specialty: string;
+}
+
 export default function CreateBillingClaimPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const [physicians, setPhysicians] = useState<Physician[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
+  const [referringPhysicians, setReferringPhysicians] = useState<
+    ReferringPhysician[]
+  >([]);
+  const [referringPhysicianSearchQuery, setReferringPhysicianSearchQuery] =
+    useState("");
+  const [referringPhysicianSearchResults, setReferringPhysicianSearchResults] =
+    useState<ReferringPhysician[]>([]);
+  const [isSearchingReferringPhysician, setIsSearchingReferringPhysician] =
+    useState(false);
+  const [selectedReferringPhysician, setSelectedReferringPhysician] =
+    useState<ReferringPhysician | null>(null);
   const [isCreatingPatient, setIsCreatingPatient] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<BillingCode[]>([]);
@@ -85,6 +104,7 @@ export default function CreateBillingClaimPage() {
       .replace(" ", "T"),
     billingCodes: [] as { codeId: number; status: string }[],
     icdCodeId: null as number | null,
+    referringPhysicianId: null as number | null,
   });
 
   const [errors, setErrors] = useState({
@@ -125,8 +145,21 @@ export default function CreateBillingClaimPage() {
       }
     };
 
+    const fetchReferringPhysicians = async () => {
+      try {
+        const response = await fetch("/api/referring-physicians");
+        if (response.ok) {
+          const data = await response.json();
+          setReferringPhysicians(data);
+        }
+      } catch (error) {
+        console.error("Error fetching referring physicians:", error);
+      }
+    };
+
     fetchPhysicians();
     fetchPatients();
+    fetchReferringPhysicians();
   }, []);
 
   useEffect(() => {
@@ -181,6 +214,35 @@ export default function CreateBillingClaimPage() {
     const debounceTimer = setTimeout(searchIcdCodes, 300);
     return () => clearTimeout(debounceTimer);
   }, [icdSearchQuery]);
+
+  useEffect(() => {
+    const searchReferringPhysicians = async () => {
+      if (referringPhysicianSearchQuery.length < 3) {
+        setReferringPhysicianSearchResults([]);
+        return;
+      }
+      setIsSearchingReferringPhysician(true);
+      try {
+        const response = await fetch(
+          `/api/referring-physicians?search=${encodeURIComponent(
+            referringPhysicianSearchQuery
+          )}`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setReferringPhysicianSearchResults(data);
+        }
+      } catch (error) {
+        console.error("Error searching referring physicians:", error);
+      } finally {
+        setIsSearchingReferringPhysician(false);
+      }
+    };
+
+    setReferringPhysicianSearchResults([]);
+    const debounceTimer = setTimeout(searchReferringPhysicians, 300);
+    return () => clearTimeout(debounceTimer);
+  }, [referringPhysicianSearchQuery]);
 
   const handleCreatePatient = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -267,6 +329,18 @@ export default function CreateBillingClaimPage() {
       ...formData,
       icdCodeId: null,
     });
+  };
+
+  const handleSelectReferringPhysician = (physician: ReferringPhysician) => {
+    setSelectedReferringPhysician(physician);
+    setFormData({ ...formData, referringPhysicianId: physician.id });
+    setReferringPhysicianSearchQuery("");
+    setReferringPhysicianSearchResults([]);
+  };
+
+  const handleRemoveReferringPhysician = () => {
+    setSelectedReferringPhysician(null);
+    setFormData({ ...formData, referringPhysicianId: null });
   };
 
   const validateForm = () => {
@@ -501,6 +575,69 @@ export default function CreateBillingClaimPage() {
                         }
                       >
                         Create Patient
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium">
+                  Referring Physician
+                </label>
+                <div className="relative">
+                  <Input
+                    placeholder="Search referring physicians..."
+                    value={referringPhysicianSearchQuery}
+                    onChange={(e) =>
+                      setReferringPhysicianSearchQuery(e.target.value)
+                    }
+                  />
+                  {isSearchingReferringPhysician && (
+                    <div className="absolute right-2 top-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
+                    </div>
+                  )}
+                  {referringPhysicianSearchResults.length > 0 && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
+                      {referringPhysicianSearchResults.map((physician) => (
+                        <div
+                          key={physician.id}
+                          className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                          onClick={() =>
+                            handleSelectReferringPhysician(physician)
+                          }
+                        >
+                          <div className="font-medium">
+                            {physician.name} - {physician.specialty} (
+                            {physician.code})
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            {physician.location}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {selectedReferringPhysician && (
+                  <div className="mt-4 space-y-2">
+                    <div className="flex items-center justify-between p-2 bg-gray-50 rounded-md">
+                      <div>
+                        <span className="font-medium">
+                          {selectedReferringPhysician.name}
+                        </span>{" "}
+                        - {selectedReferringPhysician.specialty} (
+                        {selectedReferringPhysician.code})
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleRemoveReferringPhysician}
+                      >
+                        Remove
                       </Button>
                     </div>
                   </div>

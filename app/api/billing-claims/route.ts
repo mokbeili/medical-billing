@@ -56,6 +56,7 @@ export async function POST(request: Request) {
       billingCodes,
       icdCodeId,
       serviceDate,
+      referringPhysicianId,
     } = body;
 
     // Validate required fields
@@ -86,6 +87,7 @@ export async function POST(request: Request) {
         patientId,
         jurisdictionId: physician.jurisdictionId,
         icdCodeId: icdCodeId || null,
+        referringPhysicianId: referringPhysicianId || null,
         summary,
         serviceDate: new Date(serviceDate),
         openaiEmbedding: "", // This will be populated by a background job
@@ -101,6 +103,7 @@ export async function POST(request: Request) {
         patient: true,
         jurisdiction: true,
         icdCode: true,
+        referringPhysician: true,
         claimCodes: {
           include: {
             code: true,
