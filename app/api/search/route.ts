@@ -93,9 +93,17 @@ export async function GET(request: Request) {
     };
 
     // 1. Try exact code match
+    const cleanedQuery = query
+      .trim()
+      .replace(/^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$/g, "")
+      .replace(/^0+(?=\d)/, "") // Remove leading zeros before any digit
+      .replace(/\.?0*$/, "");
     const exactCodeMatch = await prisma.billingCode.findFirst({
       where: {
-        code: query,
+        code: {
+          equals: cleanedQuery,
+          mode: "insensitive",
+        },
       },
       select: {
         id: true,
