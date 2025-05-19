@@ -23,6 +23,7 @@ export async function GET() {
         physician: true,
         patient: true,
         jurisdiction: true,
+        healthInstitution: true,
         claimCodes: {
           include: {
             code: true,
@@ -57,6 +58,7 @@ export async function POST(request: Request) {
       icdCodeId,
       serviceDate,
       referringPhysicianId,
+      healthInstitutionId,
     } = body;
 
     // Validate required fields
@@ -88,6 +90,7 @@ export async function POST(request: Request) {
         jurisdictionId: physician.jurisdictionId,
         icdCodeId: icdCodeId || null,
         referringPhysicianId: referringPhysicianId || null,
+        healthInstitutionId: healthInstitutionId || null,
         summary,
         serviceDate: new Date(serviceDate),
         openaiEmbedding: "", // This will be populated by a background job
@@ -104,6 +107,7 @@ export async function POST(request: Request) {
         jurisdiction: true,
         icdCode: true,
         referringPhysician: true,
+        healthInstitution: true,
         claimCodes: {
           include: {
             code: true,

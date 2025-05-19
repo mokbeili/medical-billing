@@ -1,6 +1,7 @@
 "use client";
 
 import Layout from "@/app/components/layout/Layout";
+import { HealthInstitutionSelect } from "@/components/health-institution-select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -58,6 +59,16 @@ interface ReferringPhysician {
   specialty: string;
 }
 
+interface HealthInstitution {
+  id: number;
+  name: string;
+  street: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+}
+
 export default function CreateBillingClaimPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
@@ -92,19 +103,12 @@ export default function CreateBillingClaimPage() {
   const [formData, setFormData] = useState({
     physicianId: "",
     patientId: "",
-    summary: "",
-    serviceDate: new Date()
-      .toLocaleString("sv-SE", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-      .replace(" ", "T"),
-    billingCodes: [] as { codeId: number; status: string }[],
-    icdCodeId: null as number | null,
     referringPhysicianId: null as number | null,
+    icdCodeId: null as number | null,
+    healthInstitutionId: null as number | null,
+    summary: "",
+    serviceDate: "",
+    billingCodes: [] as { codeId: number; status: string }[],
   });
 
   const [errors, setErrors] = useState({
@@ -791,6 +795,18 @@ export default function CreateBillingClaimPage() {
                     ))}
                   </div>
                 )}
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium">
+                  Health Institution
+                </label>
+                <HealthInstitutionSelect
+                  value={formData.healthInstitutionId || undefined}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, healthInstitutionId: value })
+                  }
+                />
               </div>
 
               <div className="flex justify-end">

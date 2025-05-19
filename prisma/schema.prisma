@@ -154,6 +154,24 @@ model ICDCode {
   @@map("icd_codes")
 }
 
+model HealthInstitution {
+  id          Int            @id @default(autoincrement())
+  name        String
+  street      String
+  city        String
+  state       String
+  postalCode  String         @map("postal_code")
+  country     String
+  latitude    Float
+  longitude   Float
+  phoneNumber String         @map("phone_number")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+  claims      BillingClaim[]
+
+  @@map("health_institutions")
+}
+
 model BillingClaim {
   id                   String              @id
   friendlyId           String              @unique @map("friendly_id")
@@ -162,6 +180,7 @@ model BillingClaim {
   jurisdictionId       Int                 @map("jurisdiction_id")
   icdCodeId            Int?                @map("icd_code_id")
   referringPhysicianId Int?                @map("referring_physician_id")
+  healthInstitutionId  Int?                @map("health_institution_id")
   summary              String
   serviceDate          DateTime            @map("service_date")
   openaiEmbedding      String              @map("openai_embedding")
@@ -174,6 +193,7 @@ model BillingClaim {
   physician            Physician           @relation(fields: [physicianId], references: [id])
   icdCode              ICDCode?            @relation(fields: [icdCodeId], references: [id])
   referringPhysician   ReferringPhysician? @relation(fields: [referringPhysicianId], references: [id])
+  healthInstitution    HealthInstitution?  @relation(fields: [healthInstitutionId], references: [id])
 
   @@map("billing_claims")
 }

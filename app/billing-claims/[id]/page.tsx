@@ -25,6 +25,15 @@ interface BillingClaim {
     middleInitial: string | null;
     billingNumber: string;
   };
+  healthInstitution?: {
+    id: number;
+    name: string;
+    street: string;
+    city: string;
+    state: string;
+    postalCode: string;
+    country: string;
+  } | null;
   icdCode?: {
     id: number;
     version: string;
@@ -220,6 +229,34 @@ export default function BillingClaimDetailsPage({
             </p>
           </CardContent>
         </Card>
+
+        {claim.healthInstitution && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Health Institution</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <h3 className="text-sm font-medium text-gray-500">Name</h3>
+                <p className="mt-1 text-sm text-gray-900">
+                  {claim.healthInstitution.name}
+                </p>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-gray-500">Address</h3>
+                <p className="mt-1 text-sm text-gray-900">
+                  {claim.healthInstitution.street}
+                  <br />
+                  {claim.healthInstitution.city},{" "}
+                  {claim.healthInstitution.state}{" "}
+                  {claim.healthInstitution.postalCode}
+                  <br />
+                  {claim.healthInstitution.country}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {claim.icdCode && (
           <Card>
