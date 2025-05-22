@@ -15,10 +15,7 @@ export default function Sidebar({
   const pathname = usePathname();
   const router = useRouter();
   const { data: session } = useSession({
-    required: true,
-    onUnauthenticated() {
-      router.push("/auth/signin");
-    },
+    required: false,
   });
 
   const userRoles = session?.user?.roles || [];

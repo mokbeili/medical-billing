@@ -9,10 +9,7 @@ export default function Navbar({ onMenuClick }: { onMenuClick: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
   const { data: session, status } = useSession({
-    required: true,
-    onUnauthenticated() {
-      router.push("/auth/signin");
-    },
+    required: false,
   });
 
   const userRoles = session?.user?.roles || [];
@@ -41,10 +38,6 @@ export default function Navbar({ onMenuClick }: { onMenuClick: () => void }) {
     );
   }
 
-  if (!session) {
-    return null;
-  }
-
   return (
     <nav className="fixed top-0 w-full bg-white shadow-md z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -61,43 +54,64 @@ export default function Navbar({ onMenuClick }: { onMenuClick: () => void }) {
               className="flex-shrink-0 flex items-center space-x-3"
             >
               <div className="w-8 h-8 bg-blue-600 rounded-full"></div>
-              <span className="text-xl font-semibold text-gray-900">Mycah</span>
+              <span className="text-xl font-semibold text-gray-900">
+                Myon Health
+              </span>
             </Link>
           </div>
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex md:items-center md:space-x-8">
-            {userRoles.includes("PHYSICIAN") && (
+            {session ? (
+              <>
+                {session.user.roles.includes("PHYSICIAN") && (
+                  <NavLink
+                    href="/billing-claims"
+                    active={pathname === "/billing-claims"}
+                  >
+                    Billing Claims
+                  </NavLink>
+                )}
+                {session.user.roles.includes("ADMIN") && (
+                  <NavLink href="/dashboard" active={pathname === "/dashboard"}>
+                    Dashboard
+                  </NavLink>
+                )}
+                <NavLink href="/search" active={pathname === "/search"}>
+                  AI Code Search
+                </NavLink>
+                <NavLink href="/profile" active={pathname === "/profile"}>
+                  Profile
+                </NavLink>
+              </>
+            ) : (
               <>
                 <NavLink
-                  href="/billing-claims"
-                  active={pathname === "/billing-claims"}
+                  href="/auth/signin"
+                  active={pathname === "/auth/signin"}
                 >
-                  Billing Claims
+                  Sign In
+                </NavLink>
+                <NavLink
+                  href="/auth/signup"
+                  active={pathname === "/auth/signup"}
+                >
+                  Sign Up
                 </NavLink>
               </>
             )}
-            {userRoles.includes("ADMIN") && (
-              <NavLink href="/dashboard" active={pathname === "/dashboard"}>
-                Dashboard
-              </NavLink>
-            )}
-            <NavLink href="/search" active={pathname === "/search"}>
-              AI Code Search
-            </NavLink>
-            <NavLink href="/profile" active={pathname === "/profile"}>
-              Profile
-            </NavLink>
           </div>
 
           {/* User Menu */}
           <div className="flex items-center">
-            <button
-              onClick={handleSignOut}
-              className="ml-4 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
-            >
-              Sign Out
-            </button>
+            {session ? (
+              <button
+                onClick={handleSignOut}
+                className="ml-4 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
+              >
+                Sign Out
+              </button>
+            ) : null}
           </div>
         </div>
       </div>

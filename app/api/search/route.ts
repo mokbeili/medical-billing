@@ -1,6 +1,4 @@
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
@@ -25,6 +23,7 @@ interface RawSearchResult extends BaseSearchResult {
 
 interface SearchResult extends BaseSearchResult {
   displayCode: string;
+  searchType: string;
 }
 
 interface SearchResponse {
@@ -47,11 +46,6 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-
     const { searchParams } = new URL(request.url);
     const query = searchParams.get("query");
     const page = parseInt(searchParams.get("page") || "1");
@@ -83,7 +77,8 @@ export async function GET(request: Request) {
         })
         .map((result) => ({
           ...result,
-          displayCode: `${result.section.code} - ${result.code}`,
+          displayCode: result.code,
+          searchType: searchType,
         }));
 
       if (uniqueResults.length > 0) {

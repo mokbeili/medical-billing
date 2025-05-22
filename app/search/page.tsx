@@ -1,9 +1,10 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
+import Link from "next/link";
 import { useEffect, useState } from "react";
-import Layout from "../components/layout/Layout";
 
 interface SearchResult {
   id: number;
@@ -16,6 +17,7 @@ interface SearchResult {
   };
   similarity?: number;
   displayCode: string;
+  searchType?: string;
 }
 
 interface SearchResponse {
@@ -88,15 +90,65 @@ export default function SearchPage() {
     }
   };
 
+  const getSearchTypeColor = (type: string) => {
+    switch (type) {
+      case "exact_code":
+        return "bg-blue-100 text-blue-800";
+      case "exact_title":
+        return "bg-green-100 text-green-800";
+      case "synonym":
+        return "bg-purple-100 text-purple-800";
+      case "ai":
+        return "bg-orange-100 text-orange-800";
+      case "ai_strict":
+        return "bg-red-100 text-red-800";
+      case "ai_refined":
+        return "bg-yellow-100 text-yellow-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
+
   return (
-    <Layout>
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">
-          Medical Billing Code Search
-        </h1>
-        <h4 className="text-m text-gray-900 mb-8 pl-2">
-          Search for medical billing codes by code, title, or visit description.
-        </h4>
+    <div className="min-h-screen bg-gray-50">
+      <nav className="bg-white shadow-md">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16">
+            <div className="flex items-center">
+              <Link href="/" className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-blue-600 rounded-full"></div>
+                <span className="text-xl font-semibold text-gray-900">
+                  Myon Health
+                </span>
+              </Link>
+            </div>
+            <div className="flex items-center space-x-4">
+              <Link href="/auth/signin">
+                <Button variant="outline">Sign In</Button>
+              </Link>
+              <Link href="/auth/signup">
+                <Button>Sign Up</Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">
+              Medical Billing Code Search
+            </h1>
+            <h4 className="text-m text-gray-900 mt-2">
+              Search for medical billing codes by code, title, or visit
+              description.
+            </h4>
+          </div>
+          <Link href="/signup">
+            <Button variant="outline">Sign Up for Full Access</Button>
+          </Link>
+        </div>
 
         <div className="bg-white shadow-sm rounded-lg p-6">
           <div className="mb-6">
@@ -154,6 +206,15 @@ export default function SearchPage() {
                               {result.description}
                             </p>
                           )}
+                          {result.searchType && (
+                            <p
+                              className={`mt-1 text-sm px-2 py-1 rounded-full inline-block ${getSearchTypeColor(
+                                result.searchType
+                              )}`}
+                            >
+                              {getSearchTypeLabel(result.searchType)}
+                            </p>
+                          )}
                         </div>
                         <div className="text-sm text-gray-500">
                           {result.section.title} ({result.section.code})
@@ -194,8 +255,21 @@ export default function SearchPage() {
               )}
             </div>
           )}
+
+          <div className="mt-8 p-4 bg-blue-50 rounded-lg">
+            <h3 className="text-lg font-semibold text-blue-800 mb-2">
+              Want to do more with billing codes?
+            </h3>
+            <p className="text-sm text-blue-700 mb-4">
+              Sign up for full access to create and manage billing claims, track
+              submissions, and more.
+            </p>
+            <Link href="/signup">
+              <Button>Sign Up Now</Button>
+            </Link>
+          </div>
         </div>
-      </div>
-    </Layout>
+      </main>
+    </div>
   );
 }

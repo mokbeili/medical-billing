@@ -5,12 +5,14 @@ import { NextResponse } from "next/server";
 export async function middleware(request: NextRequest) {
   // Paths that don't require authentication
   const publicPaths = [
+    "/",
     "/auth/signin",
     "/register",
     "/forgot-password",
     "/reset-password",
     "/api/auth/register",
     "/api/auth/signin",
+    "/search",
   ];
 
   // If it's a public path, allow access without token verification
@@ -26,9 +28,8 @@ export async function middleware(request: NextRequest) {
     });
 
     if (!token) {
-      const signInUrl = new URL("/auth/signin", request.url);
-      signInUrl.searchParams.set("callbackUrl", request.url);
-      return NextResponse.redirect(signInUrl);
+      const homeUrl = new URL("/", request.url);
+      return NextResponse.redirect(homeUrl);
     }
 
     // Add token to request headers for API routes
@@ -48,10 +49,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   } catch (error) {
     console.error("Middleware error:", error);
-    // In case of error, redirect to signin
-    const signInUrl = new URL("/auth/signin", request.url);
-    signInUrl.searchParams.set("error", "SessionError");
-    return NextResponse.redirect(signInUrl);
+    // In case of error, redirect to home page
+    const homeUrl = new URL("/", request.url);
+    return NextResponse.redirect(homeUrl);
   }
 }
 
