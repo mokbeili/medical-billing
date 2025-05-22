@@ -310,7 +310,8 @@ export async function GET(request: Request) {
 
     if (
       needsMoreResults(allResults, limit, !!exactCodeMatch) &&
-      !previous_log_id
+      !previous_log_id &&
+      query.length > 3
     ) {
       const broaderMatches = await prisma.$queryRaw<RawSearchResult[]>`
           SELECT
