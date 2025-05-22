@@ -175,7 +175,9 @@ export default function CreateBillingClaimPage() {
       setIsSearching(true);
       try {
         const response = await fetch(
-          `/api/search?query=${encodeURIComponent(searchQuery)}`
+          `/api/search?query=${encodeURIComponent(
+            searchQuery
+          )}&jurisdictionId=${1}`
         );
         if (response.ok) {
           const data = await response.json();

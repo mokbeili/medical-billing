@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
@@ -50,6 +51,9 @@ export async function GET(request: Request) {
     const query = searchParams.get("query");
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || `${TARGET_RESULTS}`);
+    const jurisdictionId = parseInt(searchParams.get("jurisdictionId") || "1");
+    const physicianId = searchParams.get("physicianId") || null;
+    const billingClaimId = searchParams.get("billingClaimId") || null;
 
     if (!query) {
       return NextResponse.json(
@@ -57,6 +61,17 @@ export async function GET(request: Request) {
         { status: 400 }
       );
     }
+
+    // Get request metadata
+    const headersList = headers();
+    const ipAddress =
+      headersList.get("x-forwarded-for") || headersList.get("x-real-ip");
+    const userAgent = headersList.get("user-agent");
+    const deviceInfo = JSON.stringify({
+      platform: headersList.get("sec-ch-ua-platform"),
+      mobile: headersList.get("sec-ch-ua-mobile"),
+      browser: headersList.get("sec-ch-ua"),
+    });
 
     let allResults: SearchResult[] = [];
     const searchTypesUsed: string[] = [];
@@ -206,6 +221,7 @@ export async function GET(request: Request) {
     }
 
     let embeddingString: string = "";
+    let embeddingArray: number[] = [];
 
     // 5. If still need more results, try AI search
     if (allResults.length < limit && !exactCodeMatch) {
@@ -214,8 +230,23 @@ export async function GET(request: Request) {
         input: query,
       });
 
-      const embeddingArray = embedding.data[0].embedding;
+      embeddingArray = embedding.data[0].embedding;
       embeddingString = `[${embeddingArray.join(",")}]`;
+
+      // Log the search query with embeddings
+      await prisma.searchQueryLog.create({
+        data: {
+          searchString: query,
+          embeddings: JSON.stringify(embeddingArray),
+          results: JSON.stringify(allResults),
+          jurisdictionId,
+          physicianId,
+          billingClaimId,
+          ipAddress,
+          userAgent,
+          deviceInfo,
+        },
+      });
 
       // First try strict matching
       const strictMatches = await prisma.$queryRaw<RawSearchResult[]>`

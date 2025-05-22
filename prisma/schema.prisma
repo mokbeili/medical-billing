@@ -32,6 +32,7 @@ model Jurisdiction {
   physicians          Physician[]
   sections            Section[]
   referringPhysicians ReferringPhysician[]
+  SearchQueryLog      SearchQueryLog[]
 
   @@map("jurisdictions")
 }
@@ -137,6 +138,7 @@ model Physician {
   jurisdiction        Jurisdiction         @relation(fields: [jurisdictionId], references: [id])
   user                User                 @relation(fields: [userId], references: [id])
   referringPhysicians ReferringPhysician[]
+  SearchQueryLog      SearchQueryLog[]
 
   @@map("physicians")
 }
@@ -194,6 +196,7 @@ model BillingClaim {
   icdCode              ICDCode?            @relation(fields: [icdCodeId], references: [id])
   referringPhysician   ReferringPhysician? @relation(fields: [referringPhysicianId], references: [id])
   healthInstitution    HealthInstitution?  @relation(fields: [healthInstitutionId], references: [id])
+  SearchQueryLog       SearchQueryLog[]
 
   @@map("billing_claims")
 }
@@ -226,6 +229,27 @@ model ReferringPhysician {
   BillingClaim   BillingClaim[]
 
   @@map("referring_physicians")
+}
+
+model SearchQueryLog {
+  id             Int      @id @default(autoincrement())
+  searchString   String   @map("search_string")
+  embeddings     String // Stored as JSON string
+  results        String   @map("results") // Stored as JSON string
+  jurisdictionId Int      @map("jurisdiction_id")
+  physicianId    String?  @map("physician_id")
+  billingClaimId String?  @map("billing_claim_id")
+  ipAddress      String?  @map("ip_address")
+  userAgent      String?  @map("user_agent")
+  deviceInfo     String?  @map("device_info") // Stored as JSON string
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  jurisdiction Jurisdiction  @relation(fields: [jurisdictionId], references: [id])
+  physician    Physician?    @relation(fields: [physicianId], references: [id])
+  billingClaim BillingClaim? @relation(fields: [billingClaimId], references: [id])
+
+  @@map("search_query_logs")
 }
 
 enum Role {

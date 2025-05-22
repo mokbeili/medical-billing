@@ -60,7 +60,7 @@ export default function SearchPage() {
       const response = await axios.get(
         `/api/search?query=${encodeURIComponent(
           debouncedQuery
-        )}&page=${currentPage}&limit=${pageSize}`
+        )}&page=${currentPage}&limit=${pageSize}&jurisdictionId=${1}`
       );
       return response.data;
     },
