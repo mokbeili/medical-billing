@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import Layout from "../components/layout/Layout";
@@ -39,6 +40,7 @@ export default function SearchPage() {
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 20;
+  const { data: session, status } = useSession();
 
   // Debounce the search query
   useEffect(() => {
@@ -62,7 +64,9 @@ export default function SearchPage() {
       const response = await axios.get(
         `/api/search?query=${encodeURIComponent(
           debouncedQuery
-        )}&page=${currentPage}&limit=${pageSize}&jurisdictionId=${1}`
+        )}&page=${currentPage}&limit=${pageSize}&jurisdictionId=${1}&userId=${
+          session?.user?.id
+        }`
       );
       return response.data;
     },

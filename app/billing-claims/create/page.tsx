@@ -177,7 +177,7 @@ export default function CreateBillingClaimPage() {
         const response = await fetch(
           `/api/search?query=${encodeURIComponent(
             searchQuery
-          )}&jurisdictionId=${1}`
+          )}&jurisdictionId=${1}&userId=${session?.user?.id}`
         );
         if (response.ok) {
           const data = await response.json();
