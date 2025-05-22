@@ -17,7 +17,7 @@ export default function Navbar({ onMenuClick }: { onMenuClick: () => void }) {
   const handleSignOut = async () => {
     try {
       await signOut({ redirect: false });
-      router.push("/auth/signin");
+      router.push("/search");
       router.refresh();
     } catch (error) {
       console.error("Logout error:", error);
@@ -86,6 +86,9 @@ export default function Navbar({ onMenuClick }: { onMenuClick: () => void }) {
               </>
             ) : (
               <>
+                <NavLink href="/search" active={pathname === "/search"}>
+                  AI Code Search
+                </NavLink>
                 <NavLink
                   href="/auth/signin"
                   active={pathname === "/auth/signin"}

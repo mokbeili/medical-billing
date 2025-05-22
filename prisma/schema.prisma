@@ -75,12 +75,12 @@ model BillingCode {
 }
 
 model User {
-  id                    Int         @id @default(autoincrement())
-  email                 String      @unique
+  id                    Int              @id @default(autoincrement())
+  email                 String           @unique
   password_hash         String
   roles                 Role[]
-  created_at            DateTime    @default(now())
-  updated_at            DateTime    @updatedAt
+  created_at            DateTime         @default(now())
+  updated_at            DateTime         @updatedAt
   reset_token           String?
   reset_token_expires   DateTime?
   encrypted_city        String?
@@ -90,6 +90,7 @@ model User {
   encrypted_street      String?
   encrypted_unit        String?
   physicians            Physician[]
+  SearchQueryLog        SearchQueryLog[]
 
   @@map("users")
 }
@@ -237,17 +238,22 @@ model SearchQueryLog {
   embeddings     String // Stored as JSON string
   results        String   @map("results") // Stored as JSON string
   jurisdictionId Int      @map("jurisdiction_id")
-  physicianId    String?  @map("physician_id")
+  userId         Int?     @map("user_id")
   billingClaimId String?  @map("billing_claim_id")
   ipAddress      String?  @map("ip_address")
   userAgent      String?  @map("user_agent")
   deviceInfo     String?  @map("device_info") // Stored as JSON string
+  previousLogId  Int?     @map("previous_log_id")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  jurisdiction Jurisdiction  @relation(fields: [jurisdictionId], references: [id])
-  physician    Physician?    @relation(fields: [physicianId], references: [id])
-  billingClaim BillingClaim? @relation(fields: [billingClaimId], references: [id])
+  jurisdiction Jurisdiction     @relation(fields: [jurisdictionId], references: [id])
+  user         User?            @relation(fields: [userId], references: [id])
+  billingClaim BillingClaim?    @relation(fields: [billingClaimId], references: [id])
+  previousLog  SearchQueryLog?  @relation("PreviousLog", fields: [previousLogId], references: [id])
+  nextLogs     SearchQueryLog[] @relation("PreviousLog")
+  Physician    Physician?       @relation(fields: [physicianId], references: [id])
+  physicianId  String?
 
   @@map("search_query_logs")
 }

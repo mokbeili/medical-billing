@@ -42,6 +42,20 @@ interface SearchResponse {
 const VECTOR_SEARCH_LIMIT = 80;
 const TARGET_RESULTS = 10;
 
+// Helper function to check if we need more results
+const needsMoreResults = (
+  currentResults: SearchResult[],
+  limit: number,
+  hasExactMatch: boolean
+) => {
+  const hasPartialCodeMatch = currentResults.some(
+    (result) => result.searchType === "partial_code"
+  );
+  return (
+    currentResults.length < limit && !hasExactMatch && !hasPartialCodeMatch
+  );
+};
+
 // Mark this route as dynamic
 export const dynamic = "force-dynamic";
 
@@ -52,7 +66,7 @@ export async function GET(request: Request) {
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || `${TARGET_RESULTS}`);
     const jurisdictionId = parseInt(searchParams.get("jurisdictionId") || "1");
-    const physicianId = searchParams.get("physicianId") || null;
+    const userId = searchParams.get("userId") || null;
     const billingClaimId = searchParams.get("billingClaimId") || null;
 
     if (!query) {
@@ -134,7 +148,7 @@ export async function GET(request: Request) {
     }
 
     // 2. Try partial code match if we need more results
-    if (allResults.length < limit && !exactCodeMatch) {
+    if (needsMoreResults(allResults, limit, !!exactCodeMatch)) {
       const partialCodeMatches = await prisma.billingCode.findMany({
         where: {
           code: {
@@ -156,12 +170,11 @@ export async function GET(request: Request) {
         },
         take: limit - allResults.length,
       });
-
       addUniqueResults(partialCodeMatches, "partial_code");
     }
 
     // 3. Try exact title match if we need more results
-    if (allResults.length < limit) {
+    if (needsMoreResults(allResults, limit, !!exactCodeMatch)) {
       const exactTitleMatches = await prisma.billingCode.findMany({
         where: {
           title: query,
@@ -185,7 +198,7 @@ export async function GET(request: Request) {
     }
 
     // 4. Try synonym match if we need more results
-    if (allResults.length < limit && !exactCodeMatch) {
+    if (needsMoreResults(allResults, limit, !!exactCodeMatch)) {
       const partialMatches = await prisma.billingCode.findMany({
         where: {
           OR: [
@@ -222,9 +235,9 @@ export async function GET(request: Request) {
 
     let embeddingString: string = "";
     let embeddingArray: number[] = [];
-
-    // 5. If still need more results, try AI search
-    if (allResults.length < limit && !exactCodeMatch) {
+    let previous_log_id: number | null = null;
+    // 5. If still need more results, try AI search using previous query logs
+    if (needsMoreResults(allResults, limit, !!exactCodeMatch)) {
       const embedding = await openai.embeddings.create({
         model: "text-embedding-ada-002",
         input: query,
@@ -233,22 +246,45 @@ export async function GET(request: Request) {
       embeddingArray = embedding.data[0].embedding;
       embeddingString = `[${embeddingArray.join(",")}]`;
 
-      // Log the search query with embeddings
-      await prisma.searchQueryLog.create({
-        data: {
-          searchString: query,
-          embeddings: JSON.stringify(embeddingArray),
-          results: JSON.stringify(allResults),
-          jurisdictionId,
-          physicianId,
-          billingClaimId,
-          ipAddress,
-          userAgent,
-          deviceInfo,
-        },
-      });
+      // Search through query logs for similar queries
+      const similarQueries = await prisma.$queryRaw<
+        { id: number; search_string: string; results: string }[]
+      >`
+        WITH vector_comparison AS (
+          SELECT 
+            id,
+            search_string,
+            results,
+            1 - (embeddings::vector <=> ${embeddingString}::vector) as similarity
+          FROM search_query_logs
+          WHERE embeddings IS NOT NULL 
+            AND embeddings != '[]'
+        )
+        SELECT id, search_string, results
+        FROM vector_comparison
+        WHERE similarity >= 0.98
+        ORDER BY similarity DESC
+        LIMIT 1`;
 
-      // First try strict matching
+      // If we found similar queries, add their results to our results
+      if (similarQueries.length > 0) {
+        const previous_query = similarQueries[0];
+        previous_log_id = previous_query.id;
+        try {
+          const previousResults = JSON.parse(
+            previous_query.results
+          ) as SearchResult[];
+          addUniqueResults(previousResults, "similar_query");
+        } catch (e) {
+          console.error("Error parsing previous results:", e);
+        }
+      }
+    }
+    // 6. If still need more results and no previous query, try AI search
+    if (
+      needsMoreResults(allResults, limit, !!exactCodeMatch) &&
+      !previous_log_id
+    ) {
       const strictMatches = await prisma.$queryRaw<RawSearchResult[]>`
         SELECT 
           bc.id,
@@ -262,7 +298,8 @@ export async function GET(request: Request) {
           1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) as similarity
         FROM billing_codes bc
         JOIN sections s ON bc.section_id = s.id
-        WHERE bc.openai_embedding IS NOT NULL
+        WHERE bc.openai_embedding IS NOT NULL 
+          AND bc.openai_embedding != '[]'
           AND 1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) > 0.90
         ORDER BY similarity DESC
         LIMIT ${limit - allResults.length}
@@ -270,7 +307,11 @@ export async function GET(request: Request) {
 
       addUniqueResults(strictMatches, "ai_strict");
     }
-    if (allResults.length < limit && !exactCodeMatch) {
+
+    if (
+      needsMoreResults(allResults, limit, !!exactCodeMatch) &&
+      !previous_log_id
+    ) {
       const broaderMatches = await prisma.$queryRaw<RawSearchResult[]>`
           SELECT
             bc.id,
@@ -285,6 +326,7 @@ export async function GET(request: Request) {
           FROM billing_codes bc
           JOIN sections s ON bc.section_id = s.id
           WHERE bc.openai_embedding IS NOT NULL
+            AND bc.openai_embedding != '[]'
             AND 1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) > 0.20
           ORDER BY similarity DESC
           LIMIT ${limit - allResults.length}
@@ -343,20 +385,23 @@ export async function GET(request: Request) {
           });
 
         addUniqueResults(selectedResults, "ai_refined");
-
-        return NextResponse.json({
-          type: "combined",
-          results: allResults,
-          search_types_used: searchTypesUsed,
-          pagination: {
-            page,
-            limit: allResults.length,
-            total: allResults.length,
-            totalPages: 1,
-          },
-        });
       }
     }
+
+    await prisma.searchQueryLog.create({
+      data: {
+        searchString: query,
+        embeddings: JSON.stringify(embeddingArray),
+        results: JSON.stringify(allResults),
+        jurisdictionId,
+        userId: userId ? parseInt(userId) : null,
+        billingClaimId,
+        ipAddress,
+        userAgent,
+        deviceInfo,
+        previousLogId: previous_log_id,
+      },
+    });
 
     return NextResponse.json({
       type: "combined",
