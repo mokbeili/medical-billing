@@ -262,7 +262,7 @@ export async function GET(request: Request) {
         )
         SELECT id, search_string, results
         FROM vector_comparison
-        WHERE similarity >= 0.98
+        WHERE similarity >= 0.995
         ORDER BY similarity DESC
         LIMIT 1`;
 
