@@ -270,14 +270,12 @@ export function BillingCodesTable() {
 
   useEffect(() => {
     const searchSections = async () => {
-      if (sectionSearchQuery.length < 2) {
-        setSectionSearchResults([]);
-        return;
-      }
       setIsSearchingSection(true);
       try {
         const response = await fetch(
-          `/api/sections?search=${encodeURIComponent(sectionSearchQuery)}`
+          `/api/sections?search=${encodeURIComponent(
+            sectionSearchQuery
+          )}&searchFields=${sectionSearchQuery.length === 1 ? "code" : "title"}`
         );
         if (response.ok) {
           const data = await response.json();

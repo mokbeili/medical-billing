@@ -12,14 +12,20 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search");
+    const searchFields = searchParams.get("searchFields")?.split(",") || [
+      "code",
+      "title",
+    ];
 
     const sections = await prisma.section.findMany({
       where: search
         ? {
-            OR: [
-              { code: { contains: search, mode: "insensitive" } },
-              { title: { contains: search, mode: "insensitive" } },
-            ],
+            OR: searchFields.map((field) => ({
+              [field]: {
+                contains: search,
+                mode: field === "code" ? "default" : "insensitive",
+              },
+            })),
           }
         : undefined,
       include: {
