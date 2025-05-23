@@ -23,7 +23,7 @@ export async function GET(request: Request) {
             OR: searchFields.map((field) => ({
               [field]: {
                 contains: search,
-                mode: field === "code" ? "default" : "insensitive",
+                mode: "insensitive",
               },
             })),
           }

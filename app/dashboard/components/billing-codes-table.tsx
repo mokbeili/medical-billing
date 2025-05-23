@@ -270,6 +270,10 @@ export function BillingCodesTable() {
 
   useEffect(() => {
     const searchSections = async () => {
+      if (sectionSearchQuery.length < 1) {
+        setSectionSearchResults([]);
+        return;
+      }
       setIsSearchingSection(true);
       try {
         const response = await fetch(
