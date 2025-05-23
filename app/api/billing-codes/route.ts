@@ -138,7 +138,19 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { code, title, description, sectionId } = body;
+    const {
+      code,
+      title,
+      description,
+      sectionId,
+      codeClass,
+      anes,
+      details,
+      generalPracticeCost,
+      specialistPrice,
+      referredPrice,
+      nonReferredPrice,
+    } = body;
 
     if (!code || !title || !sectionId) {
       return new NextResponse("Missing required fields", { status: 400 });
@@ -150,6 +162,13 @@ export async function POST(request: Request) {
         title,
         description,
         section_id: sectionId,
+        code_class: codeClass,
+        anes,
+        details,
+        general_practice_cost: generalPracticeCost,
+        specialist_price: specialistPrice,
+        referred_price: referredPrice,
+        non_referred_price: nonReferredPrice,
         openai_embedding: "", // This will be populated by a background job
       },
       include: {

@@ -48,6 +48,19 @@ interface PaginationInfo {
   totalPages: number;
 }
 
+interface Section {
+  id: number;
+  code: string;
+  title: string;
+  jurisdiction: {
+    country: string;
+    region: string;
+    provider: {
+      name: string;
+    };
+  };
+}
+
 export function BillingCodesTable() {
   const [billingCodes, setBillingCodes] = useState<BillingCode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -76,11 +89,26 @@ export function BillingCodesTable() {
     limit: 10,
     totalPages: 0,
   });
+  const [sections, setSections] = useState<Section[]>([]);
+  const [sectionSearchQuery, setSectionSearchQuery] = useState("");
+  const [sectionSearchResults, setSectionSearchResults] = useState<Section[]>(
+    []
+  );
+  const [isSearchingSection, setIsSearchingSection] = useState(false);
+  const [open, setOpen] = useState(false);
   const [newBillingCode, setNewBillingCode] = useState({
     code: "",
     title: "",
     description: "",
     sectionId: "",
+    section: null as Section | null,
+    codeClass: "",
+    anes: "",
+    details: "",
+    generalPracticeCost: "",
+    specialistPrice: "",
+    referredPrice: "",
+    nonReferredPrice: "",
   });
 
   const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -189,14 +217,92 @@ export function BillingCodesTable() {
     }
   };
 
+  const fetchSections = async () => {
+    try {
+      const response = await fetch("/api/sections");
+      if (!response.ok) throw new Error("Failed to fetch sections");
+      const data = await response.json();
+      setSections(data);
+    } catch (error) {
+      console.error("Error fetching sections:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchBillingCodes();
+    fetchSections();
+  }, [filter, pagination.page]);
+
+  useEffect(() => {
+    const searchSections = async () => {
+      if (sectionSearchQuery.length < 2) {
+        setSectionSearchResults([]);
+        return;
+      }
+      setIsSearchingSection(true);
+      try {
+        const response = await fetch(
+          `/api/sections?search=${encodeURIComponent(sectionSearchQuery)}`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setSectionSearchResults(data);
+        }
+      } catch (error) {
+        console.error("Error searching sections:", error);
+      } finally {
+        setIsSearchingSection(false);
+      }
+    };
+
+    setSectionSearchResults([]);
+    const debounceTimer = setTimeout(searchSections, 300);
+    return () => clearTimeout(debounceTimer);
+  }, [sectionSearchQuery]);
+
+  const handleSelectSection = (section: Section) => {
+    setNewBillingCode((prev) => ({
+      ...prev,
+      section,
+      sectionId: section.id.toString(),
+    }));
+    setSectionSearchQuery("");
+    setSectionSearchResults([]);
+  };
+
+  const handleRemoveSection = () => {
+    setNewBillingCode((prev) => ({
+      ...prev,
+      section: null,
+      sectionId: "",
+    }));
+  };
+
   const handleCreateBillingCode = async () => {
     try {
+      if (!newBillingCode.section) {
+        setError("Please select a section");
+        return;
+      }
+
       const response = await fetch("/api/billing-codes", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(newBillingCode),
+        body: JSON.stringify({
+          code: newBillingCode.code,
+          title: newBillingCode.title,
+          description: newBillingCode.description,
+          sectionId: newBillingCode.section.id,
+          codeClass: newBillingCode.codeClass || null,
+          anes: newBillingCode.anes || null,
+          details: newBillingCode.details || null,
+          generalPracticeCost: newBillingCode.generalPracticeCost || null,
+          specialistPrice: newBillingCode.specialistPrice || null,
+          referredPrice: newBillingCode.referredPrice || null,
+          nonReferredPrice: newBillingCode.nonReferredPrice || null,
+        }),
       });
 
       if (!response.ok) throw new Error("Failed to create billing code");
@@ -206,19 +312,27 @@ export function BillingCodesTable() {
         title: "",
         description: "",
         sectionId: "",
+        section: null,
+        codeClass: "",
+        anes: "",
+        details: "",
+        generalPracticeCost: "",
+        specialistPrice: "",
+        referredPrice: "",
+        nonReferredPrice: "",
       });
+      setOpen(false);
     } catch (error) {
       console.error("Error creating billing code:", error);
+      setError(
+        error instanceof Error ? error.message : "Failed to create billing code"
+      );
     }
   };
 
   const handlePageChange = (newPage: number) => {
     setPagination((prev) => ({ ...prev, page: newPage }));
   };
-
-  useEffect(() => {
-    fetchBillingCodes();
-  }, [filter, pagination.page]);
 
   return (
     <div className="space-y-4">
@@ -253,27 +367,41 @@ export function BillingCodesTable() {
             className="max-w-xs"
           />
         </div>
-        <Dialog>
+        <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
               Add Billing Code
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Add New Billing Code</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="code">Code</Label>
-                <Input
-                  id="code"
-                  name="code"
-                  value={newBillingCode.code}
-                  onChange={handleNewBillingCodeChange}
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="code">Code</Label>
+                  <Input
+                    id="code"
+                    name="code"
+                    value={newBillingCode.code}
+                    onChange={handleNewBillingCodeChange}
+                    placeholder="Enter billing code"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="codeClass">Code Class</Label>
+                  <Input
+                    id="codeClass"
+                    name="codeClass"
+                    value={newBillingCode.codeClass}
+                    onChange={handleNewBillingCodeChange}
+                    placeholder="Enter code class"
+                  />
+                </div>
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="title">Title</Label>
                 <Input
@@ -281,8 +409,10 @@ export function BillingCodesTable() {
                   name="title"
                   value={newBillingCode.title}
                   onChange={handleNewBillingCodeChange}
+                  placeholder="Enter title"
                 />
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="description">Description</Label>
                 <Textarea
@@ -290,17 +420,140 @@ export function BillingCodesTable() {
                   name="description"
                   value={newBillingCode.description}
                   onChange={handleNewBillingCodeChange}
+                  placeholder="Enter description"
                 />
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="sectionId">Section ID</Label>
+                <Label htmlFor="anes">Anesthesia</Label>
                 <Input
-                  id="sectionId"
-                  name="sectionId"
-                  value={newBillingCode.sectionId}
+                  id="anes"
+                  name="anes"
+                  value={newBillingCode.anes}
                   onChange={handleNewBillingCodeChange}
+                  placeholder="Enter anesthesia details"
                 />
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="details">Details</Label>
+                <Textarea
+                  id="details"
+                  name="details"
+                  value={newBillingCode.details}
+                  onChange={handleNewBillingCodeChange}
+                  placeholder="Enter additional details"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="generalPracticeCost">
+                    General Practice Cost
+                  </Label>
+                  <Input
+                    id="generalPracticeCost"
+                    name="generalPracticeCost"
+                    value={newBillingCode.generalPracticeCost}
+                    onChange={handleNewBillingCodeChange}
+                    placeholder="Enter general practice cost"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="specialistPrice">Specialist Price</Label>
+                  <Input
+                    id="specialistPrice"
+                    name="specialistPrice"
+                    value={newBillingCode.specialistPrice}
+                    onChange={handleNewBillingCodeChange}
+                    placeholder="Enter specialist price"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="referredPrice">Referred Price</Label>
+                  <Input
+                    id="referredPrice"
+                    name="referredPrice"
+                    value={newBillingCode.referredPrice}
+                    onChange={handleNewBillingCodeChange}
+                    placeholder="Enter referred price"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="nonReferredPrice">Non-Referred Price</Label>
+                  <Input
+                    id="nonReferredPrice"
+                    name="nonReferredPrice"
+                    value={newBillingCode.nonReferredPrice}
+                    onChange={handleNewBillingCodeChange}
+                    placeholder="Enter non-referred price"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Section</Label>
+                <div className="relative">
+                  <Input
+                    placeholder="Search sections..."
+                    value={sectionSearchQuery}
+                    onChange={(e) => setSectionSearchQuery(e.target.value)}
+                  />
+                  {isSearchingSection && (
+                    <div className="absolute right-2 top-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
+                    </div>
+                  )}
+                  {sectionSearchResults.length > 0 && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
+                      {sectionSearchResults.map((section) => (
+                        <div
+                          key={section.id}
+                          className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                          onClick={() => handleSelectSection(section)}
+                        >
+                          <div className="font-medium">
+                            {section.code} - {section.title}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            {section.jurisdiction.country} -{" "}
+                            {section.jurisdiction.region}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {newBillingCode.section && (
+                  <div className="mt-4 space-y-2">
+                    <div className="flex items-center justify-between p-2 bg-gray-50 rounded-md">
+                      <div>
+                        <span className="font-medium">
+                          {newBillingCode.section.code}
+                        </span>{" "}
+                        - {newBillingCode.section.title}
+                        <div className="text-sm text-gray-500">
+                          {newBillingCode.section.jurisdiction.country} -{" "}
+                          {newBillingCode.section.jurisdiction.region}
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleRemoveSection}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              {error && <div className="text-red-500 text-sm">{error}</div>}
               <Button onClick={handleCreateBillingCode}>Create</Button>
             </div>
           </DialogContent>
