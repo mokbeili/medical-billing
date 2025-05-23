@@ -27,6 +27,13 @@ interface BillingCode {
   code: string;
   title: string;
   description: string | null;
+  code_class: string | null;
+  anes: string | null;
+  details: string | null;
+  general_practice_cost: string | null;
+  specialist_price: string | null;
+  referred_price: string | null;
+  non_referred_price: string | null;
   section: {
     id: number;
     code: string;
