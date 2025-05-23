@@ -300,6 +300,7 @@ export async function GET(request: Request) {
         JOIN sections s ON bc.section_id = s.id
         WHERE bc.openai_embedding IS NOT NULL 
           AND bc.openai_embedding != '[]'
+          AND bc.openai_embedding != ''
           AND 1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) > 0.90
         ORDER BY similarity DESC
         LIMIT ${limit - allResults.length}
@@ -328,6 +329,7 @@ export async function GET(request: Request) {
           JOIN sections s ON bc.section_id = s.id
           WHERE bc.openai_embedding IS NOT NULL
             AND bc.openai_embedding != '[]'
+            AND bc.openai_embedding != ''
             AND 1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) > 0.20
           ORDER BY similarity DESC
           LIMIT ${limit - allResults.length}
