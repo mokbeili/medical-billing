@@ -70,11 +70,25 @@ export function BillingCodesTable() {
     title: string;
     description: string;
     sectionId: number;
+    codeClass: string;
+    anes: string;
+    details: string;
+    generalPracticeCost: string;
+    specialistPrice: string;
+    referredPrice: string;
+    nonReferredPrice: string;
   }>({
     code: "",
     title: "",
     description: "",
     sectionId: 0,
+    codeClass: "",
+    anes: "",
+    details: "",
+    generalPracticeCost: "",
+    specialistPrice: "",
+    referredPrice: "",
+    nonReferredPrice: "",
   });
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState({
@@ -131,6 +145,13 @@ export function BillingCodesTable() {
       title: code.title,
       description: code.description || "",
       sectionId: code.section.id,
+      codeClass: code.code_class || "",
+      anes: code.anes || "",
+      details: code.details || "",
+      generalPracticeCost: code.general_practice_cost || "",
+      specialistPrice: code.specialist_price || "",
+      referredPrice: code.referred_price || "",
+      nonReferredPrice: code.non_referred_price || "",
     });
     setError(null);
   };
@@ -165,6 +186,13 @@ export function BillingCodesTable() {
           title: editValues.title,
           description: editValues.description,
           sectionId: editValues.sectionId,
+          codeClass: editValues.codeClass || null,
+          anes: editValues.anes || null,
+          details: editValues.details || null,
+          generalPracticeCost: editValues.generalPracticeCost || null,
+          specialistPrice: editValues.specialistPrice || null,
+          referredPrice: editValues.referredPrice || null,
+          nonReferredPrice: editValues.nonReferredPrice || null,
         }),
       });
 
@@ -636,20 +664,99 @@ export function BillingCodesTable() {
                   </TableCell>
                   <TableCell>
                     {editingId === code.id ? (
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          onClick={() => handleEditSave(code.id)}
-                        >
-                          Save
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={handleEditCancel}
-                        >
-                          Cancel
-                        </Button>
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="edit-codeClass">Code Class</Label>
+                            <Input
+                              id="edit-codeClass"
+                              name="codeClass"
+                              value={editValues.codeClass}
+                              onChange={handleEditChange}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="edit-anes">Anesthesia</Label>
+                            <Input
+                              id="edit-anes"
+                              name="anes"
+                              value={editValues.anes}
+                              onChange={handleEditChange}
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-details">Details</Label>
+                          <Textarea
+                            id="edit-details"
+                            name="details"
+                            value={editValues.details}
+                            onChange={handleEditChange}
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="edit-generalPracticeCost">
+                              General Practice Cost
+                            </Label>
+                            <Input
+                              id="edit-generalPracticeCost"
+                              name="generalPracticeCost"
+                              value={editValues.generalPracticeCost}
+                              onChange={handleEditChange}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="edit-specialistPrice">
+                              Specialist Price
+                            </Label>
+                            <Input
+                              id="edit-specialistPrice"
+                              name="specialistPrice"
+                              value={editValues.specialistPrice}
+                              onChange={handleEditChange}
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="edit-referredPrice">
+                              Referred Price
+                            </Label>
+                            <Input
+                              id="edit-referredPrice"
+                              name="referredPrice"
+                              value={editValues.referredPrice}
+                              onChange={handleEditChange}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="edit-nonReferredPrice">
+                              Non-Referred Price
+                            </Label>
+                            <Input
+                              id="edit-nonReferredPrice"
+                              name="nonReferredPrice"
+                              value={editValues.nonReferredPrice}
+                              onChange={handleEditChange}
+                            />
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => handleEditSave(code.id)}
+                          >
+                            Save
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={handleEditCancel}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
                       </div>
                     ) : (
                       <Button
