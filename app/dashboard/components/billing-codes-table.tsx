@@ -485,6 +485,16 @@ export function BillingCodesTable() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
+                  <Label htmlFor="specialistPrice">Specialist Price</Label>
+                  <Input
+                    id="specialistPrice"
+                    name="specialistPrice"
+                    value={newBillingCode.specialistPrice}
+                    onChange={handleNewBillingCodeChange}
+                    placeholder="Enter specialist price"
+                  />
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="generalPracticeCost">
                     General Practice Cost
                   </Label>
@@ -494,16 +504,6 @@ export function BillingCodesTable() {
                     value={newBillingCode.generalPracticeCost}
                     onChange={handleNewBillingCodeChange}
                     placeholder="Enter general practice cost"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="specialistPrice">Specialist Price</Label>
-                  <Input
-                    id="specialistPrice"
-                    name="specialistPrice"
-                    value={newBillingCode.specialistPrice}
-                    onChange={handleNewBillingCodeChange}
-                    placeholder="Enter specialist price"
                   />
                 </div>
               </div>
