@@ -416,121 +416,6 @@ export function BillingCodesTable() {
               <DialogTitle>Add New Billing Code</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="code">Code</Label>
-                  <Input
-                    id="code"
-                    name="code"
-                    value={newBillingCode.code}
-                    onChange={handleNewBillingCodeChange}
-                    placeholder="Enter billing code"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="codeClass">Code Class</Label>
-                  <Input
-                    id="codeClass"
-                    name="codeClass"
-                    value={newBillingCode.codeClass}
-                    onChange={handleNewBillingCodeChange}
-                    placeholder="Enter code class"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="title">Title</Label>
-                <Input
-                  id="title"
-                  name="title"
-                  value={newBillingCode.title}
-                  onChange={handleNewBillingCodeChange}
-                  placeholder="Enter title"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  name="description"
-                  value={newBillingCode.description}
-                  onChange={handleNewBillingCodeChange}
-                  placeholder="Enter description"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="anes">Anesthesia</Label>
-                <Input
-                  id="anes"
-                  name="anes"
-                  value={newBillingCode.anes}
-                  onChange={handleNewBillingCodeChange}
-                  placeholder="Enter anesthesia details"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="details">Details</Label>
-                <Textarea
-                  id="details"
-                  name="details"
-                  value={newBillingCode.details}
-                  onChange={handleNewBillingCodeChange}
-                  placeholder="Enter additional details"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="specialistPrice">Specialist Price</Label>
-                  <Input
-                    id="specialistPrice"
-                    name="specialistPrice"
-                    value={newBillingCode.specialistPrice}
-                    onChange={handleNewBillingCodeChange}
-                    placeholder="Enter specialist price"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="generalPracticeCost">
-                    General Practice Cost
-                  </Label>
-                  <Input
-                    id="generalPracticeCost"
-                    name="generalPracticeCost"
-                    value={newBillingCode.generalPracticeCost}
-                    onChange={handleNewBillingCodeChange}
-                    placeholder="Enter general practice cost"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="referredPrice">Referred Price</Label>
-                  <Input
-                    id="referredPrice"
-                    name="referredPrice"
-                    value={newBillingCode.referredPrice}
-                    onChange={handleNewBillingCodeChange}
-                    placeholder="Enter referred price"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="nonReferredPrice">Non-Referred Price</Label>
-                  <Input
-                    id="nonReferredPrice"
-                    name="nonReferredPrice"
-                    value={newBillingCode.nonReferredPrice}
-                    onChange={handleNewBillingCodeChange}
-                    placeholder="Enter non-referred price"
-                  />
-                </div>
-              </div>
-
               <div className="space-y-2">
                 <Label>Section</Label>
                 <div className="relative">
@@ -590,6 +475,123 @@ export function BillingCodesTable() {
                   </div>
                 )}
               </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="code">Code</Label>
+                  <Input
+                    id="code"
+                    name="code"
+                    value={newBillingCode.code}
+                    onChange={handleNewBillingCodeChange}
+                    placeholder="Enter billing code"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="title">Title</Label>
+                  <Input
+                    id="title"
+                    name="title"
+                    value={newBillingCode.title}
+                    onChange={handleNewBillingCodeChange}
+                    placeholder="Enter title"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  name="description"
+                  value={newBillingCode.description}
+                  onChange={handleNewBillingCodeChange}
+                  placeholder="Enter description"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="specialistPrice">Specialist Price</Label>
+                  <Input
+                    id="specialistPrice"
+                    name="specialistPrice"
+                    value={newBillingCode.specialistPrice}
+                    onChange={handleNewBillingCodeChange}
+                    placeholder="Enter specialist price"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="generalPracticeCost">
+                    General Practice Cost
+                  </Label>
+                  <Input
+                    id="generalPracticeCost"
+                    name="generalPracticeCost"
+                    value={newBillingCode.generalPracticeCost}
+                    onChange={handleNewBillingCodeChange}
+                    placeholder="Enter general practice cost"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="referredPrice">Referred Price</Label>
+                  <Input
+                    id="referredPrice"
+                    name="referredPrice"
+                    value={newBillingCode.referredPrice}
+                    onChange={handleNewBillingCodeChange}
+                    placeholder="Enter referred price"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="nonReferredPrice">Non-Referred Price</Label>
+                  <Input
+                    id="nonReferredPrice"
+                    name="nonReferredPrice"
+                    value={newBillingCode.nonReferredPrice}
+                    onChange={handleNewBillingCodeChange}
+                    placeholder="Enter non-referred price"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="codeClass">Code Class</Label>
+                  <Input
+                    id="codeClass"
+                    name="codeClass"
+                    value={newBillingCode.codeClass}
+                    onChange={handleNewBillingCodeChange}
+                    placeholder="Enter code class"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="anes">Anesthesia</Label>
+                  <Input
+                    id="anes"
+                    name="anes"
+                    value={newBillingCode.anes}
+                    onChange={handleNewBillingCodeChange}
+                    placeholder="Enter anesthesia details"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="details">Details</Label>
+                <Textarea
+                  id="details"
+                  name="details"
+                  value={newBillingCode.details}
+                  onChange={handleNewBillingCodeChange}
+                  placeholder="Enter additional details"
+                />
+              </div>
+
               {error && <div className="text-red-500 text-sm">{error}</div>}
               <Button onClick={handleCreateBillingCode}>Create</Button>
             </div>
