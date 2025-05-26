@@ -174,7 +174,7 @@ export function BillingCodesTable() {
     try {
       // Check for duplicates
       const duplicateCheck = await fetch(
-        `/api/billing-codes/check-duplicates?code=${editValues.code}&title=${editValues.title}&excludeId=${id}`
+        `/api/billing-codes/check-duplicates?code=${editValues.code}&title=${editValues.title}&excludeId=${id}&sectionId=${editValues.sectionId}`
       );
       const duplicateData = await duplicateCheck.json();
 

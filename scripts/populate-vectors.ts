@@ -10,7 +10,7 @@ const openai = new OpenAI({
 async function populateVectors(
   sectionCode?: string,
   billingCode?: string,
-  limit: number = 5
+  limit?: number
 ) {
   try {
     // Build the where clause based on provided filters
@@ -28,6 +28,9 @@ async function populateVectors(
     const billingCodes = await prisma.billingCode.findMany({
       where: whereClause,
       take: limit,
+      orderBy: {
+        created_at: "desc",
+      },
       select: {
         id: true,
         code: true,

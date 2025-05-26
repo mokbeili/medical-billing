@@ -14,8 +14,9 @@ export async function GET(request: Request) {
     const code = searchParams.get("code");
     const title = searchParams.get("title");
     const excludeId = searchParams.get("excludeId");
+    const sectionId = searchParams.get("sectionId");
 
-    if (!code || !title) {
+    if (!code || !title || !sectionId) {
       return new NextResponse("Missing required parameters", { status: 400 });
     }
 
@@ -39,6 +40,7 @@ export async function GET(request: Request) {
       where: {
         title,
         id: excludeId ? { not: parseInt(excludeId) } : undefined,
+        section_id: parseInt(sectionId),
       },
     });
 
