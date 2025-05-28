@@ -15,7 +15,7 @@ export default function DashboardPage() {
     <Layout>
       <div className="min-h-screen bg-gray-50">
         {/* Main Content */}
-        <main className="container mx-auto px-4 py-8 mt-16">
+        <main className="px-4 py-8 mt-16">
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900">
               Admin Dashboard
