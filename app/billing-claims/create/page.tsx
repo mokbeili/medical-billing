@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useSearchThrottle } from "@/lib/hooks/useSearchThrottle";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -86,9 +87,6 @@ export default function CreateBillingClaimPage() {
   const [selectedReferringPhysician, setSelectedReferringPhysician] =
     useState<ReferringPhysician | null>(null);
   const [isCreatingPatient, setIsCreatingPatient] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<BillingCode[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
   const [selectedCodes, setSelectedCodes] = useState<BillingCode[]>([]);
   const [icdSearchQuery, setIcdSearchQuery] = useState("");
   const [icdSearchResults, setIcdSearchResults] = useState<ICDCode[]>([]);
@@ -166,33 +164,29 @@ export default function CreateBillingClaimPage() {
     fetchReferringPhysicians();
   }, []);
 
-  useEffect(() => {
-    const searchBillingCodes = async () => {
-      if (searchQuery.length < 2) {
-        setSearchResults([]);
-        return;
-      }
-      setIsSearching(true);
-      try {
-        const response = await fetch(
-          `/api/search?query=${encodeURIComponent(
-            searchQuery
-          )}&jurisdictionId=${1}&userId=${session?.user?.id}`
-        );
-        if (response.ok) {
-          const data = await response.json();
-          setSearchResults(data.results);
-        }
-      } catch (error) {
-        console.error("Error searching billing codes:", error);
-      } finally {
-        setIsSearching(false);
-      }
-    };
-    setSearchResults([]);
-    const debounceTimer = setTimeout(searchBillingCodes, 300);
-    return () => clearTimeout(debounceTimer);
-  }, [searchQuery]);
+  const searchBillingCodes = async (query: string) => {
+    const response = await fetch(
+      `/api/search?query=${encodeURIComponent(
+        query
+      )}&jurisdictionId=${1}&userId=${session?.user?.id}`
+    );
+    if (response.ok) {
+      const data = await response.json();
+      return data.results as BillingCode[];
+    }
+    return [];
+  };
+
+  const {
+    query: searchQuery,
+    setQuery: setSearchQuery,
+    results: searchResults,
+    isSearching,
+  } = useSearchThrottle<BillingCode>(searchBillingCodes, {
+    minLength: 2,
+    debounceMs: 300,
+    throttleMs: 1000,
+  });
 
   useEffect(() => {
     const searchIcdCodes = async () => {
@@ -306,7 +300,6 @@ export default function CreateBillingClaimPage() {
     }
     setErrors({ ...errors, billingCodes: false });
     setSearchQuery("");
-    setSearchResults([]);
   };
 
   const handleRemoveCode = (codeId: number) => {
