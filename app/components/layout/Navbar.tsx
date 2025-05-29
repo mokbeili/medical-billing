@@ -57,6 +57,9 @@ export default function Navbar({ onMenuClick }: { onMenuClick: () => void }) {
               <span className="text-xl font-semibold text-gray-900">
                 Myon Health
               </span>
+              <span className="px-2 py-1 text-xs font-medium text-white bg-blue-600 rounded-full">
+                ALPHA
+              </span>
             </Link>
           </div>
 
