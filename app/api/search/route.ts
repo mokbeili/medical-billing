@@ -39,7 +39,7 @@ interface SearchResponse {
   };
 }
 
-const VECTOR_SEARCH_LIMIT = 80;
+const BROADER_SEARCH_LIMIT = 100;
 const TARGET_RESULTS = 10;
 
 // Helper function to check if we need more results
@@ -332,7 +332,7 @@ export async function GET(request: Request) {
             AND bc.openai_embedding != ''
             AND 1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) > 0.20
           ORDER BY similarity DESC
-          LIMIT ${limit - allResults.length}
+          LIMIT ${BROADER_SEARCH_LIMIT}
         `;
 
       if (broaderMatches.length > 0) {
@@ -345,7 +345,119 @@ export async function GET(request: Request) {
           )
           .join("\n");
 
-        const prompt = `You are a medical billing expert. Given the following search query and potential matches, select the most relevant billing codes that exactly match the medical procedure or service being searched for.
+        const prompt = `You are a medical billing assistant for Saskatchewan physicians. Based on a suggested list of billing codes and service descriptions, your task is to:
+
+📌 1. Verify Billing Code Validity
+Use only codes listed in the Saskatchewan Physician Payment Schedule (April 2025).
+
+If a service is not listed, advise the physician to contact Medical Services Branch (MSB) with a written request including:
+
+Service description
+
+Frequency
+
+Time spent
+
+Suggested fee and rationale
+
+🧾 2. Apply Proper Billing Rules
+For each billing code, apply the following:
+
+A. Assessment Rules
+Avoid double billing for services with overlapping coverage (e.g., visits bundled with procedures).
+
+For services on the same day, apply:
+
+Visit + 0/10-Day Procedure: Pay the higher of:
+
+Full procedure OR
+
+Visit + 75% of procedure
+
+Visit + 42-Day Procedure: Visit is included unless emergency, consultation, or >30 days since last visit.
+
+For multiple procedures:
+
+Pay 100% for the highest-value procedure
+
+Pay 75% for each additional one, unless:
+
+Composite applies
+
+Additional service is excluded or specifically listed
+
+B. Consultation Rules
+Only one consult per condition per 90 days unless:
+
+A new referral exists
+
+A new condition is assessed
+
+Subsequent consults may be reclassified to partial or follow-up assessments
+
+Include written recommendations to referring physician
+
+C. Virtual Care Rules
+Only billable if both physician and patient are in Saskatchewan
+
+Must be real-time and medically necessary
+
+Maximum of 3,000 virtual care services per year per physician (1,500 for code 875A)
+
+Start and end times must be documented for time-based codes
+
+Cannot bill for admin tasks or updates without direct patient interaction
+
+D. Out-of-Province Services
+For out-of-province insured services:
+
+Must fall under the Interprovincial Billing Agreement (IRBA)
+
+Prior approval is required for many Quebec or out-of-country services
+
+Submit through MSB at Saskatchewan rates unless IRBA-excluded
+
+📄 3. Ensure Proper Documentation
+Every billed service must have a medical record with:
+
+Start and end times (for time-based services)
+
+Clinical details justifying the billing code
+
+Notes confirming that the service was insured, provided, and medically required
+
+Additional documents for:
+
+Diagnostics: tracings, reports, lab results
+
+Procedures: operative reports
+
+Virtual care: location, platform compliance, secure communication
+
+📚 4. Use Specialty and Section Rules
+Refer to the relevant section in the Schedule:
+
+Each specialty (e.g., Psychiatry, Cardiology, General Practice) has its own section (A–Y)
+
+Apply specialty-specific assessment rules if noted (e.g., Anesthesia, Surgery, Obstetrics)
+
+🔁 5. Billing Timing and Limits
+Claims must be submitted within 6 months of service
+
+Time-based codes must meet minimum durations (e.g., 15 min = at least 7.5 min to claim)
+
+For multi-unit claims, each unit (except the last) must meet full time; the last must be a major portion
+
+📬 6. Special Notes
+If billing under locum tenens or alternate payment models, use appropriate physician number and billing method
+
+Use "by report" only when required and include all supporting details
+
+Referral rules:
+
+Valid 4-digit referring physician ID is required
+
+Use referral code 9901 only for retired/deceased/moved physicians and only twice per patient
 
             Search Query: "${query}"
 
@@ -353,7 +465,7 @@ export async function GET(request: Request) {
             ${matchesText}
 
             Please analyze these matches and return ONLY the billing codes that are most relevant to the search query. 
-            return results as an array of strings (billing codes)`;
+            return results as an array of strings (billing codes) example: ["123A", "14D"] with no other text`;
 
         const completion = await openai.chat.completions.create({
           model: "gpt-4",
@@ -371,6 +483,8 @@ export async function GET(request: Request) {
           temperature: 0.3,
           max_tokens: 100,
         });
+
+        console.log(completion.choices[0].message.content);
 
         // Parse the JSON array from the completion
         const selectedCodes: string[] = JSON.parse(
