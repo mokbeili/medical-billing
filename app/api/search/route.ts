@@ -465,7 +465,11 @@ Use referral code 9901 only for retired/deceased/moved physicians and only twice
             ${matchesText}
 
             Please analyze these matches and return ONLY the billing codes that are most relevant to the search query. 
-            return results as an array of strings (billing codes) example: ["123A", "14D"] with no other text`;
+            return the results in the following format:
+            {
+              "billingCodes": ["123A", "14D"]
+              "reasoning": "The billing codes 123A and 14D are the most relevant to the search query because they are the only codes that are listed in the Saskatchewan Physician Payment Schedule (April 2025) and are relevant to the search query."
+            }`;
 
         const completion = await openai.chat.completions.create({
           model: "gpt-4",
@@ -483,13 +487,10 @@ Use referral code 9901 only for retired/deceased/moved physicians and only twice
           temperature: 0.3,
           max_tokens: 100,
         });
-
-        console.log(completion.choices[0].message.content);
-
         // Parse the JSON array from the completion
         const selectedCodes: string[] = JSON.parse(
-          completion.choices[0].message.content || "[]"
-        );
+          completion.choices[0].message.content || "{}"
+        )["billingCodes"];
 
         // Find the corresponding billing codes from the broader matches
         const selectedResults = broaderMatches
