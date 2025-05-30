@@ -301,7 +301,7 @@ export async function GET(request: Request) {
         WHERE bc.openai_embedding IS NOT NULL 
           AND bc.openai_embedding != '[]'
           AND bc.openai_embedding != ''
-          AND 1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) > 0.90
+          AND 1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) > 0.80
         ORDER BY similarity DESC
         LIMIT ${limit - allResults.length}
       `;
@@ -465,19 +465,17 @@ Use referral code 9901 only for retired/deceased/moved physicians and only twice
             ${matchesText}
 
             Please analyze these matches and return ONLY the billing codes that are most relevant to the search query. 
-            return the results in the following format:
-            {
-              "billingCodes": ["123A", "14D"]
-              "reasoning": "The billing codes 123A and 14D are the most relevant to the search query because they are the only codes that are listed in the Saskatchewan Physician Payment Schedule (April 2025) and are relevant to the search query."
-            }`;
-
+            return only a json object with the following format:
+            { billingCodes: ['code1', 'code2'], 
+             reasoning: 
+             'The billing codes 123A and 14D are the most relevant to the search query because they are the only codes that are listed in the Saskatchewan Physician Payment Schedule (April 2025) and are relevant to the search query.' }",`;
         const completion = await openai.chat.completions.create({
           model: "gpt-4",
           messages: [
             {
               role: "system",
               content:
-                "You are a medical billing expert helping to find the most relevant billing codes for medical procedures and services.",
+                "You are a medical billing expert helping to find the most relevant billing codes for medical procedures and services. You are given a list of billing codes and their descriptions. You are also given a search query. You need to return the billing codes that are most relevant to the search query. return only a json object with the following format: { billingCodes: ['code1', 'code2'], reasoning: 'The billing codes 123A and 14D are the most relevant to the search query because they are the only codes that are listed in the Saskatchewan Physician Payment Schedule (April 2025) and are relevant to the search query.' }",
             },
             {
               role: "user",
@@ -485,8 +483,9 @@ Use referral code 9901 only for retired/deceased/moved physicians and only twice
             },
           ],
           temperature: 0.3,
-          max_tokens: 100,
+          max_tokens: 200,
         });
+
         // Parse the JSON array from the completion
         const selectedCodes: string[] = JSON.parse(
           completion.choices[0].message.content || "{}"
