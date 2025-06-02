@@ -94,21 +94,25 @@ export async function GET(request: Request) {
     // Helper function to add unique results
     const addUniqueResults = (
       results: BaseSearchResult[],
+      cacheResults: SearchResult[],
       searchType: string
     ) => {
-      const uniqueResults = results
-        .filter((result) => {
-          if (usedCodes.has(result.code)) {
-            return false;
-          }
-          usedCodes.add(result.code);
-          return true;
-        })
-        .map((result) => ({
-          ...result,
-          displayCode: result.code,
-          searchType: searchType,
-        }));
+      const uniqueResults = [
+        ...cacheResults,
+        ...results
+          .filter((result) => {
+            if (usedCodes.has(result.code)) {
+              return false;
+            }
+            usedCodes.add(result.code);
+            return true;
+          })
+          .map((result) => ({
+            ...result,
+            displayCode: result.code,
+            searchType: searchType,
+          })),
+      ];
 
       if (uniqueResults.length > 0) {
         allResults = [...allResults, ...uniqueResults];
@@ -144,7 +148,7 @@ export async function GET(request: Request) {
     });
 
     if (exactCodeMatch) {
-      addUniqueResults([exactCodeMatch], "exact_code");
+      addUniqueResults([exactCodeMatch], [], "exact_code");
     }
 
     // 2. Try partial code match if we need more results
@@ -170,7 +174,7 @@ export async function GET(request: Request) {
         },
         take: limit - allResults.length,
       });
-      addUniqueResults(partialCodeMatches, "partial_code");
+      addUniqueResults(partialCodeMatches, [], "partial_code");
     }
 
     // 3. Try exact title match if we need more results
@@ -194,7 +198,7 @@ export async function GET(request: Request) {
         take: limit - allResults.length,
       });
 
-      addUniqueResults(exactTitleMatches, "exact_title");
+      addUniqueResults(exactTitleMatches, [], "exact_title");
     }
 
     // 4. Try synonym match if we need more results
@@ -230,7 +234,7 @@ export async function GET(request: Request) {
         },
         take: limit - allResults.length,
       });
-      addUniqueResults(partialMatches, "synonym");
+      addUniqueResults(partialMatches, [], "synonym");
     }
 
     let embeddingString: string = "";
@@ -262,7 +266,7 @@ export async function GET(request: Request) {
         )
         SELECT id, search_string, results
         FROM vector_comparison
-        WHERE similarity >= 0.995
+        WHERE similarity >= 0.95
         ORDER BY similarity DESC
         LIMIT 1`;
 
@@ -274,7 +278,7 @@ export async function GET(request: Request) {
           const previousResults = JSON.parse(
             previous_query.results
           ) as SearchResult[];
-          addUniqueResults(previousResults, "similar_query");
+          addUniqueResults([], [...previousResults], "similar_query");
         } catch (e) {
           console.error("Error parsing previous results:", e);
         }
@@ -306,7 +310,7 @@ export async function GET(request: Request) {
         LIMIT ${limit - allResults.length}
       `;
 
-      addUniqueResults(strictMatches, "ai_strict");
+      addUniqueResults(strictMatches, [], "ai_strict");
     }
 
     if (
@@ -474,8 +478,7 @@ Use referral code 9901 only for retired/deceased/moved physicians and only twice
           messages: [
             {
               role: "system",
-              content:
-                "You are a medical billing expert helping to find the most relevant billing codes for medical procedures and services. You are given a list of billing codes and their descriptions. You are also given a search query. You need to return the billing codes that are most relevant to the search query. return only a json object with the following format: { billingCodes: ['code1', 'code2'], reasoning: 'The billing codes 123A and 14D are the most relevant to the search query because they are the only codes that are listed in the Saskatchewan Physician Payment Schedule (April 2025) and are relevant to the search query.' }",
+              content: "",
             },
             {
               role: "user",
@@ -483,7 +486,7 @@ Use referral code 9901 only for retired/deceased/moved physicians and only twice
             },
           ],
           temperature: 0.3,
-          max_tokens: 200,
+          max_tokens: 300,
         });
 
         // Parse the JSON array from the completion
@@ -501,7 +504,7 @@ Use referral code 9901 only for retired/deceased/moved physicians and only twice
             };
           });
 
-        addUniqueResults(selectedResults, "ai_refined");
+        addUniqueResults(selectedResults, [], "ai_refined");
       }
     }
 

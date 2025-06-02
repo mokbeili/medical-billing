@@ -1,7 +1,6 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import { useSession } from "next-auth/react";
@@ -132,12 +131,12 @@ export default function SearchPage() {
 
           <div className="bg-white shadow-sm rounded-lg p-6">
             <div className="mb-6">
-              <Input
-                type="text"
+              <textarea
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Enter code or description..."
-                className="w-full"
+                className="w-full min-h-[4rem] p-2 border rounded-md resize-y"
+                rows={2}
               />
             </div>
 
