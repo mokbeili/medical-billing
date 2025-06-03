@@ -16,13 +16,22 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Layout from "../components/layout/Layout";
 
-interface BillingClaim {
-  id: string;
-  friendlyId: string;
-  physician: {
-    firstName: string;
-    lastName: string;
-    middleInitial: string | null;
+interface ServiceCode {
+  id: number;
+  status: ClaimStatus;
+  serviceDate: string;
+  serviceStartTime: string | null;
+  serviceEndTime: string | null;
+  summary: string;
+  createdAt: string;
+  code: {
+    code: string;
+    title: string;
+    description: string | null;
+    section: {
+      code: string;
+      title: string;
+    };
   };
   patient: {
     firstName: string;
@@ -30,80 +39,107 @@ interface BillingClaim {
     middleInitial: string | null;
     billingNumber: string;
   };
-  serviceCodes: {
-    status: ClaimStatus;
-  }[];
-  createdAt: string;
-  serviceDate: string;
+  icdCode: {
+    code: string;
+    description: string;
+  } | null;
+  referringPhysician: {
+    code: string;
+    name: string;
+  } | null;
+  healthInstitution: {
+    name: string;
+  } | null;
+  claim: {
+    id: string;
+    friendlyId: string;
+  } | null;
 }
 
 export default function BillingClaimsPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
-  const [claims, setClaims] = useState<BillingClaim[]>([]);
-  const [filteredClaims, setFilteredClaims] = useState<BillingClaim[]>([]);
+  const [serviceCodes, setServiceCodes] = useState<ServiceCode[]>([]);
+  const [filteredServiceCodes, setFilteredServiceCodes] = useState<
+    ServiceCode[]
+  >([]);
   const [filters, setFilters] = useState({
-    claimId: "",
     patientName: "",
     billingNumber: "",
     status: "",
     serviceDate: "",
+    code: "",
+    section: "",
   });
 
   useEffect(() => {
-    const fetchClaims = async () => {
+    const fetchServiceCodes = async () => {
       try {
-        const response = await fetch("/api/billing-claims");
+        const response = await fetch("/api/service-codes");
         if (response.ok) {
           const data = await response.json();
-          setClaims(data);
-          setFilteredClaims(data);
+          setServiceCodes(data);
+          setFilteredServiceCodes(data);
         }
       } catch (error) {
-        console.error("Error fetching claims:", error);
+        console.error("Error fetching service codes:", error);
       }
     };
 
     if (status === "authenticated") {
-      fetchClaims();
+      fetchServiceCodes();
     }
   }, [status]);
 
   useEffect(() => {
-    let filtered = [...claims];
+    let filtered = [...serviceCodes];
 
     if (filters.status && filters.status !== "ALL") {
-      filtered = filtered.filter((claim) =>
-        claim.serviceCodes.some((code) => code.status === filters.status)
-      );
+      filtered = filtered.filter((code) => code.status === filters.status);
     }
 
     if (filters.patientName) {
       const searchTerm = filters.patientName.toLowerCase();
       filtered = filtered.filter(
-        (claim) =>
-          claim.patient.firstName.toLowerCase().includes(searchTerm) ||
-          claim.patient.lastName.toLowerCase().includes(searchTerm)
+        (code) =>
+          code.patient.firstName.toLowerCase().includes(searchTerm) ||
+          code.patient.lastName.toLowerCase().includes(searchTerm)
       );
     }
 
     if (filters.billingNumber) {
       const searchTerm = filters.billingNumber.toLowerCase();
-      filtered = filtered.filter((claim) =>
-        claim.patient.billingNumber.toLowerCase().includes(searchTerm)
+      filtered = filtered.filter((code) =>
+        code.patient.billingNumber.toLowerCase().includes(searchTerm)
       );
     }
 
     if (filters.serviceDate) {
       const searchTerm = filters.serviceDate.toLowerCase();
       filtered = filtered.filter(
-        (claim) =>
-          new Date(claim.serviceDate).toISOString().slice(0, 16) === searchTerm
+        (code) =>
+          new Date(code.serviceDate).toISOString().slice(0, 16) === searchTerm
       );
     }
 
-    setFilteredClaims(filtered);
-  }, [claims, filters]);
+    if (filters.code) {
+      const searchTerm = filters.code.toLowerCase();
+      filtered = filtered.filter((code) =>
+        code.code.code.toLowerCase().includes(searchTerm)
+      );
+    }
+
+    if (filters.section) {
+      const searchTerm = filters.section.toLowerCase();
+      filtered = filtered.filter(
+        (code) =>
+          code.code.section.code.toLowerCase().includes(searchTerm) ||
+          code.code.section.title.toLowerCase().includes(searchTerm)
+      );
+    }
+
+    setFilteredServiceCodes(filtered);
+  }, [serviceCodes, filters]);
 
   if (status === "loading") {
     return (
@@ -124,9 +160,9 @@ export default function BillingClaimsPage() {
     <Layout>
       <div className="min-h-screen bg-gray-50">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Billing Claims</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Service Codes</h1>
           <Link href="/billing-claims/create">
-            <Button>Create New Claim</Button>
+            <Button>New Service</Button>
           </Link>
         </div>
 
@@ -190,14 +226,36 @@ export default function BillingClaimsPage() {
                 }
               />
             </div>
+
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">Billing Code</label>
+              <Input
+                placeholder="Search by billing code"
+                value={filters.code}
+                onChange={(e) =>
+                  setFilters({ ...filters, code: e.target.value })
+                }
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">Section</label>
+              <Input
+                placeholder="Search by section code or title"
+                value={filters.section}
+                onChange={(e) =>
+                  setFilters({ ...filters, section: e.target.value })
+                }
+              />
+            </div>
           </div>
         </div>
 
         <div className="bg-white rounded-lg shadow">
-          {filteredClaims.length === 0 ? (
+          {filteredServiceCodes.length === 0 ? (
             <div className="p-4">
               <p className="text-gray-500">
-                No claims found matching your criteria.
+                No service codes found matching your criteria.
               </p>
             </div>
           ) : (
@@ -206,7 +264,10 @@ export default function BillingClaimsPage() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Claim ID
+                      Billing Code
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Section
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Patient
@@ -221,7 +282,7 @@ export default function BillingClaimsPage() {
                       Service Date and Time
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Created At
+                      Claim
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
@@ -229,52 +290,83 @@ export default function BillingClaimsPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredClaims.map((claim) => (
-                    <tr key={claim.id}>
+                  {filteredServiceCodes.map((serviceCode) => (
+                    <tr key={serviceCode.id}>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {claim.friendlyId}
+                        {serviceCode.code.code}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {`${claim.patient.firstName} ${claim.patient.lastName}${
-                          claim.patient.middleInitial
-                            ? ` ${claim.patient.middleInitial}`
+                        {serviceCode.code.section.code} -{" "}
+                        {serviceCode.code.section.title}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {`${serviceCode.patient.firstName} ${
+                          serviceCode.patient.lastName
+                        }${
+                          serviceCode.patient.middleInitial
+                            ? ` ${serviceCode.patient.middleInitial}`
                             : ""
                         }`}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {claim.patient.billingNumber}
+                        {serviceCode.patient.billingNumber}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span
                           className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            claim.serviceCodes[0]?.status === "APPROVED"
+                            serviceCode.status === "APPROVED"
                               ? "bg-green-100 text-green-800"
-                              : claim.serviceCodes[0]?.status === "REJECTED"
+                              : serviceCode.status === "REJECTED"
                               ? "bg-red-100 text-red-800"
-                              : claim.serviceCodes[0]?.status === "SENT"
+                              : serviceCode.status === "SENT"
                               ? "bg-blue-100 text-blue-800"
                               : "bg-yellow-100 text-yellow-800"
                           }`}
                         >
-                          {claim.serviceCodes[0]?.status || "PENDING"}
+                          {serviceCode.status}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(claim.serviceDate).toLocaleString()}
+                        {new Date(serviceCode.serviceDate).toLocaleString()}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(claim.createdAt).toLocaleDateString()}
+                        {serviceCode.claim ? (
+                          <Link
+                            href={`/billing-claims/${serviceCode.claim.id}`}
+                          >
+                            <span className="text-blue-600 hover:text-blue-800">
+                              {serviceCode.claim.friendlyId}
+                            </span>
+                          </Link>
+                        ) : (
+                          "Not Claimed"
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <Link href={`/billing-claims/${claim.id}`}>
+                        {serviceCode.claim ? (
+                          <Link
+                            href={`/billing-claims/${serviceCode.claim.id}`}
+                          >
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                            >
+                              View Claim
+                            </Button>
+                          </Link>
+                        ) : (
                           <Button
                             variant="outline"
                             size="sm"
-                            className="hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                            className="hover:bg-green-50 hover:text-green-600 transition-colors"
+                            onClick={() => {
+                              // TODO: Implement create claim functionality
+                            }}
                           >
-                            View Details
+                            Create Claim
                           </Button>
-                        </Link>
+                        )}
                       </td>
                     </tr>
                   ))}

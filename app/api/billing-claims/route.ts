@@ -21,9 +21,7 @@ export async function GET() {
       },
       include: {
         physician: true,
-        patient: true,
         jurisdiction: true,
-        healthInstitution: true,
         serviceCodes: {
           include: {
             code: true,
@@ -53,7 +51,6 @@ export async function POST(request: Request) {
     const {
       physicianId,
       patientId,
-      summary,
       billingCodes,
       icdCodeId,
       serviceDate,
@@ -88,26 +85,25 @@ export async function POST(request: Request) {
         physicianId,
         patientId,
         jurisdictionId: physician.jurisdictionId,
-        icdCodeId: icdCodeId || null,
+        iCDCodeId: icdCodeId || null,
         referringPhysicianId: referringPhysicianId || null,
         healthInstitutionId: healthInstitutionId || null,
-        summary,
-        serviceDate: new Date(serviceDate),
-        openaiEmbedding: "", // This will be populated by a background job
         serviceCodes: {
           create: billingCodes.map((code: { codeId: number }) => ({
             codeId: code.codeId,
             status: "PENDING",
+            serviceDate: new Date(serviceDate),
+            summary: "", // This will be populated by a background job
           })),
         },
       },
       include: {
         physician: true,
-        patient: true,
+        Patient: true,
         jurisdiction: true,
-        icdCode: true,
-        referringPhysician: true,
-        healthInstitution: true,
+        ICDCode: true,
+        ReferringPhysician: true,
+        HealthInstitution: true,
         serviceCodes: {
           include: {
             code: true,

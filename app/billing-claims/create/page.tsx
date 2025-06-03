@@ -3,7 +3,7 @@
 import Layout from "@/app/components/layout/Layout";
 import { HealthInstitutionSelect } from "@/components/health-institution-select";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -70,7 +70,7 @@ interface HealthInstitution {
   country: string;
 }
 
-export default function CreateBillingClaimPage() {
+export default function CreateServiceCodePage() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const [physicians, setPhysicians] = useState<Physician[]>([]);
@@ -106,6 +106,8 @@ export default function CreateBillingClaimPage() {
     healthInstitutionId: null as number | null,
     summary: "",
     serviceDate: "",
+    serviceStartTime: "",
+    serviceEndTime: "",
     billingCodes: [] as { codeId: number; status: string }[],
   });
 
@@ -370,23 +372,35 @@ export default function CreateBillingClaimPage() {
       router.push("/auth/signin");
       return;
     }
+
     try {
-      const response = await fetch("/api/billing-claims", {
+      const response = await fetch("/api/service-codes", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.user?.id}`,
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          serviceDate: new Date(formData.serviceDate).toISOString(),
+          serviceStartTime: formData.serviceStartTime
+            ? new Date(formData.serviceStartTime).toISOString()
+            : null,
+          serviceEndTime: formData.serviceEndTime
+            ? new Date(formData.serviceEndTime).toISOString()
+            : null,
+        }),
       });
+
+      console.log(response);
 
       if (response.ok) {
         router.push("/billing-claims");
       } else {
-        console.error("Failed to create billing claim:", await response.text());
+        console.error("Failed to create service codes:", await response.text());
       }
     } catch (error) {
-      console.error("Error creating billing claim:", error);
+      console.error("Error creating service codes:", error);
     }
   };
 
@@ -412,35 +426,38 @@ export default function CreateBillingClaimPage() {
   return (
     <Layout>
       <div className="container mx-auto p-4">
-        <h1 className="text-2xl font-bold mb-6">Create New Billing Claim</h1>
+        <h1 className="text-2xl font-bold mb-6">Create New Service Codes</h1>
         <form onSubmit={handleSubmit} className="space-y-6">
           <Card>
-            <CardHeader>
-              <CardTitle>Claim Information</CardTitle>
-            </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <label className="block text-sm font-medium">Physician</label>
-                <Select
-                  value={formData.physicianId}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, physicianId: value })
-                  }
-                >
-                  <SelectTrigger
-                    className={errors.physician ? "border-red-500" : ""}
-                  >
-                    <SelectValue placeholder="Select a physician" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {physicians.map((physician) => (
-                      <SelectItem key={physician.id} value={physician.id}>
-                        {physician.firstName} {physician.lastName} (
-                        {physician.billingNumber})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {physicians.length > 1 && (
+                  <>
+                    <label className="block text-sm font-medium">
+                      Physician
+                    </label>
+                    <Select
+                      value={formData.physicianId}
+                      onValueChange={(value) =>
+                        setFormData({ ...formData, physicianId: value })
+                      }
+                    >
+                      <SelectTrigger
+                        className={errors.physician ? "border-red-500" : ""}
+                      >
+                        <SelectValue placeholder="Select a physician" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {physicians.map((physician) => (
+                          <SelectItem key={physician.id} value={physician.id}>
+                            {physician.firstName} {physician.lastName} (
+                            {physician.billingNumber})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </>
+                )}
                 {errors.physician && (
                   <p className="text-sm text-red-500">
                     Please select a physician
@@ -657,10 +674,10 @@ export default function CreateBillingClaimPage() {
 
               <div className="space-y-2">
                 <label className="block text-sm font-medium">
-                  Service Date and Time
+                  Service Date
                 </label>
                 <Input
-                  type="datetime-local"
+                  type="date"
                   value={formData.serviceDate}
                   onChange={(e) =>
                     setFormData({ ...formData, serviceDate: e.target.value })
@@ -669,9 +686,38 @@ export default function CreateBillingClaimPage() {
                 />
                 {errors.serviceDate && (
                   <p className="text-sm text-red-500">
-                    Please select a service date and time
+                    Please select a service date
                   </p>
                 )}
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium">
+                  Service Start Time
+                </label>
+                <Input
+                  type="time"
+                  value={formData.serviceStartTime}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      serviceStartTime: e.target.value,
+                    })
+                  }
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium">
+                  Service End Time
+                </label>
+                <Input
+                  type="time"
+                  value={formData.serviceEndTime}
+                  onChange={(e) =>
+                    setFormData({ ...formData, serviceEndTime: e.target.value })
+                  }
+                />
               </div>
 
               <div className="space-y-2">
@@ -805,7 +851,7 @@ export default function CreateBillingClaimPage() {
               </div>
 
               <div className="flex justify-end">
-                <Button type="submit">Create Billing Claim</Button>
+                <Button type="submit">Create Service Codes</Button>
               </div>
             </CardContent>
           </Card>
