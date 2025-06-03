@@ -24,7 +24,7 @@ export async function GET() {
         patient: true,
         jurisdiction: true,
         healthInstitution: true,
-        claimCodes: {
+        serviceCodes: {
           include: {
             code: true,
           },
@@ -94,7 +94,7 @@ export async function POST(request: Request) {
         summary,
         serviceDate: new Date(serviceDate),
         openaiEmbedding: "", // This will be populated by a background job
-        claimCodes: {
+        serviceCodes: {
           create: billingCodes.map((code: { codeId: number }) => ({
             codeId: code.codeId,
             status: "PENDING",
@@ -108,7 +108,7 @@ export async function POST(request: Request) {
         icdCode: true,
         referringPhysician: true,
         healthInstitution: true,
-        claimCodes: {
+        serviceCodes: {
           include: {
             code: true,
           },

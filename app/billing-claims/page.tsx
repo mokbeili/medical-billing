@@ -30,7 +30,7 @@ interface BillingClaim {
     middleInitial: string | null;
     billingNumber: string;
   };
-  claimCodes: {
+  serviceCodes: {
     status: ClaimStatus;
   }[];
   createdAt: string;
@@ -74,7 +74,7 @@ export default function BillingClaimsPage() {
 
     if (filters.status && filters.status !== "ALL") {
       filtered = filtered.filter((claim) =>
-        claim.claimCodes.some((code) => code.status === filters.status)
+        claim.serviceCodes.some((code) => code.status === filters.status)
       );
     }
 
@@ -247,16 +247,16 @@ export default function BillingClaimsPage() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span
                           className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            claim.claimCodes[0]?.status === "APPROVED"
+                            claim.serviceCodes[0]?.status === "APPROVED"
                               ? "bg-green-100 text-green-800"
-                              : claim.claimCodes[0]?.status === "REJECTED"
+                              : claim.serviceCodes[0]?.status === "REJECTED"
                               ? "bg-red-100 text-red-800"
-                              : claim.claimCodes[0]?.status === "SENT"
+                              : claim.serviceCodes[0]?.status === "SENT"
                               ? "bg-blue-100 text-blue-800"
                               : "bg-yellow-100 text-yellow-800"
                           }`}
                         >
-                          {claim.claimCodes[0]?.status || "PENDING"}
+                          {claim.serviceCodes[0]?.status || "PENDING"}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">

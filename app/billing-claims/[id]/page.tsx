@@ -40,7 +40,7 @@ interface BillingClaim {
     code: string;
     description: string;
   } | null;
-  claimCodes: {
+  serviceCodes: {
     id: number;
     status: ClaimStatus;
     code: {
@@ -306,31 +306,31 @@ export default function BillingClaimDetailsPage({
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {claim.claimCodes.map((claimCode) => (
-                    <tr key={claimCode.id}>
+                  {claim.serviceCodes.map((serviceCode) => (
+                    <tr key={serviceCode.id}>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {claimCode.code.code}
+                        {serviceCode.code.code}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-500">
-                        {claimCode.code.title}
+                        {serviceCode.code.title}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {claimCode.code.section.code} -{" "}
-                        {claimCode.code.section.title}
+                        {serviceCode.code.section.code} -{" "}
+                        {serviceCode.code.section.title}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span
                           className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            claimCode.status === "APPROVED"
+                            serviceCode.status === "APPROVED"
                               ? "bg-green-100 text-green-800"
-                              : claimCode.status === "REJECTED"
+                              : serviceCode.status === "REJECTED"
                               ? "bg-red-100 text-red-800"
-                              : claimCode.status === "SENT"
+                              : serviceCode.status === "SENT"
                               ? "bg-blue-100 text-blue-800"
                               : "bg-yellow-100 text-yellow-800"
                           }`}
                         >
-                          {claimCode.status}
+                          {serviceCode.status}
                         </span>
                       </td>
                     </tr>
