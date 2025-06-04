@@ -52,24 +52,23 @@ model Section {
 }
 
 model BillingCode {
-  id                                                              Int           @id @default(autoincrement())
-  code                                                            String
-  title                                                           String
-  description                                                     String?
-  section_id                                                      Int
-  openai_embedding                                                String
-  created_at                                                      DateTime      @default(now())
-  updated_at                                                      DateTime      @updatedAt
-  code_class                                                      String?
-  anes                                                            String?
-  details                                                         String?
-  general_practice_cost                                           String?
-  specialist_price                                                String?
-  referred_price                                                  String?
-  non_referred_price                                              String?
-  lood_Profile__includes_hemoglobin__Hgb___WBC__smear_and_differe String?       @map("lood Profile (includes hemoglobin (Hgb), WBC, smear and differe") @db.VarChar(50)
-  section                                                         Section       @relation(fields: [section_id], references: [id])
-  serviceCodes                                                    ServiceCode[]
+  id                    Int           @id @default(autoincrement())
+  code                  String
+  title                 String
+  description           String?
+  section_id            Int
+  openai_embedding      String
+  created_at            DateTime      @default(now())
+  updated_at            DateTime      @updatedAt
+  code_class            String?
+  anes                  String?
+  details               String?
+  general_practice_cost String?
+  specialist_price      String?
+  referred_price        String?
+  non_referred_price    String?
+  section               Section       @relation(fields: [section_id], references: [id])
+  serviceCodes          ServiceCode[]
 
   @@index([section_id])
   @@map("billing_codes")
@@ -239,7 +238,6 @@ model SearchQueryLog {
   embeddings     String
   results        String           @map("results")
   jurisdictionId Int              @map("jurisdiction_id")
-  billingClaimId String?          @map("billing_claim_id")
   ipAddress      String?          @map("ip_address")
   userAgent      String?          @map("user_agent")
   deviceInfo     String?          @map("device_info")
@@ -248,7 +246,8 @@ model SearchQueryLog {
   previousLogId  Int?             @map("previous_log_id")
   physicianId    String?
   userId         Int?             @map("user_id")
-  billingClaim   BillingClaim?    @relation(fields: [billingClaimId], references: [id])
+  billingClaimId String?
+  BillingClaim   BillingClaim?    @relation(fields: [billingClaimId], references: [id])
   jurisdiction   Jurisdiction     @relation(fields: [jurisdictionId], references: [id])
   Physician      Physician?       @relation(fields: [physicianId], references: [id])
   previousLog    SearchQueryLog?  @relation("PreviousLog", fields: [previousLogId], references: [id])

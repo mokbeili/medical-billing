@@ -67,7 +67,6 @@ export async function GET(request: Request) {
     const limit = parseInt(searchParams.get("limit") || `${TARGET_RESULTS}`);
     const jurisdictionId = parseInt(searchParams.get("jurisdictionId") || "1");
     const userId = searchParams.get("userId") || null;
-    const billingClaimId = searchParams.get("billingClaimId") || null;
 
     if (!query) {
       return NextResponse.json(
@@ -515,7 +514,6 @@ Use referral code 9901 only for retired/deceased/moved physicians and only twice
         results: JSON.stringify(allResults),
         jurisdictionId,
         userId: userId ? parseInt(userId) : null,
-        billingClaimId,
         ipAddress,
         userAgent,
         deviceInfo,
