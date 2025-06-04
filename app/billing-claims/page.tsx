@@ -31,6 +31,7 @@ interface ServiceCode {
     section: {
       code: string;
       title: string;
+      jurisdiction_id: string;
     };
   };
   patient: {
@@ -38,6 +39,12 @@ interface ServiceCode {
     lastName: string;
     middleInitial: string | null;
     billingNumber: string;
+    physician: {
+      id: string;
+      firstName: string;
+      lastName: string;
+      billingNumber: string;
+    };
   };
   icdCode: {
     code: string;
@@ -63,6 +70,9 @@ export default function BillingClaimsPage() {
   const [filteredServiceCodes, setFilteredServiceCodes] = useState<
     ServiceCode[]
   >([]);
+  const [selectedServiceCodes, setSelectedServiceCodes] = useState<number[]>(
+    []
+  );
   const [filters, setFilters] = useState({
     patientName: "",
     billingNumber: "",
@@ -141,6 +151,68 @@ export default function BillingClaimsPage() {
     setFilteredServiceCodes(filtered);
   }, [serviceCodes, filters]);
 
+  const handleServiceCodeSelect = (serviceCodeId: number) => {
+    const serviceCode = serviceCodes.find((sc) => sc.id === serviceCodeId);
+    if (!serviceCode) return;
+
+    if (selectedServiceCodes.includes(serviceCodeId)) {
+      setSelectedServiceCodes(
+        selectedServiceCodes.filter((id) => id !== serviceCodeId)
+      );
+    } else {
+      // Check if this is the first selection
+      if (selectedServiceCodes.length === 0) {
+        setSelectedServiceCodes([serviceCodeId]);
+      } else {
+        // Get the first selected service code to compare physician and jurisdiction
+        const firstSelected = serviceCodes.find(
+          (sc) => sc.id === selectedServiceCodes[0]
+        );
+        if (!firstSelected) return;
+
+        // Check if the physician and jurisdiction match
+        if (
+          firstSelected.patient.physician?.id ===
+            serviceCode.patient.physician?.id &&
+          firstSelected.code.section.jurisdiction_id ===
+            serviceCode.code.section.jurisdiction_id
+        ) {
+          setSelectedServiceCodes([...selectedServiceCodes, serviceCodeId]);
+        }
+      }
+    }
+  };
+
+  const handleCreateClaim = async () => {
+    if (selectedServiceCodes.length === 0) return;
+
+    try {
+      const response = await fetch("/api/billing-claims", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          serviceCodeIds: selectedServiceCodes,
+        }),
+      });
+
+      if (response.ok) {
+        const claim = await response.json();
+        // Refresh the service codes list
+        const updatedResponse = await fetch("/api/service-codes");
+        if (updatedResponse.ok) {
+          const data = await updatedResponse.json();
+          setServiceCodes(data);
+          setFilteredServiceCodes(data);
+        }
+        setSelectedServiceCodes([]);
+      }
+    } catch (error) {
+      console.error("Error creating claim:", error);
+    }
+  };
+
   if (status === "loading") {
     return (
       <div className="container mx-auto py-8">
@@ -161,9 +233,16 @@ export default function BillingClaimsPage() {
       <div className="min-h-screen bg-gray-50">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Service Codes</h1>
-          <Link href="/billing-claims/create">
-            <Button>New Service</Button>
-          </Link>
+          <div className="space-x-4">
+            {selectedServiceCodes.length > 0 && (
+              <Button onClick={handleCreateClaim}>
+                Create Claim ({selectedServiceCodes.length})
+              </Button>
+            )}
+            <Link href="/billing-claims/create">
+              <Button>New Service</Button>
+            </Link>
+          </div>
         </div>
 
         <div className="bg-white rounded-lg shadow mb-6">
@@ -251,18 +330,22 @@ export default function BillingClaimsPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow">
+        <div className="bg-white rounded-lg shadow overflow-hidden">
           {filteredServiceCodes.length === 0 ? (
-            <div className="p-4">
-              <p className="text-gray-500">
-                No service codes found matching your criteria.
-              </p>
+            <div className="p-4 text-center text-gray-500">
+              No service codes found
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      Select
+                    </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Billing Code
                     </th>
@@ -292,6 +375,20 @@ export default function BillingClaimsPage() {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {filteredServiceCodes.map((serviceCode) => (
                     <tr key={serviceCode.id}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {!serviceCode.claim && (
+                          <input
+                            type="checkbox"
+                            checked={selectedServiceCodes.includes(
+                              serviceCode.id
+                            )}
+                            onChange={() =>
+                              handleServiceCodeSelect(serviceCode.id)
+                            }
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          />
+                        )}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         {serviceCode.code.code}
                       </td>
@@ -360,11 +457,11 @@ export default function BillingClaimsPage() {
                             variant="outline"
                             size="sm"
                             className="hover:bg-green-50 hover:text-green-600 transition-colors"
-                            onClick={() => {
-                              // TODO: Implement create claim functionality
-                            }}
+                            onClick={() =>
+                              handleServiceCodeSelect(serviceCode.id)
+                            }
                           >
-                            Create Claim
+                            Add to Claim
                           </Button>
                         )}
                       </td>

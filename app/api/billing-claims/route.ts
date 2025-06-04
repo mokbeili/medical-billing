@@ -48,29 +48,36 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const {
-      physicianId,
-      patientId,
-      billingCodes,
-      icdCodeId,
-      serviceDate,
-      referringPhysicianId,
-      healthInstitutionId,
-    } = body;
+    const { serviceCodeIds } = body;
 
-    // Validate required fields
-    if (!physicianId || !patientId || !serviceDate) {
-      return new NextResponse("Missing required fields", { status: 400 });
+    if (
+      !serviceCodeIds ||
+      !Array.isArray(serviceCodeIds) ||
+      serviceCodeIds.length === 0
+    ) {
+      return new NextResponse("Missing or invalid service code IDs", {
+        status: 400,
+      });
     }
 
-    // Get physician to determine jurisdiction
-    const physician = await prisma.physician.findUnique({
-      where: { id: physicianId },
-      include: { jurisdiction: true },
+    // Get the first service code to determine physician and jurisdiction
+    const firstServiceCode = await prisma.serviceCode.findUnique({
+      where: { id: serviceCodeIds[0] },
+      include: {
+        patient: {
+          include: {
+            physician: {
+              include: {
+                jurisdiction: true,
+              },
+            },
+          },
+        },
+      },
     });
 
-    if (!physician) {
-      return new NextResponse("Physician not found", { status: 404 });
+    if (!firstServiceCode) {
+      return new NextResponse("Service code not found", { status: 404 });
     }
 
     // Generate unique IDs
@@ -82,31 +89,19 @@ export async function POST(request: Request) {
       data: {
         id,
         friendlyId,
-        physicianId,
-        patientId,
-        jurisdictionId: physician.jurisdictionId,
-        iCDCodeId: icdCodeId || null,
-        referringPhysicianId: referringPhysicianId || null,
-        healthInstitutionId: healthInstitutionId || null,
+        physicianId: firstServiceCode.patient.physician.id,
+        jurisdictionId: firstServiceCode.patient.physician.jurisdiction.id,
         serviceCodes: {
-          create: billingCodes.map((code: { codeId: number }) => ({
-            codeId: code.codeId,
-            status: "PENDING",
-            serviceDate: new Date(serviceDate),
-            summary: "", // This will be populated by a background job
-          })),
+          connect: serviceCodeIds.map((id) => ({ id })),
         },
       },
       include: {
         physician: true,
-        Patient: true,
         jurisdiction: true,
-        ICDCode: true,
-        ReferringPhysician: true,
-        HealthInstitution: true,
         serviceCodes: {
           include: {
             code: true,
+            patient: true,
           },
         },
       },
