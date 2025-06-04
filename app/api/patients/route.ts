@@ -43,12 +43,37 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { firstName, lastName, middleInitial, billingNumber, physicianId } =
-      body;
+    const {
+      firstName,
+      lastName,
+      middleInitial,
+      billingNumber,
+      physicianId,
+      dateOfBirth,
+      date_of_birth,
+      sex,
+    } = body;
+
+    // Use either dateOfBirth or date_of_birth
+    const dateOfBirthValue = dateOfBirth || date_of_birth;
 
     // Validate required fields
-    if (!firstName || !lastName || !billingNumber || !physicianId) {
+    if (
+      !firstName ||
+      !lastName ||
+      !billingNumber ||
+      !physicianId ||
+      !dateOfBirthValue ||
+      !sex
+    ) {
       return NextResponse.json("Missing required fields", { status: 400 });
+    }
+
+    // Validate sex field
+    if (sex !== "M" && sex !== "F") {
+      return NextResponse.json("Sex must be either 'M' or 'F'", {
+        status: 400,
+      });
     }
 
     // Get physician to determine jurisdiction
@@ -73,6 +98,8 @@ export async function POST(request: Request) {
         middleInitial,
         billingNumber,
         physicianId,
+        dateOfBirth: new Date(dateOfBirthValue),
+        sex,
         jurisdictionId: physician.jurisdictionId,
       },
       include: {
@@ -83,6 +110,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(patient);
   } catch (error) {
+    console.log(error);
     console.error("Error creating patient:", error);
     return new NextResponse("Internal Server Error", { status: 500 });
   }

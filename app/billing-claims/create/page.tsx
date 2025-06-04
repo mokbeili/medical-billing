@@ -24,6 +24,7 @@ interface Physician {
   lastName: string;
   middleInitial: string | null;
   billingNumber: string;
+  jurisdictionId: number;
 }
 
 interface Patient {
@@ -32,6 +33,8 @@ interface Patient {
   lastName: string;
   middleInitial: string | null;
   billingNumber: string;
+  dateOfBirth: string;
+  sex: string;
 }
 
 interface BillingCode {
@@ -97,6 +100,8 @@ export default function CreateServiceCodePage() {
     lastName: "",
     middleInitial: "",
     billingNumber: "",
+    dateOfBirth: "",
+    sex: "",
   });
   const [formData, setFormData] = useState({
     physicianId: "",
@@ -109,6 +114,11 @@ export default function CreateServiceCodePage() {
     serviceStartTime: "",
     serviceEndTime: "",
     billingCodes: [] as { codeId: number; status: string }[],
+    numberOfUnits: 1,
+    serviceLocation: "",
+    specialCircumstances: null as string | null,
+    bilateralIndicator: null as string | null,
+    claimType: null as string | null,
   });
 
   const [errors, setErrors] = useState({
@@ -254,6 +264,13 @@ export default function CreateServiceCodePage() {
         return;
       }
 
+      const selectedPhysician = physicians.find(
+        (p) => p.id === formData.physicianId
+      );
+      if (!selectedPhysician) {
+        throw new Error("Selected physician not found");
+      }
+
       const response = await fetch("/api/patients", {
         method: "POST",
         headers: {
@@ -264,7 +281,10 @@ export default function CreateServiceCodePage() {
           lastName: newPatient.lastName,
           middleInitial: newPatient.middleInitial || null,
           billingNumber: newPatient.billingNumber,
+          date_of_birth: newPatient.dateOfBirth,
+          sex: newPatient.sex,
           physicianId: formData.physicianId,
+          jurisdictionId: selectedPhysician.jurisdictionId,
         }),
       });
 
@@ -282,6 +302,8 @@ export default function CreateServiceCodePage() {
         lastName: "",
         middleInitial: "",
         billingNumber: "",
+        dateOfBirth: "",
+        sex: "",
       });
     } catch (error) {
       console.error("Error creating patient:", error);
@@ -374,22 +396,33 @@ export default function CreateServiceCodePage() {
     }
 
     try {
+      // Create base date from service date
+      const baseDate = new Date(formData.serviceDate);
+
+      // Helper function to combine date and time
+      const combineDateTime = (date: Date, timeStr: string) => {
+        if (!timeStr) return null;
+        const [hours, minutes] = timeStr.split(":").map(Number);
+        const newDate = new Date(date);
+        newDate.setHours(hours, minutes, 0, 0);
+        return newDate.toISOString();
+      };
+
+      const requestData = {
+        ...formData,
+        serviceDate: baseDate.toISOString(),
+        serviceStartTime: combineDateTime(baseDate, formData.serviceStartTime),
+        serviceEndTime: combineDateTime(baseDate, formData.serviceEndTime),
+      };
+
+      console.log(requestData);
       const response = await fetch("/api/service-codes", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.user?.id}`,
         },
-        body: JSON.stringify({
-          ...formData,
-          serviceDate: new Date(formData.serviceDate).toISOString(),
-          serviceStartTime: formData.serviceStartTime
-            ? new Date(formData.serviceStartTime).toISOString()
-            : null,
-          serviceEndTime: formData.serviceEndTime
-            ? new Date(formData.serviceEndTime).toISOString()
-            : null,
-        }),
+        body: JSON.stringify(requestData),
       });
 
       console.log(response);
@@ -572,6 +605,41 @@ export default function CreateServiceCodePage() {
                           placeholder="Billing number"
                         />
                       </div>
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium">
+                          Date of Birth
+                        </label>
+                        <Input
+                          type="date"
+                          value={newPatient.dateOfBirth}
+                          onChange={(e) =>
+                            setNewPatient({
+                              ...newPatient,
+                              dateOfBirth: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium">Sex</label>
+                        <Select
+                          value={newPatient.sex}
+                          onValueChange={(value) =>
+                            setNewPatient({
+                              ...newPatient,
+                              sex: value,
+                            })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select sex" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="M">Male</SelectItem>
+                            <SelectItem value="F">Female</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                     <div className="flex justify-end space-x-2">
                       <Button
@@ -718,6 +786,124 @@ export default function CreateServiceCodePage() {
                     setFormData({ ...formData, serviceEndTime: e.target.value })
                   }
                 />
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium">
+                  Number of Units
+                </label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={formData.numberOfUnits}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      numberOfUnits: parseInt(e.target.value) || 1,
+                    })
+                  }
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium">
+                  Service Location
+                </label>
+                <Select
+                  value={formData.serviceLocation || "none"}
+                  onValueChange={(value) =>
+                    setFormData({
+                      ...formData,
+                      serviceLocation: value === "none" ? "" : value,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select service location" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="R">Regina</SelectItem>
+                    <SelectItem value="S">Saskatoon</SelectItem>
+                    <SelectItem value="X">
+                      Rural and Northern Premium
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium">
+                  Special Circumstances
+                </label>
+                <Select
+                  value={formData.specialCircumstances || "none"}
+                  onValueChange={(value) =>
+                    setFormData({
+                      ...formData,
+                      specialCircumstances: value === "none" ? null : value,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select special circumstances" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="TF">TF</SelectItem>
+                    <SelectItem value="PF">PF</SelectItem>
+                    <SelectItem value="CF">CF</SelectItem>
+                    <SelectItem value="TA">TA</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium">
+                  Bilateral Indicator
+                </label>
+                <Select
+                  value={formData.bilateralIndicator || "none"}
+                  onValueChange={(value) =>
+                    setFormData({
+                      ...formData,
+                      bilateralIndicator: value === "none" ? null : value,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select bilateral indicator" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="L">Left</SelectItem>
+                    <SelectItem value="R">Right</SelectItem>
+                    <SelectItem value="B">Both</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium">Claim Type</label>
+                <Select
+                  value={formData.claimType || "none"}
+                  onValueChange={(value) =>
+                    setFormData({
+                      ...formData,
+                      claimType: value === "none" ? null : value,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select claim type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="P">P</SelectItem>
+                    <SelectItem value="W">W</SelectItem>
+                    <SelectItem value="D">D</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">

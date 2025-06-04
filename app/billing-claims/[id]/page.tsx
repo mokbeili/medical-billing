@@ -24,6 +24,8 @@ interface BillingClaim {
     lastName: string;
     middleInitial: string | null;
     billingNumber: string;
+    dateOfBirth: string;
+    sex: string;
   };
   healthInstitution?: {
     id: number;
@@ -188,6 +190,20 @@ export default function BillingClaimDetailsPage({
               </h3>
               <p className="mt-1 text-sm text-gray-900">
                 {claim.patient.billingNumber}
+              </p>
+            </div>
+            <div>
+              <h3 className="text-sm font-medium text-gray-500">
+                Date of Birth
+              </h3>
+              <p className="mt-1 text-sm text-gray-900">
+                {new Date(claim.patient.dateOfBirth).toLocaleDateString()}
+              </p>
+            </div>
+            <div>
+              <h3 className="text-sm font-medium text-gray-500">Sex</h3>
+              <p className="mt-1 text-sm text-gray-900">
+                {claim.patient.sex === "M" ? "Male" : "Female"}
               </p>
             </div>
           </CardContent>

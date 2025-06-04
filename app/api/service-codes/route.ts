@@ -22,10 +22,15 @@ export async function POST(request: Request) {
       serviceEndTime,
       referringPhysicianId,
       healthInstitutionId,
+      numberOfUnits,
+      serviceLocation,
+      specialCircumstances,
+      bilateralIndicator,
+      claimType,
     } = body;
 
     // Validate required fields
-    if (!physicianId || !patientId || !serviceDate) {
+    if (!physicianId || !patientId || !serviceDate || !serviceLocation) {
       return new NextResponse("Missing required fields", { status: 400 });
     }
 
@@ -82,6 +87,11 @@ export async function POST(request: Request) {
               : null,
             serviceEndTime: serviceEndTime ? new Date(serviceEndTime) : null,
             summary,
+            numberOfUnits,
+            serviceLocation,
+            specialCircumstances,
+            bilateralIndicator,
+            claimType,
           },
           include: {
             code: {

@@ -113,6 +113,8 @@ model Patient {
   lastName       String        @map("last_name")
   middleInitial  String?       @map("middle_initial")
   billingNumber  String        @map("billing_number")
+  dateOfBirth    DateTime      @map("date_of_birth")
+  sex            String        @map("sex")
   jurisdictionId Int           @map("jurisdiction_id")
   physicianId    String        @map("physician_id")
   createdAt      DateTime      @default(now()) @map("created_at")
@@ -130,6 +132,12 @@ model Physician {
   lastName            String               @map("last_name")
   middleInitial       String?              @map("middle_initial")
   billingNumber       String               @map("billing_number")
+  groupNumber         String?              @map("group_number")
+  healthInstitutionId Int?                 @map("health_institution_id")
+  streetAddress       String?              @map("street_address")
+  city                String?
+  province            String?
+  postalCode          String?              @map("postal_code")
   userId              Int                  @map("user_id")
   jurisdictionId      Int                  @map("jurisdiction_id")
   createdAt           DateTime             @default(now()) @map("created_at")
@@ -138,6 +146,7 @@ model Physician {
   patients            Patient[]
   jurisdiction        Jurisdiction         @relation(fields: [jurisdictionId], references: [id])
   user                User                 @relation(fields: [userId], references: [id])
+  healthInstitution   HealthInstitution?   @relation(fields: [healthInstitutionId], references: [id])
   referringPhysicians ReferringPhysician[]
   SearchQueryLog      SearchQueryLog[]
 
@@ -171,6 +180,7 @@ model HealthInstitution {
   createdAt   DateTime      @default(now()) @map("created_at")
   updatedAt   DateTime      @updatedAt @map("updated_at")
   ServiceCode ServiceCode[]
+  Physician   Physician[]
 
   @@map("health_institutions")
 }
@@ -180,6 +190,7 @@ model BillingClaim {
   friendlyId     String           @unique @map("friendly_id")
   physicianId    String           @map("physician_id")
   jurisdictionId Int              @map("jurisdiction_id")
+  batchClaimText String?          @map("batch_claim_text") @db.Text
   createdAt      DateTime         @default(now()) @map("created_at")
   updatedAt      DateTime         @updatedAt @map("updated_at")
   jurisdiction   Jurisdiction     @relation(fields: [jurisdictionId], references: [id])
@@ -205,6 +216,11 @@ model ServiceCode {
   serviceStartTime     DateTime?           @map("service_start_time")
   serviceEndTime       DateTime?           @map("service_end_time")
   summary              String              @default("")
+  numberOfUnits        Int                 @default(1) @map("number_of_units")
+  serviceLocation      String              @map("service_location")
+  specialCircumstances String?             @map("special_circumstances")
+  bilateralIndicator   String?             @map("bilateral_indicator")
+  claimType            String?             @map("claim_type")
   claim                BillingClaim?       @relation(fields: [claimId], references: [id], onDelete: Restrict, map: "billing_claim_codes_claim_id_fkey")
   code                 BillingCode         @relation(fields: [codeId], references: [id], map: "billing_claim_codes_code_id_fkey")
   healthInstitution    HealthInstitution?  @relation(fields: [healthInstitutionId], references: [id])
