@@ -15,6 +15,7 @@ async function main() {
       latitude: 40.7128,
       longitude: -74.006,
       phoneNumber: "212-555-0123",
+      number: "00001",
     },
     {
       name: "Community Medical Center",
@@ -26,6 +27,7 @@ async function main() {
       latitude: 34.0522,
       longitude: -118.2437,
       phoneNumber: "213-555-0124",
+      number: "00002",
     },
     {
       name: "Regional Hospital",
@@ -37,6 +39,7 @@ async function main() {
       latitude: 41.8781,
       longitude: -87.6298,
       phoneNumber: "312-555-0125",
+      number: "00003",
     },
     {
       name: "Specialty Clinic",
@@ -48,6 +51,7 @@ async function main() {
       latitude: 29.7604,
       longitude: -95.3698,
       phoneNumber: "713-555-0126",
+      number: "00004",
     },
     {
       name: "Medical Arts Center",
@@ -59,6 +63,7 @@ async function main() {
       latitude: 25.7617,
       longitude: -80.1918,
       phoneNumber: "305-555-0127",
+      number: "00005",
     },
   ];
 
