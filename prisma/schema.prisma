@@ -52,14 +52,14 @@ model Section {
 }
 
 model BillingCode {
-  id                    Int           @id @default(autoincrement())
+  id                    Int                    @id @default(autoincrement())
   code                  String
   title                 String
   description           String?
   section_id            Int
   openai_embedding      String
-  created_at            DateTime      @default(now())
-  updated_at            DateTime      @updatedAt
+  created_at            DateTime               @default(now())
+  updated_at            DateTime               @updatedAt
   code_class            String?
   anes                  String?
   details               String?
@@ -67,11 +67,32 @@ model BillingCode {
   specialist_price      String?
   referred_price        String?
   non_referred_price    String?
-  section               Section       @relation(fields: [section_id], references: [id])
+  section               Section                @relation(fields: [section_id], references: [id])
   serviceCodes          ServiceCode[]
+  changeLogs            BillingCodeChangeLog[]
 
   @@index([section_id])
   @@map("billing_codes")
+}
+
+model BillingCodeChangeLog {
+  id                    Int         @id @default(autoincrement())
+  billing_code_id       Int
+  code                  String
+  title                 String
+  description           String?
+  code_class            String?
+  anes                  String?
+  details               String?
+  general_practice_cost String?
+  specialist_price      String?
+  referred_price        String?
+  non_referred_price    String?
+  changed_at            DateTime    @default(now())
+  billing_code          BillingCode @relation(fields: [billing_code_id], references: [id])
+
+  @@index([billing_code_id])
+  @@map("billing_code_change_logs")
 }
 
 model User {

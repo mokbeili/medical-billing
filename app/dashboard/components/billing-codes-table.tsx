@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, History, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "../../components/ui/button";
 import {
@@ -46,6 +46,21 @@ interface BillingCode {
       };
     };
   };
+}
+
+interface BillingCodeChangeLog {
+  id: number;
+  code: string;
+  title: string;
+  description: string | null;
+  code_class: string | null;
+  anes: string | null;
+  details: string | null;
+  general_practice_cost: string | null;
+  specialist_price: string | null;
+  referred_price: string | null;
+  non_referred_price: string | null;
+  changed_at: string;
 }
 
 interface PaginationInfo {
@@ -366,6 +381,9 @@ function BillingCodeForm({
 
 export function BillingCodesTable() {
   const [billingCodes, setBillingCodes] = useState<BillingCode[]>([]);
+  const [changeLogs, setChangeLogs] = useState<BillingCodeChangeLog[]>([]);
+  const [isChangeLogOpen, setIsChangeLogOpen] = useState(false);
+  const [selectedCodeId, setSelectedCodeId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -529,6 +547,19 @@ export function BillingCodesTable() {
     setPagination((prev) => ({ ...prev, page: newPage }));
   };
 
+  const handleViewChangeLog = async (codeId: number) => {
+    try {
+      const response = await fetch(`/api/billing-codes/${codeId}/change-log`);
+      if (!response.ok) throw new Error("Failed to fetch change log");
+      const data = await response.json();
+      setChangeLogs(data);
+      setSelectedCodeId(codeId);
+      setIsChangeLogOpen(true);
+    } catch (error) {
+      console.error("Error fetching change log:", error);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -671,13 +702,22 @@ export function BillingCodesTable() {
                     {code.section.code} - {code.section.title}
                   </TableCell>
                   <TableCell>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleEdit(code)}
-                    >
-                      Edit
-                    </Button>
+                    <div className="flex space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEdit(code)}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleViewChangeLog(code.id)}
+                      >
+                        <History className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -715,6 +755,58 @@ export function BillingCodesTable() {
           </Button>
         </div>
       </div>
+
+      <Dialog open={isChangeLogOpen} onOpenChange={setIsChangeLogOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Change Log History</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Changed At</TableHead>
+                  <TableHead>Code</TableHead>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Details</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {changeLogs.map((log) => (
+                  <TableRow key={log.id}>
+                    <TableCell>
+                      {new Date(log.changed_at).toLocaleString()}
+                    </TableCell>
+                    <TableCell>{log.code}</TableCell>
+                    <TableCell>{log.title}</TableCell>
+                    <TableCell>{log.description}</TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        {log.code_class && <div>Class: {log.code_class}</div>}
+                        {log.anes && <div>Anes: {log.anes}</div>}
+                        {log.details && <div>Details: {log.details}</div>}
+                        {log.general_practice_cost && (
+                          <div>GP Cost: {log.general_practice_cost}</div>
+                        )}
+                        {log.specialist_price && (
+                          <div>Specialist: {log.specialist_price}</div>
+                        )}
+                        {log.referred_price && (
+                          <div>Referred: {log.referred_price}</div>
+                        )}
+                        {log.non_referred_price && (
+                          <div>Non-referred: {log.non_referred_price}</div>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -32,6 +32,35 @@ export async function PUT(
       return new NextResponse("Missing required fields", { status: 400 });
     }
 
+    // Get the current billing code before updating
+    const currentBillingCode = await prisma.billingCode.findUnique({
+      where: {
+        id: parseInt(params.id),
+      },
+    });
+
+    if (!currentBillingCode) {
+      return new NextResponse("Billing code not found", { status: 404 });
+    }
+
+    // Create a change log entry
+    await prisma.billingCodeChangeLog.create({
+      data: {
+        billing_code_id: currentBillingCode.id,
+        code: currentBillingCode.code,
+        title: currentBillingCode.title,
+        description: currentBillingCode.description,
+        code_class: currentBillingCode.code_class,
+        anes: currentBillingCode.anes,
+        details: currentBillingCode.details,
+        general_practice_cost: currentBillingCode.general_practice_cost,
+        specialist_price: currentBillingCode.specialist_price,
+        referred_price: currentBillingCode.referred_price,
+        non_referred_price: currentBillingCode.non_referred_price,
+      },
+    });
+
+    // Update the billing code
     const billingCode = await prisma.billingCode.update({
       where: {
         id: parseInt(params.id),
