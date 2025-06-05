@@ -428,7 +428,7 @@ export default function CreateServiceCodePage() {
       console.log(response);
 
       if (response.ok) {
-        router.push("/billing-claims");
+        router.push("/service-records");
       } else {
         console.error("Failed to create service codes:", await response.text());
       }
@@ -459,7 +459,7 @@ export default function CreateServiceCodePage() {
   return (
     <Layout>
       <div className="container mx-auto p-4">
-        <h1 className="text-2xl font-bold mb-6">Create New Service Codes</h1>
+        <h1 className="text-2xl font-bold mb-6">Create Service Records</h1>
         <form onSubmit={handleSubmit} className="space-y-6">
           <Card>
             <CardContent className="space-y-4">
