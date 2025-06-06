@@ -600,7 +600,7 @@ export function BillingCodesTable() {
               Add Billing Code
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
                 {isEditing ? "Edit Billing Code" : "Add New Billing Code"}
