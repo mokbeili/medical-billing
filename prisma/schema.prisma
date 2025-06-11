@@ -150,28 +150,29 @@ model Patient {
 }
 
 model Physician {
-  id                  String               @id
-  firstName           String               @map("first_name")
-  lastName            String               @map("last_name")
-  middleInitial       String?              @map("middle_initial")
-  billingNumber       String               @map("billing_number")
-  groupNumber         String?              @map("group_number")
-  healthInstitutionId Int?                 @map("health_institution_id")
-  streetAddress       String?              @map("street_address")
-  city                String?
-  province            String?
-  postalCode          String?              @map("postal_code")
-  userId              Int                  @map("user_id")
-  jurisdictionId      Int                  @map("jurisdiction_id")
-  createdAt           DateTime             @default(now()) @map("created_at")
-  updatedAt           DateTime             @updatedAt @map("updated_at")
-  billingClaims       BillingClaim[]
-  patients            Patient[]
-  jurisdiction        Jurisdiction         @relation(fields: [jurisdictionId], references: [id])
-  user                User                 @relation(fields: [userId], references: [id])
-  healthInstitution   HealthInstitution?   @relation(fields: [healthInstitutionId], references: [id])
-  referringPhysicians ReferringPhysician[]
-  SearchQueryLog      SearchQueryLog[]
+  id                    String               @id
+  firstName             String               @map("first_name")
+  lastName              String               @map("last_name")
+  middleInitial         String?              @map("middle_initial")
+  billingNumber         String               @map("billing_number")
+  groupNumber           String?              @map("group_number")
+  healthInstitutionId   Int?                 @map("health_institution_id")
+  streetAddress         String?              @map("street_address")
+  city                  String?
+  province              String?
+  postalCode            String?              @map("postal_code")
+  userId                Int                  @map("user_id")
+  jurisdictionId        Int                  @map("jurisdiction_id")
+  mostRecentClaimNumber Int                  @default(10000) @map("most_recent_claim_number")
+  createdAt             DateTime             @default(now()) @map("created_at")
+  updatedAt             DateTime             @updatedAt @map("updated_at")
+  billingClaims         BillingClaim[]
+  patients              Patient[]
+  jurisdiction          Jurisdiction         @relation(fields: [jurisdictionId], references: [id])
+  user                  User                 @relation(fields: [userId], references: [id])
+  healthInstitution     HealthInstitution?   @relation(fields: [healthInstitutionId], references: [id])
+  referringPhysicians   ReferringPhysician[]
+  SearchQueryLog        SearchQueryLog[]
 
   @@map("physicians")
 }

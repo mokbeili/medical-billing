@@ -123,8 +123,12 @@ export async function POST(request: Request) {
       corporationIndicator: " ", // TODO: Add corporation indicator to physician model
     };
 
-    const serviceRecords = serviceCodes.map((sc) => ({
-      claimNumber: parseInt(friendlyId.split("-")[1]),
+    let baseClaimNumber = physician
+      ? physician.mostRecentClaimNumber + 1
+      : 10000;
+
+    const serviceRecords = serviceCodes.map((sc, index) => ({
+      claimNumber: baseClaimNumber + index,
       sequence: serviceCodes.indexOf(sc) + 1,
       hsn: sc.patient?.billingNumber || "",
       dob: sc.patient?.dateOfBirth
@@ -178,6 +182,15 @@ export async function POST(request: Request) {
       practitionerHeader,
       serviceRecords
     );
+
+    // Update physician's most recent claim number
+    await prisma.physician.update({
+      where: { id: firstServiceCode.patient.physician.id },
+      data: {
+        mostRecentClaimNumber:
+          physician.mostRecentClaimNumber + serviceRecords.length,
+      },
+    });
 
     // Create the billing claim
     const claim = await prisma.billingClaim.create({
