@@ -123,6 +123,7 @@ export async function POST(request: Request) {
       corporationIndicator: " ", // TODO: Add corporation indicator to physician model
     };
 
+    // This is Saskatchewan-specific
     let baseClaimNumber = physician
       ? physician.mostRecentClaimNumber + 1
       : 10000;

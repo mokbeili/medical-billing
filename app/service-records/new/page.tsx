@@ -98,7 +98,6 @@ export default function CreateServiceCodePage() {
   const [newPatient, setNewPatient] = useState({
     firstName: "",
     lastName: "",
-    middleInitial: "",
     billingNumber: "",
     dateOfBirth: "",
     sex: "",
@@ -126,6 +125,9 @@ export default function CreateServiceCodePage() {
     patient: false,
     billingCodes: false,
     serviceDate: false,
+    billingNumber: false,
+    dateOfBirth: false,
+    sex: false,
   });
 
   useEffect(() => {
@@ -260,7 +262,22 @@ export default function CreateServiceCodePage() {
     e.preventDefault();
     try {
       if (!formData.physicianId) {
-        setErrors({ ...errors, physician: true });
+        setErrors({ ...errors, physician: true, billingNumber: false });
+        return;
+      }
+
+      if (newPatient.billingNumber.length !== 8) {
+        setErrors({ ...errors, billingNumber: true });
+        return;
+      }
+
+      if (!newPatient.dateOfBirth) {
+        setErrors({ ...errors, dateOfBirth: true });
+        return;
+      }
+
+      if (!newPatient.sex) {
+        setErrors({ ...errors, sex: true });
         return;
       }
 
@@ -279,7 +296,6 @@ export default function CreateServiceCodePage() {
         body: JSON.stringify({
           firstName: newPatient.firstName,
           lastName: newPatient.lastName,
-          middleInitial: newPatient.middleInitial || null,
           billingNumber: newPatient.billingNumber,
           date_of_birth: newPatient.dateOfBirth,
           sex: newPatient.sex,
@@ -300,7 +316,6 @@ export default function CreateServiceCodePage() {
       setNewPatient({
         firstName: "",
         lastName: "",
-        middleInitial: "",
         billingNumber: "",
         dateOfBirth: "",
         sex: "",
@@ -372,6 +387,9 @@ export default function CreateServiceCodePage() {
       patient: !formData.patientId,
       billingCodes: formData.billingCodes.length === 0,
       serviceDate: !formData.serviceDate,
+      billingNumber: false,
+      dateOfBirth: !newPatient.dateOfBirth,
+      sex: !newPatient.sex,
     };
     setErrors(newErrors);
     return !Object.values(newErrors).some(Boolean);
@@ -576,22 +594,6 @@ export default function CreateServiceCodePage() {
                       </div>
                       <div className="space-y-2">
                         <label className="block text-sm font-medium">
-                          Middle Initial
-                        </label>
-                        <Input
-                          value={newPatient.middleInitial}
-                          onChange={(e) =>
-                            setNewPatient({
-                              ...newPatient,
-                              middleInitial: e.target.value,
-                            })
-                          }
-                          placeholder="M.I."
-                          maxLength={1}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="block text-sm font-medium">
                           Billing Number
                         </label>
                         <Input
@@ -602,8 +604,17 @@ export default function CreateServiceCodePage() {
                               billingNumber: e.target.value,
                             })
                           }
-                          placeholder="Billing number"
+                          placeholder="hsn (8 characters)"
+                          maxLength={8}
+                          className={
+                            errors.billingNumber ? "border-red-500" : ""
+                          }
                         />
+                        {errors.billingNumber && (
+                          <p className="text-sm text-red-500">
+                            Billing number must be exactly 8 characters long
+                          </p>
+                        )}
                       </div>
                       <div className="space-y-2">
                         <label className="block text-sm font-medium">
@@ -618,7 +629,14 @@ export default function CreateServiceCodePage() {
                               dateOfBirth: e.target.value,
                             })
                           }
+                          className={errors.dateOfBirth ? "border-red-500" : ""}
+                          required
                         />
+                        {errors.dateOfBirth && (
+                          <p className="text-sm text-red-500">
+                            Date of birth is required
+                          </p>
+                        )}
                       </div>
                       <div className="space-y-2">
                         <label className="block text-sm font-medium">Sex</label>
@@ -631,7 +649,9 @@ export default function CreateServiceCodePage() {
                             })
                           }
                         >
-                          <SelectTrigger>
+                          <SelectTrigger
+                            className={errors.sex ? "border-red-500" : ""}
+                          >
                             <SelectValue placeholder="Select sex" />
                           </SelectTrigger>
                           <SelectContent>
@@ -639,6 +659,11 @@ export default function CreateServiceCodePage() {
                             <SelectItem value="F">Female</SelectItem>
                           </SelectContent>
                         </Select>
+                        {errors.sex && (
+                          <p className="text-sm text-red-500">
+                            Please select a sex
+                          </p>
+                        )}
                       </div>
                     </div>
                     <div className="flex justify-end space-x-2">
@@ -655,7 +680,10 @@ export default function CreateServiceCodePage() {
                         disabled={
                           !newPatient.firstName ||
                           !newPatient.lastName ||
-                          !newPatient.billingNumber
+                          !newPatient.billingNumber ||
+                          newPatient.billingNumber.length !== 8 ||
+                          !newPatient.dateOfBirth ||
+                          !newPatient.sex
                         }
                       >
                         Create Patient
