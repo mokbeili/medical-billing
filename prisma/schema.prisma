@@ -67,6 +67,7 @@ model BillingCode {
   specialist_price      String?
   referred_price        String?
   non_referred_price    String?
+  billing_record_type   Int                    @default(50) @map("billing_record_type")
   section               Section                @relation(fields: [section_id], references: [id])
   serviceCodes          ServiceCode[]
   changeLogs            BillingCodeChangeLog[]
@@ -88,6 +89,7 @@ model BillingCodeChangeLog {
   specialist_price      String?
   referred_price        String?
   non_referred_price    String?
+  billing_record_type   Int         @default(50) @map("billing_record_type")
   changed_at            DateTime    @default(now())
   billing_code          BillingCode @relation(fields: [billing_code_id], references: [id])
 

@@ -26,6 +26,7 @@ export async function PUT(
       specialistPrice,
       referredPrice,
       nonReferredPrice,
+      billingRecordType,
     } = body;
 
     if (!code || !title || !sectionId) {
@@ -57,6 +58,7 @@ export async function PUT(
         specialist_price: currentBillingCode.specialist_price,
         referred_price: currentBillingCode.referred_price,
         non_referred_price: currentBillingCode.non_referred_price,
+        billing_record_type: currentBillingCode.billing_record_type,
       },
     });
 
@@ -77,6 +79,7 @@ export async function PUT(
         specialist_price: specialistPrice,
         referred_price: referredPrice,
         non_referred_price: nonReferredPrice,
+        billing_record_type: billingRecordType,
       },
       include: {
         section: {

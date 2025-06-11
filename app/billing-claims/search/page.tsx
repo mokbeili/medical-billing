@@ -18,6 +18,7 @@ interface BillingClaim {
     firstName: string;
     lastName: string;
     billingNumber: string;
+    groupNumber: string;
   };
   jurisdiction: {
     country: string;
@@ -79,11 +80,20 @@ export default function BillingClaimsSearchPage() {
   const handleDownload = (claim: BillingClaim) => {
     if (!claim.batchClaimText) return;
 
+    const now = new Date();
+    const timestamp =
+      now.getFullYear().toString() +
+      (now.getMonth() + 1).toString().padStart(2, "0") +
+      now.getDate().toString().padStart(2, "0") +
+      now.getHours().toString().padStart(2, "0") +
+      now.getMinutes().toString().padStart(2, "0") +
+      now.getSeconds().toString().padStart(2, "0");
+
     const blob = new Blob([claim.batchClaimText], { type: "text/plain" });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${claim.friendlyId}.txt`;
+    a.download = `${claim.physician.groupNumber}_${timestamp}.txt`;
     document.body.appendChild(a);
     a.click();
     window.URL.revokeObjectURL(url);

@@ -150,10 +150,27 @@ export async function POST(request: Request) {
       specialistPrice,
       referredPrice,
       nonReferredPrice,
+      billingRecordType,
     } = body;
 
     if (!code || !title || !sectionId) {
       return new NextResponse("Missing required fields", { status: 400 });
+    }
+
+    // Check for duplicates
+    const existingCode = await prisma.billingCode.findFirst({
+      where: {
+        code,
+        title,
+        section_id: sectionId,
+      },
+    });
+
+    if (existingCode) {
+      return new NextResponse(
+        "A billing code with this code and title already exists in this section",
+        { status: 400 }
+      );
     }
 
     const billingCode = await prisma.billingCode.create({
@@ -169,7 +186,8 @@ export async function POST(request: Request) {
         specialist_price: specialistPrice,
         referred_price: referredPrice,
         non_referred_price: nonReferredPrice,
-        openai_embedding: "", // This will be populated by a background job
+        billing_record_type: billingRecordType || 50,
+        openai_embedding: "", // This will be updated by the background job
       },
       include: {
         section: {

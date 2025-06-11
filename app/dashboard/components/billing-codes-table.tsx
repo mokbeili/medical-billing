@@ -34,6 +34,7 @@ interface BillingCode {
   specialist_price: string | null;
   referred_price: string | null;
   non_referred_price: string | null;
+  billing_record_type: number;
   section: {
     id: number;
     code: string;
@@ -97,6 +98,7 @@ interface BillingCodeFormProps {
     specialistPrice: string;
     referredPrice: string;
     nonReferredPrice: string;
+    billingRecordType: number;
   };
   onSubmit: (data: any) => Promise<void>;
   onCancel: () => void;
@@ -123,6 +125,7 @@ function BillingCodeForm({
       specialistPrice: "",
       referredPrice: "",
       nonReferredPrice: "",
+      billingRecordType: 50,
     }
   );
   const [sectionSearchQuery, setSectionSearchQuery] = useState("");
@@ -353,6 +356,18 @@ function BillingCodeForm({
             placeholder="Enter anesthesia details"
           />
         </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="billingRecordType">Billing Record Type</Label>
+        <Input
+          id="billingRecordType"
+          name="billingRecordType"
+          type="number"
+          value={formData.billingRecordType}
+          onChange={handleFormChange}
+          placeholder="Enter billing record type"
+        />
       </div>
 
       <div className="space-y-2">
@@ -647,6 +662,9 @@ export function BillingCodesTable() {
                         nonReferredPrice:
                           billingCodes.find((code) => code.id === editingId)!
                             .non_referred_price || "",
+                        billingRecordType:
+                          billingCodes.find((code) => code.id === editingId)!
+                            .billing_record_type || 50,
                       }
                     : undefined
                   : undefined
