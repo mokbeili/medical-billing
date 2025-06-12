@@ -69,7 +69,7 @@ model BillingCode {
   non_referred_price    String?
   billing_record_type   Int                    @default(50) @map("billing_record_type")
   section               Section                @relation(fields: [section_id], references: [id])
-  serviceCodes          ServiceCode[]
+  serviceCodes          ServiceCodes[]
   changeLogs            BillingCodeChangeLog[]
 
   @@index([section_id])
@@ -131,20 +131,20 @@ model AIPrompt {
 }
 
 model Patient {
-  id             String        @id
-  firstName      String        @map("first_name")
-  lastName       String        @map("last_name")
-  middleInitial  String?       @map("middle_initial")
-  billingNumber  String        @map("billing_number")
-  dateOfBirth    DateTime      @map("date_of_birth")
-  sex            String        @map("sex")
-  jurisdictionId Int           @map("jurisdiction_id")
-  physicianId    String        @map("physician_id")
-  createdAt      DateTime      @default(now()) @map("created_at")
-  updatedAt      DateTime      @updatedAt @map("updated_at")
-  jurisdiction   Jurisdiction  @relation(fields: [jurisdictionId], references: [id])
-  physician      Physician     @relation(fields: [physicianId], references: [id])
-  ServiceCode    ServiceCode[]
+  id             String       @id
+  firstName      String       @map("first_name")
+  lastName       String       @map("last_name")
+  middleInitial  String?      @map("middle_initial")
+  billingNumber  String       @map("billing_number")
+  dateOfBirth    DateTime     @map("date_of_birth")
+  sex            String       @map("sex")
+  jurisdictionId Int          @map("jurisdiction_id")
+  physicianId    String       @map("physician_id")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  jurisdiction   Jurisdiction @relation(fields: [jurisdictionId], references: [id])
+  physician      Physician    @relation(fields: [physicianId], references: [id])
+  services       Service[]
 
   @@map("patients")
 }
@@ -178,33 +178,33 @@ model Physician {
 }
 
 model ICDCode {
-  id          Int           @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
   version     String
   code        String
   description String
-  createdAt   DateTime      @default(now()) @map("created_at")
-  updatedAt   DateTime      @updatedAt @map("updated_at")
-  ServiceCode ServiceCode[]
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  services    Service[]
 
   @@index([code])
   @@map("icd_codes")
 }
 
 model HealthInstitution {
-  id          Int           @id @default(autoincrement())
+  id          Int         @id @default(autoincrement())
   name        String
   street      String
   city        String
   state       String
-  postalCode  String        @map("postal_code")
+  postalCode  String      @map("postal_code")
   country     String
   latitude    Float
   longitude   Float
-  phoneNumber String        @map("phone_number")
+  phoneNumber String      @map("phone_number")
   number      String?
-  createdAt   DateTime      @default(now()) @map("created_at")
-  updatedAt   DateTime      @updatedAt @map("updated_at")
-  ServiceCode ServiceCode[]
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+  services    Service[]
   Physician   Physician[]
 
   @@map("health_institutions")
@@ -221,15 +221,14 @@ model BillingClaim {
   jurisdiction   Jurisdiction     @relation(fields: [jurisdictionId], references: [id])
   physician      Physician        @relation(fields: [physicianId], references: [id])
   SearchQueryLog SearchQueryLog[]
-  serviceCodes   ServiceCode[]
+  services       Service[]
 
   @@map("billing_claims")
 }
 
-model ServiceCode {
-  id                   Int                 @id(map: "billing_claim_codes_pkey") @default(autoincrement())
+model Service {
+  id                   Int                 @id @default(autoincrement())
   claimId              String?             @map("claim_id")
-  codeId               Int                 @map("code_id")
   status               ClaimStatus
   createdAt            DateTime            @default(now()) @map("created_at")
   updatedAt            DateTime            @updatedAt @map("updated_at")
@@ -238,37 +237,54 @@ model ServiceCode {
   referringPhysicianId Int?                @map("referring_physician_id")
   healthInstitutionId  Int?                @map("health_institution_id")
   serviceDate          DateTime            @default(now()) @map("service_date")
-  serviceStartTime     DateTime?           @map("service_start_time")
-  serviceEndTime       DateTime?           @map("service_end_time")
   summary              String              @default("")
-  numberOfUnits        Int                 @default(1) @map("number_of_units")
   serviceLocation      String              @map("service_location")
   specialCircumstances String?             @map("special_circumstances")
-  bilateralIndicator   String?             @map("bilateral_indicator")
-  claimType            String?             @map("claim_type")
-  claim                BillingClaim?       @relation(fields: [claimId], references: [id], onDelete: Restrict, map: "billing_claim_codes_claim_id_fkey")
-  code                 BillingCode         @relation(fields: [codeId], references: [id], map: "billing_claim_codes_code_id_fkey")
-  healthInstitution    HealthInstitution?  @relation(fields: [healthInstitutionId], references: [id])
+  claim                BillingClaim?       @relation(fields: [claimId], references: [id], onDelete: Restrict)
+  patient              Patient?            @relation(fields: [patientId], references: [id])
   icdCode              ICDCode?            @relation(fields: [icdCodeId], references: [id])
-  patient              Patient?            @relation(fields: [patientId], references: [id], onDelete: Restrict)
   referringPhysician   ReferringPhysician? @relation(fields: [referringPhysicianId], references: [id])
+  healthInstitution    HealthInstitution?  @relation(fields: [healthInstitutionId], references: [id])
+  serviceCodes         ServiceCodes[]
 
+  @@index([claimId])
+  @@index([patientId])
+  @@index([icdCodeId])
+  @@index([referringPhysicianId])
+  @@index([healthInstitutionId])
+  @@map("services")
+}
+
+model ServiceCodes {
+  id                 Int         @id @default(autoincrement())
+  serviceId          Int         @map("service_id")
+  codeId             Int         @map("code_id")
+  code               String
+  serviceStartTime   DateTime    @map("service_start_time")
+  serviceEndTime     DateTime    @map("service_end_time")
+  bilateralIndicator String?     @map("bilateral_indicator")
+  numberOfUnits      Int         @map("number_of_units")
+  service            Service     @relation(fields: [serviceId], references: [id])
+  billingCode        BillingCode @relation(fields: [codeId], references: [id])
+
+  @@index([serviceId])
+  @@index([codeId])
   @@map("service_codes")
 }
 
 model ReferringPhysician {
-  id             Int           @id @default(autoincrement())
-  jurisdictionId Int           @map("jurisdiction_id")
+  id             Int          @id @default(autoincrement())
+  jurisdictionId Int          @map("jurisdiction_id")
   code           String
   name           String
   location       String
   specialty      String
-  physicianId    String?       @map("physician_id")
-  createdAt      DateTime      @default(now()) @map("created_at")
-  updatedAt      DateTime      @updatedAt @map("updated_at")
-  jurisdiction   Jurisdiction  @relation(fields: [jurisdictionId], references: [id])
-  physician      Physician?    @relation(fields: [physicianId], references: [id])
-  ServiceCode    ServiceCode[]
+  physicianId    String?      @map("physician_id")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  jurisdiction   Jurisdiction @relation(fields: [jurisdictionId], references: [id])
+  physician      Physician?   @relation(fields: [physicianId], references: [id])
+  Services       Service[]
 
   @@map("referring_physicians")
 }
