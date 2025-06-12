@@ -45,6 +45,16 @@ function pad(
   ).slice(0, length);
 }
 
+function checkDigit(value: string): string {
+  const weights = [9, 8, 7, 6, 5, 4, 3, 2];
+  const sum = value.split("").reduce((acc, digit, index) => {
+    const product = parseInt(digit) * weights[index];
+    return acc + (product > 9 ? product - 9 : product);
+  }, 0);
+  const remainder = sum % 11;
+  return remainder === 0 ? "0" : (11 - remainder).toString();
+}
+
 function formatHeader(p: PractitionerHeader): string {
   return (
     "10" +
@@ -67,7 +77,7 @@ function formatService50(practitionerNumber: string, s: ServiceRecord): string {
     pad(practitionerNumber, 4) +
     pad(s.claimNumber, 5) +
     s.sequence.toString() +
-    pad(s.hsn || "", 9) +
+    pad(s.hsn + checkDigit(s.hsn), 9) +
     s.dob +
     s.sex +
     pad(s.name.toUpperCase(), 25, "left") +

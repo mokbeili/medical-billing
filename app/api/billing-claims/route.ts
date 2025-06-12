@@ -1,6 +1,6 @@
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { generateClaimBatch } from "@/utils/generateBatchClaim";
+import { generateClaimBatch } from "@/utils/SK-MSB/generateBatchClaim";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
