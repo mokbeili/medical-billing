@@ -537,7 +537,7 @@ export default function CreateServicePage() {
         throw new Error("Failed to create service codes");
       }
 
-      router.push("/service-records");
+      router.push("/services");
     } catch (error) {
       console.error("Error creating service and service codes:", error);
     }

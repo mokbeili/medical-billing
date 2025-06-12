@@ -78,9 +78,16 @@ export async function GET(request: Request) {
       include: {
         patient: true,
         healthInstitution: true,
+        physician: true,
+        referringPhysician: true,
+        icdCode: true,
         serviceCodes: {
           include: {
-            billingCode: true,
+            billingCode: {
+              include: {
+                section: true,
+              },
+            },
           },
         },
       },

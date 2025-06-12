@@ -52,11 +52,8 @@ export default function Sidebar({
           </SidebarLink>
           {userRoles.includes("PHYSICIAN") && (
             <>
-              <SidebarLink
-                href="/service-records"
-                active={pathname === "/service-records"}
-              >
-                Service Records
+              <SidebarLink href="/services" active={pathname === "/services"}>
+                Services
               </SidebarLink>
               <SidebarLink
                 href="/billing-claims"
