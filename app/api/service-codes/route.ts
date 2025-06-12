@@ -11,98 +11,50 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const {
-      physicianId,
-      patientId,
-      summary,
-      billingCodes,
-      icdCodeId,
-      serviceDate,
-      serviceStartTime,
-      serviceEndTime,
-      referringPhysicianId,
-      healthInstitutionId,
-      numberOfUnits,
-      serviceLocation,
-      specialCircumstances,
-      bilateralIndicator,
-      claimType,
-    } = body;
 
-    // Validate required fields
-    if (!physicianId || !patientId || !serviceDate || !serviceLocation) {
+    // Handle both array and object formats
+    const serviceCodesToCreate = Array.isArray(body) ? body : body.billingCodes;
+
+    if (
+      !serviceCodesToCreate ||
+      !Array.isArray(serviceCodesToCreate) ||
+      serviceCodesToCreate.length === 0
+    ) {
       return new NextResponse("Missing required fields", { status: 400 });
-    }
-
-    // Get physician to determine jurisdiction
-    const physician = await prisma.physician.findUnique({
-      where: { id: physicianId },
-      include: { jurisdiction: true },
-    });
-
-    if (!physician) {
-      return new NextResponse("Physician not found", { status: 404 });
     }
 
     // Create service codes
     const serviceCodes = await Promise.all(
-      billingCodes.map(async (code: { codeId: number }) => {
-        return prisma.serviceCode.create({
+      serviceCodesToCreate.map(async (code) => {
+        const billingCode = await prisma.billingCode.findUnique({
+          where: { id: code.codeId },
+          select: { code: true },
+        });
+
+        if (!billingCode) {
+          throw new Error(`Billing code ${code.codeId} not found`);
+        }
+
+        return prisma.serviceCodes.create({
           data: {
-            code: {
-              connect: {
-                id: code.codeId,
-              },
-            },
-            patient: {
-              connect: {
-                id: patientId,
-              },
-            },
-            icdCode: icdCodeId
-              ? {
-                  connect: {
-                    id: icdCodeId,
-                  },
-                }
-              : undefined,
-            referringPhysician: referringPhysicianId
-              ? {
-                  connect: {
-                    id: referringPhysicianId,
-                  },
-                }
-              : undefined,
-            healthInstitution: healthInstitutionId
-              ? {
-                  connect: {
-                    id: healthInstitutionId,
-                  },
-                }
-              : undefined,
-            status: "PENDING",
-            serviceDate: new Date(serviceDate),
-            serviceStartTime: serviceStartTime
-              ? new Date(serviceStartTime)
+            serviceId: code.serviceId,
+            codeId: code.codeId,
+            serviceStartTime: code.serviceStartTime
+              ? new Date(code.serviceStartTime)
               : null,
-            serviceEndTime: serviceEndTime ? new Date(serviceEndTime) : null,
-            summary,
-            numberOfUnits,
-            serviceLocation,
-            specialCircumstances,
-            bilateralIndicator,
-            claimType,
+            serviceEndTime: code.serviceEndTime
+              ? new Date(code.serviceEndTime)
+              : null,
+            bilateralIndicator: code.bilateralIndicator,
+            numberOfUnits: code.numberOfUnits || 1,
           },
           include: {
-            code: {
+            service: true,
+            billingCode: {
               include: {
                 section: true,
               },
             },
-            patient: true,
-            icdCode: true,
-            referringPhysician: true,
-            healthInstitution: true,
           },
         });
       })
@@ -122,30 +74,36 @@ export async function GET() {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    const serviceCodes = await prisma.serviceCode.findMany({
+    const serviceCodes = await prisma.serviceCodes.findMany({
       where: {
-        patient: {
-          physician: {
-            user: {
-              id: parseInt(session.user.id),
+        service: {
+          patient: {
+            physician: {
+              user: {
+                id: parseInt(session.user.id),
+              },
             },
           },
         },
       },
       include: {
-        code: {
+        service: {
+          include: {
+            patient: true,
+            physician: true,
+            icdCode: true,
+            healthInstitution: true,
+            referringPhysician: true,
+          },
+        },
+        billingCode: {
           include: {
             section: true,
           },
         },
-        patient: true,
-        icdCode: true,
-        referringPhysician: true,
-        healthInstitution: true,
-        claim: true,
       },
       orderBy: {
-        createdAt: "desc",
+        id: "desc",
       },
     });
 

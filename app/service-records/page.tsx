@@ -24,7 +24,7 @@ interface ServiceCode {
   serviceEndTime: string | null;
   summary: string;
   createdAt: string;
-  code: {
+  billingCode: {
     code: string;
     title: string;
     description: string | null;
@@ -34,33 +34,35 @@ interface ServiceCode {
       jurisdiction_id: string;
     };
   };
-  patient: {
-    firstName: string;
-    lastName: string;
-    middleInitial: string | null;
-    billingNumber: string;
-    physician: {
-      id: string;
+  service: {
+    patient: {
       firstName: string;
       lastName: string;
+      middleInitial: string | null;
       billingNumber: string;
+      physician: {
+        id: string;
+        firstName: string;
+        lastName: string;
+        billingNumber: string;
+      };
     };
+    icdCode: {
+      code: string;
+      description: string;
+    } | null;
+    referringPhysician: {
+      code: string;
+      name: string;
+    } | null;
+    healthInstitution: {
+      name: string;
+    } | null;
+    claim: {
+      id: string;
+      friendlyId: string;
+    } | null;
   };
-  icdCode: {
-    code: string;
-    description: string;
-  } | null;
-  referringPhysician: {
-    code: string;
-    name: string;
-  } | null;
-  healthInstitution: {
-    name: string;
-  } | null;
-  claim: {
-    id: string;
-    friendlyId: string;
-  } | null;
 }
 
 export default function ServiceRecordsPage() {
@@ -112,15 +114,15 @@ export default function ServiceRecordsPage() {
       const searchTerm = filters.patientName.toLowerCase();
       filtered = filtered.filter(
         (code) =>
-          code.patient.firstName.toLowerCase().includes(searchTerm) ||
-          code.patient.lastName.toLowerCase().includes(searchTerm)
+          code.service.patient.firstName.toLowerCase().includes(searchTerm) ||
+          code.service.patient.lastName.toLowerCase().includes(searchTerm)
       );
     }
 
     if (filters.billingNumber) {
       const searchTerm = filters.billingNumber.toLowerCase();
       filtered = filtered.filter((code) =>
-        code.patient.billingNumber.toLowerCase().includes(searchTerm)
+        code.service.patient.billingNumber.toLowerCase().includes(searchTerm)
       );
     }
 
@@ -135,7 +137,7 @@ export default function ServiceRecordsPage() {
     if (filters.code) {
       const searchTerm = filters.code.toLowerCase();
       filtered = filtered.filter((code) =>
-        code.code.code.toLowerCase().includes(searchTerm)
+        code.billingCode.code.toLowerCase().includes(searchTerm)
       );
     }
 
@@ -143,8 +145,8 @@ export default function ServiceRecordsPage() {
       const searchTerm = filters.section.toLowerCase();
       filtered = filtered.filter(
         (code) =>
-          code.code.section.code.toLowerCase().includes(searchTerm) ||
-          code.code.section.title.toLowerCase().includes(searchTerm)
+          code.billingCode.section.code.toLowerCase().includes(searchTerm) ||
+          code.billingCode.section.title.toLowerCase().includes(searchTerm)
       );
     }
 
@@ -172,10 +174,10 @@ export default function ServiceRecordsPage() {
 
         // Check if the physician and jurisdiction match
         if (
-          firstSelected.patient.physician?.id ===
-            serviceCode.patient.physician?.id &&
-          firstSelected.code.section.jurisdiction_id ===
-            serviceCode.code.section.jurisdiction_id
+          firstSelected.service.patient.physician?.id ===
+            serviceCode.service.patient.physician?.id &&
+          firstSelected.billingCode.section.jurisdiction_id ===
+            serviceCode.billingCode.section.jurisdiction_id
         ) {
           setSelectedServiceCodes([...selectedServiceCodes, serviceCodeId]);
         }
@@ -390,23 +392,23 @@ export default function ServiceRecordsPage() {
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {serviceCode.code.code}
+                        {serviceCode.billingCode.code}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {serviceCode.code.section.code} -{" "}
-                        {serviceCode.code.section.title}
+                        {serviceCode.billingCode.section.code} -{" "}
+                        {serviceCode.billingCode.section.title}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {`${serviceCode.patient.firstName} ${
-                          serviceCode.patient.lastName
+                        {`${serviceCode.service.patient.firstName} ${
+                          serviceCode.service.patient.lastName
                         }${
-                          serviceCode.patient.middleInitial
-                            ? ` ${serviceCode.patient.middleInitial}`
+                          serviceCode.service.patient.middleInitial
+                            ? ` ${serviceCode.service.patient.middleInitial}`
                             : ""
                         }`}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {serviceCode.patient.billingNumber}
+                        {serviceCode.service.patient.billingNumber}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span

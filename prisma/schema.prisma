@@ -173,6 +173,7 @@ model Physician {
   healthInstitution     HealthInstitution?   @relation(fields: [healthInstitutionId], references: [id])
   referringPhysicians   ReferringPhysician[]
   SearchQueryLog        SearchQueryLog[]
+  Service               Service[]
 
   @@map("physicians")
 }
@@ -233,6 +234,7 @@ model Service {
   createdAt            DateTime            @default(now()) @map("created_at")
   updatedAt            DateTime            @updatedAt @map("updated_at")
   patientId            String?             @map("patient_id")
+  physicianId          String              @map("physician_id")
   icdCodeId            Int?                @map("icd_code_id")
   referringPhysicianId Int?                @map("referring_physician_id")
   healthInstitutionId  Int?                @map("health_institution_id")
@@ -242,6 +244,7 @@ model Service {
   specialCircumstances String?             @map("special_circumstances")
   claim                BillingClaim?       @relation(fields: [claimId], references: [id], onDelete: Restrict)
   patient              Patient?            @relation(fields: [patientId], references: [id])
+  physician            Physician           @relation(fields: [physicianId], references: [id])
   icdCode              ICDCode?            @relation(fields: [icdCodeId], references: [id])
   referringPhysician   ReferringPhysician? @relation(fields: [referringPhysicianId], references: [id])
   healthInstitution    HealthInstitution?  @relation(fields: [healthInstitutionId], references: [id])
@@ -249,6 +252,7 @@ model Service {
 
   @@index([claimId])
   @@index([patientId])
+  @@index([physicianId])
   @@index([icdCodeId])
   @@index([referringPhysicianId])
   @@index([healthInstitutionId])
@@ -259,11 +263,10 @@ model ServiceCodes {
   id                 Int         @id @default(autoincrement())
   serviceId          Int         @map("service_id")
   codeId             Int         @map("code_id")
-  code               String
-  serviceStartTime   DateTime    @map("service_start_time")
-  serviceEndTime     DateTime    @map("service_end_time")
+  serviceStartTime   DateTime?   @map("service_start_time")
+  serviceEndTime     DateTime?   @map("service_end_time")
   bilateralIndicator String?     @map("bilateral_indicator")
-  numberOfUnits      Int         @map("number_of_units")
+  numberOfUnits      Int?        @map("number_of_units")
   service            Service     @relation(fields: [serviceId], references: [id])
   billingCode        BillingCode @relation(fields: [codeId], references: [id])
 

@@ -73,7 +73,43 @@ interface HealthInstitution {
   country: string;
 }
 
-export default function CreateServiceCodePage() {
+interface Service {
+  id: string;
+  physicianId: string;
+  patientId: string;
+  referringPhysicianId: number | null;
+  icdCodeId: number | null;
+  healthInstitutionId: number | null;
+  summary: string;
+  serviceDate: string;
+  serviceLocation: string | null;
+  specialCircumstances: string | null;
+}
+
+interface ServiceCode {
+  serviceId: string;
+  codeId: number;
+  status: string;
+  serviceStartTime: string | null;
+  serviceEndTime: string | null;
+  numberOfUnits: number | null;
+  bilateralIndicator: string | null;
+}
+
+interface ServiceErrors {
+  physician: boolean;
+  patient: boolean;
+  billingCodes: boolean;
+  serviceDate: boolean;
+}
+
+interface NewPatientErrors {
+  billingNumber: boolean;
+  dateOfBirth: boolean;
+  sex: boolean;
+}
+
+export default function CreateServicePage() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const [physicians, setPhysicians] = useState<Physician[]>([]);
@@ -103,28 +139,33 @@ export default function CreateServiceCodePage() {
     sex: "",
   });
   const [formData, setFormData] = useState({
-    physicianId: "",
+    physicianId: physicians.length === 1 ? physicians[0].id : "",
     patientId: "",
     referringPhysicianId: null as number | null,
     icdCodeId: null as number | null,
     healthInstitutionId: null as number | null,
     summary: "",
-    serviceDate: "",
-    serviceStartTime: "",
-    serviceEndTime: "",
-    billingCodes: [] as { codeId: number; status: string }[],
-    numberOfUnits: 1,
-    serviceLocation: "",
+    serviceDate: new Date().toISOString().split("T")[0],
+    serviceLocation: null as string | null,
     specialCircumstances: null as string | null,
-    bilateralIndicator: null as string | null,
-    claimType: null as string | null,
+    billingCodes: [] as Array<{
+      codeId: number;
+      status: string;
+      serviceStartTime: string | null;
+      serviceEndTime: string | null;
+      numberOfUnits: number | null;
+      bilateralIndicator: string | null;
+    }>,
   });
 
-  const [errors, setErrors] = useState({
+  const [serviceErrors, setServiceErrors] = useState<ServiceErrors>({
     physician: false,
     patient: false,
     billingCodes: false,
     serviceDate: false,
+  });
+
+  const [newPatientErrors, setNewPatientErrors] = useState<NewPatientErrors>({
     billingNumber: false,
     dateOfBirth: false,
     sex: false,
@@ -262,22 +303,23 @@ export default function CreateServiceCodePage() {
     e.preventDefault();
     try {
       if (!formData.physicianId) {
-        setErrors({ ...errors, physician: true, billingNumber: false });
+        setServiceErrors({ ...serviceErrors, physician: true });
+        setNewPatientErrors({ ...newPatientErrors, billingNumber: false });
         return;
       }
 
       if (newPatient.billingNumber.length !== 8) {
-        setErrors({ ...errors, billingNumber: true });
+        setNewPatientErrors({ ...newPatientErrors, billingNumber: true });
         return;
       }
 
       if (!newPatient.dateOfBirth) {
-        setErrors({ ...errors, dateOfBirth: true });
+        setNewPatientErrors({ ...newPatientErrors, dateOfBirth: true });
         return;
       }
 
       if (!newPatient.sex) {
-        setErrors({ ...errors, sex: true });
+        setNewPatientErrors({ ...newPatientErrors, sex: true });
         return;
       }
 
@@ -322,7 +364,6 @@ export default function CreateServiceCodePage() {
       });
     } catch (error) {
       console.error("Error creating patient:", error);
-      // You might want to show an error message to the user here
     }
   };
 
@@ -333,12 +374,28 @@ export default function CreateServiceCodePage() {
         ...formData,
         billingCodes: [
           ...formData.billingCodes,
-          { codeId: code.id, status: "PENDING" },
+          {
+            codeId: code.id,
+            status: "PENDING",
+            serviceStartTime: null,
+            serviceEndTime: null,
+            numberOfUnits: null,
+            bilateralIndicator: null,
+          },
         ],
       });
     }
-    setErrors({ ...errors, billingCodes: false });
+    setServiceErrors({ ...serviceErrors, billingCodes: false });
     setSearchQuery("");
+  };
+
+  const handleUpdateBillingCode = (
+    index: number,
+    updates: Partial<(typeof formData.billingCodes)[0]>
+  ) => {
+    const updatedBillingCodes = [...formData.billingCodes];
+    updatedBillingCodes[index] = { ...updatedBillingCodes[index], ...updates };
+    setFormData({ ...formData, billingCodes: updatedBillingCodes });
   };
 
   const handleRemoveCode = (codeId: number) => {
@@ -382,17 +439,14 @@ export default function CreateServiceCodePage() {
   };
 
   const validateForm = () => {
-    const newErrors = {
+    const newServiceErrors = {
       physician: !formData.physicianId,
       patient: !formData.patientId,
       billingCodes: formData.billingCodes.length === 0,
       serviceDate: !formData.serviceDate,
-      billingNumber: false,
-      dateOfBirth: !newPatient.dateOfBirth,
-      sex: !newPatient.sex,
     };
-    setErrors(newErrors);
-    return !Object.values(newErrors).some(Boolean);
+    setServiceErrors(newServiceErrors);
+    return !Object.values(newServiceErrors).some(Boolean);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -426,32 +480,66 @@ export default function CreateServiceCodePage() {
         return newDate.toISOString();
       };
 
-      const requestData = {
-        ...formData,
+      // First, create the service
+      const serviceData = {
+        physicianId: formData.physicianId,
+        patientId: formData.patientId,
+        referringPhysicianId: formData.referringPhysicianId,
+        icdCodeId: formData.icdCodeId,
+        healthInstitutionId: formData.healthInstitutionId,
+        summary: formData.summary,
         serviceDate: baseDate.toISOString(),
-        serviceStartTime: combineDateTime(baseDate, formData.serviceStartTime),
-        serviceEndTime: combineDateTime(baseDate, formData.serviceEndTime),
+        serviceLocation: formData.serviceLocation,
+        specialCircumstances: formData.specialCircumstances,
       };
 
-      console.log(requestData);
-      const response = await fetch("/api/service-codes", {
+      const serviceResponse = await fetch("/api/services", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.user?.id}`,
         },
-        body: JSON.stringify(requestData),
+        body: JSON.stringify(serviceData),
       });
 
-      console.log(response);
-
-      if (response.ok) {
-        router.push("/service-records");
-      } else {
-        console.error("Failed to create service codes:", await response.text());
+      if (!serviceResponse.ok) {
+        console.error(serviceResponse);
+        throw new Error("Failed to create service");
       }
+
+      const createdService = await serviceResponse.json();
+
+      // Then, create the service codes
+      const serviceCodesData = formData.billingCodes.map((code) => ({
+        serviceId: createdService.id,
+        codeId: code.codeId,
+        status: code.status,
+        serviceStartTime: code.serviceStartTime
+          ? combineDateTime(baseDate, code.serviceStartTime)
+          : null,
+        serviceEndTime: code.serviceEndTime
+          ? combineDateTime(baseDate, code.serviceEndTime)
+          : null,
+        numberOfUnits: code.numberOfUnits || null,
+        bilateralIndicator: code.bilateralIndicator,
+      }));
+
+      const serviceCodesResponse = await fetch("/api/service-codes", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.user?.id}`,
+        },
+        body: JSON.stringify(serviceCodesData),
+      });
+
+      if (!serviceCodesResponse.ok) {
+        throw new Error("Failed to create service codes");
+      }
+
+      router.push("/service-records");
     } catch (error) {
-      console.error("Error creating service codes:", error);
+      console.error("Error creating service and service codes:", error);
     }
   };
 
@@ -477,7 +565,7 @@ export default function CreateServiceCodePage() {
   return (
     <Layout>
       <div className="container mx-auto p-4">
-        <h1 className="text-2xl font-bold mb-6">Create Service Records</h1>
+        <h1 className="text-2xl font-bold mb-6">New Service</h1>
         <form onSubmit={handleSubmit} className="space-y-6">
           <Card>
             <CardContent className="space-y-4">
@@ -494,7 +582,9 @@ export default function CreateServiceCodePage() {
                       }
                     >
                       <SelectTrigger
-                        className={errors.physician ? "border-red-500" : ""}
+                        className={
+                          serviceErrors.physician ? "border-red-500" : ""
+                        }
                       >
                         <SelectValue placeholder="Select a physician" />
                       </SelectTrigger>
@@ -509,7 +599,7 @@ export default function CreateServiceCodePage() {
                     </Select>
                   </>
                 )}
-                {errors.physician && (
+                {serviceErrors.physician && (
                   <p className="text-sm text-red-500">
                     Please select a physician
                   </p>
@@ -524,11 +614,13 @@ export default function CreateServiceCodePage() {
                       value={formData.patientId}
                       onValueChange={(value: string) => {
                         setFormData({ ...formData, patientId: value });
-                        setErrors({ ...errors, patient: false });
+                        setServiceErrors({ ...serviceErrors, patient: false });
                       }}
                     >
                       <SelectTrigger
-                        className={errors.patient ? "border-red-500" : ""}
+                        className={
+                          serviceErrors.patient ? "border-red-500" : ""
+                        }
                       >
                         <SelectValue placeholder="Select patient" />
                       </SelectTrigger>
@@ -544,7 +636,7 @@ export default function CreateServiceCodePage() {
                         ))}
                       </SelectContent>
                     </Select>
-                    {errors.patient && (
+                    {serviceErrors.patient && (
                       <p className="text-sm text-red-500">
                         Please select a patient
                       </p>
@@ -607,10 +699,12 @@ export default function CreateServiceCodePage() {
                           placeholder="hsn (8 characters)"
                           maxLength={8}
                           className={
-                            errors.billingNumber ? "border-red-500" : ""
+                            newPatientErrors.billingNumber
+                              ? "border-red-500"
+                              : ""
                           }
                         />
-                        {errors.billingNumber && (
+                        {newPatientErrors.billingNumber && (
                           <p className="text-sm text-red-500">
                             Billing number must be exactly 8 characters long
                           </p>
@@ -629,10 +723,12 @@ export default function CreateServiceCodePage() {
                               dateOfBirth: e.target.value,
                             })
                           }
-                          className={errors.dateOfBirth ? "border-red-500" : ""}
+                          className={
+                            newPatientErrors.dateOfBirth ? "border-red-500" : ""
+                          }
                           required
                         />
-                        {errors.dateOfBirth && (
+                        {newPatientErrors.dateOfBirth && (
                           <p className="text-sm text-red-500">
                             Date of birth is required
                           </p>
@@ -640,26 +736,33 @@ export default function CreateServiceCodePage() {
                       </div>
                       <div className="space-y-2">
                         <label className="block text-sm font-medium">Sex</label>
-                        <Select
-                          value={newPatient.sex}
-                          onValueChange={(value) =>
-                            setNewPatient({
-                              ...newPatient,
-                              sex: value,
-                            })
-                          }
-                        >
-                          <SelectTrigger
-                            className={errors.sex ? "border-red-500" : ""}
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            variant={
+                              newPatient.sex === "M" ? "default" : "outline"
+                            }
+                            onClick={() =>
+                              setNewPatient({ ...newPatient, sex: "M" })
+                            }
+                            className="flex-1"
                           >
-                            <SelectValue placeholder="Select sex" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="M">Male</SelectItem>
-                            <SelectItem value="F">Female</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        {errors.sex && (
+                            M
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={
+                              newPatient.sex === "F" ? "default" : "outline"
+                            }
+                            onClick={() =>
+                              setNewPatient({ ...newPatient, sex: "F" })
+                            }
+                            className="flex-1"
+                          >
+                            F
+                          </Button>
+                        </div>
+                        {newPatientErrors.sex && (
                           <p className="text-sm text-red-500">
                             Please select a sex
                           </p>
@@ -772,15 +875,75 @@ export default function CreateServiceCodePage() {
                 <label className="block text-sm font-medium">
                   Service Date
                 </label>
-                <Input
-                  type="date"
-                  value={formData.serviceDate}
-                  onChange={(e) =>
-                    setFormData({ ...formData, serviceDate: e.target.value })
-                  }
-                  className={errors.serviceDate ? "border-red-500" : ""}
-                />
-                {errors.serviceDate && (
+                <div className="flex gap-2 items-center">
+                  <Input
+                    type="date"
+                    value={formData.serviceDate}
+                    onChange={(e) =>
+                      setFormData({ ...formData, serviceDate: e.target.value })
+                    }
+                    className={
+                      serviceErrors.serviceDate ? "border-red-500" : ""
+                    }
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      const date = new Date();
+                      date.setDate(date.getDate() - 1);
+                      setFormData({
+                        ...formData,
+                        serviceDate: date.toISOString().split("T")[0],
+                      });
+                    }}
+                  >
+                    -1
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      const date = new Date();
+                      date.setDate(date.getDate() - 2);
+                      setFormData({
+                        ...formData,
+                        serviceDate: date.toISOString().split("T")[0],
+                      });
+                    }}
+                  >
+                    -2
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      const date = new Date();
+                      date.setDate(date.getDate() - 3);
+                      setFormData({
+                        ...formData,
+                        serviceDate: date.toISOString().split("T")[0],
+                      });
+                    }}
+                  >
+                    -3
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      const date = new Date();
+                      date.setDate(date.getDate() - 4);
+                      setFormData({
+                        ...formData,
+                        serviceDate: date.toISOString().split("T")[0],
+                      });
+                    }}
+                  >
+                    -4
+                  </Button>
+                </div>
+                {serviceErrors.serviceDate && (
                   <p className="text-sm text-red-500">
                     Please select a service date
                   </p>
@@ -789,149 +952,138 @@ export default function CreateServiceCodePage() {
 
               <div className="space-y-2">
                 <label className="block text-sm font-medium">
-                  Service Start Time
-                </label>
-                <Input
-                  type="time"
-                  value={formData.serviceStartTime}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      serviceStartTime: e.target.value,
-                    })
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-sm font-medium">
-                  Service End Time
-                </label>
-                <Input
-                  type="time"
-                  value={formData.serviceEndTime}
-                  onChange={(e) =>
-                    setFormData({ ...formData, serviceEndTime: e.target.value })
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-sm font-medium">
-                  Number of Units
-                </label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={formData.numberOfUnits}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      numberOfUnits: parseInt(e.target.value) || 1,
-                    })
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-sm font-medium">
                   Service Location
                 </label>
-                <Select
-                  value={formData.serviceLocation || "none"}
-                  onValueChange={(value) =>
-                    setFormData({
-                      ...formData,
-                      serviceLocation: value === "none" ? "" : value,
-                    })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select service location" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    <SelectItem value="R">Regina</SelectItem>
-                    <SelectItem value="S">Saskatoon</SelectItem>
-                    <SelectItem value="X">
-                      Rural and Northern Premium
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={
+                      formData.serviceLocation === "R" ? "default" : "outline"
+                    }
+                    onClick={() =>
+                      setFormData({
+                        ...formData,
+                        serviceLocation:
+                          formData.serviceLocation === "R" ? null : "R",
+                      })
+                    }
+                    className="flex-1"
+                  >
+                    Regina
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={
+                      formData.serviceLocation === "S" ? "default" : "outline"
+                    }
+                    onClick={() =>
+                      setFormData({
+                        ...formData,
+                        serviceLocation:
+                          formData.serviceLocation === "S" ? null : "S",
+                      })
+                    }
+                    className="flex-1"
+                  >
+                    Saskatoon
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={
+                      formData.serviceLocation === "X" ? "default" : "outline"
+                    }
+                    onClick={() =>
+                      setFormData({
+                        ...formData,
+                        serviceLocation:
+                          formData.serviceLocation === "X" ? null : "X",
+                      })
+                    }
+                    className="flex-1"
+                  >
+                    Rural/Northern Premium
+                  </Button>
+                </div>
               </div>
 
               <div className="space-y-2">
                 <label className="block text-sm font-medium">
                   Special Circumstances
                 </label>
-                <Select
-                  value={formData.specialCircumstances || "none"}
-                  onValueChange={(value) =>
-                    setFormData({
-                      ...formData,
-                      specialCircumstances: value === "none" ? null : value,
-                    })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select special circumstances" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    <SelectItem value="TF">TF</SelectItem>
-                    <SelectItem value="PF">PF</SelectItem>
-                    <SelectItem value="CF">CF</SelectItem>
-                    <SelectItem value="TA">TA</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-sm font-medium">
-                  Bilateral Indicator
-                </label>
-                <Select
-                  value={formData.bilateralIndicator || "none"}
-                  onValueChange={(value) =>
-                    setFormData({
-                      ...formData,
-                      bilateralIndicator: value === "none" ? null : value,
-                    })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select bilateral indicator" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    <SelectItem value="L">Left</SelectItem>
-                    <SelectItem value="R">Right</SelectItem>
-                    <SelectItem value="B">Both</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-sm font-medium">Claim Type</label>
-                <Select
-                  value={formData.claimType || "none"}
-                  onValueChange={(value) =>
-                    setFormData({
-                      ...formData,
-                      claimType: value === "none" ? null : value,
-                    })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select claim type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    <SelectItem value="P">P</SelectItem>
-                    <SelectItem value="W">W</SelectItem>
-                    <SelectItem value="D">D</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={
+                      formData.specialCircumstances === "TF"
+                        ? "default"
+                        : "outline"
+                    }
+                    onClick={() =>
+                      setFormData({
+                        ...formData,
+                        specialCircumstances:
+                          formData.specialCircumstances === "TF" ? null : "TF",
+                      })
+                    }
+                    className="flex-1"
+                  >
+                    TF
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={
+                      formData.specialCircumstances === "PF"
+                        ? "default"
+                        : "outline"
+                    }
+                    onClick={() =>
+                      setFormData({
+                        ...formData,
+                        specialCircumstances:
+                          formData.specialCircumstances === "PF" ? null : "PF",
+                      })
+                    }
+                    className="flex-1"
+                  >
+                    PF
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={
+                      formData.specialCircumstances === "CF"
+                        ? "default"
+                        : "outline"
+                    }
+                    onClick={() =>
+                      setFormData({
+                        ...formData,
+                        specialCircumstances:
+                          formData.specialCircumstances === "CF" ? null : "CF",
+                      })
+                    }
+                    className="flex-1"
+                  >
+                    CF
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={
+                      formData.specialCircumstances === "TA"
+                        ? "default"
+                        : "outline"
+                    }
+                    onClick={() =>
+                      setFormData({
+                        ...formData,
+                        specialCircumstances:
+                          formData.specialCircumstances === "TA" ? null : "TA",
+                      })
+                    }
+                    className="flex-1"
+                  >
+                    TA
+                  </Button>
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -995,7 +1147,9 @@ export default function CreateServiceCodePage() {
                     placeholder="Search billing codes..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className={errors.billingCodes ? "border-red-500" : ""}
+                    className={
+                      serviceErrors.billingCodes ? "border-red-500" : ""
+                    }
                   />
                   {isSearching && (
                     <div className="absolute right-2 top-2">
@@ -1021,31 +1175,119 @@ export default function CreateServiceCodePage() {
                     </div>
                   )}
                 </div>
-                {errors.billingCodes && (
+                {serviceErrors.billingCodes && (
                   <p className="text-sm text-red-500">
                     Please add at least one billing code
                   </p>
                 )}
 
                 {selectedCodes.length > 0 && (
-                  <div className="mt-4 space-y-2">
-                    {selectedCodes.map((code) => (
+                  <div className="mt-4 space-y-4">
+                    {selectedCodes.map((code, index) => (
                       <div
                         key={code.id}
-                        className="flex items-center justify-between p-2 bg-gray-50 rounded-md"
+                        className="p-4 bg-gray-50 rounded-md space-y-4"
                       >
-                        <div>
-                          <span className="font-medium">{code.code}</span> -{" "}
-                          {code.title}
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="font-medium">{code.code}</span> -{" "}
+                            {code.title}
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveCode(code.id)}
+                          >
+                            Remove
+                          </Button>
                         </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemoveCode(code.id)}
-                        >
-                          Remove
-                        </Button>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <label className="block text-sm font-medium">
+                              Service Start Time
+                            </label>
+                            <Input
+                              type="time"
+                              value={
+                                formData.billingCodes[index].serviceStartTime ||
+                                ""
+                              }
+                              onChange={(e) =>
+                                handleUpdateBillingCode(index, {
+                                  serviceStartTime: e.target.value || null,
+                                })
+                              }
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <label className="block text-sm font-medium">
+                              Service End Time
+                            </label>
+                            <Input
+                              type="time"
+                              value={
+                                formData.billingCodes[index].serviceEndTime ||
+                                ""
+                              }
+                              onChange={(e) =>
+                                handleUpdateBillingCode(index, {
+                                  serviceEndTime: e.target.value || null,
+                                })
+                              }
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <label className="block text-sm font-medium">
+                              Number of Units
+                            </label>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={
+                                formData.billingCodes[index].numberOfUnits || ""
+                              }
+                              onChange={(e) =>
+                                handleUpdateBillingCode(index, {
+                                  numberOfUnits: e.target.value
+                                    ? parseInt(e.target.value)
+                                    : null,
+                                })
+                              }
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <label className="block text-sm font-medium">
+                              Bilateral Indicator
+                            </label>
+                            <Select
+                              value={
+                                formData.billingCodes[index]
+                                  .bilateralIndicator || "none"
+                              }
+                              onValueChange={(value) =>
+                                handleUpdateBillingCode(index, {
+                                  bilateralIndicator:
+                                    value === "none" ? null : value,
+                                })
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select bilateral indicator" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">None</SelectItem>
+                                <SelectItem value="L">Left</SelectItem>
+                                <SelectItem value="R">Right</SelectItem>
+                                <SelectItem value="B">Both</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1065,7 +1307,7 @@ export default function CreateServiceCodePage() {
               </div>
 
               <div className="flex justify-end">
-                <Button type="submit">Create Service Codes</Button>
+                <Button type="submit">Submit</Button>
               </div>
             </CardContent>
           </Card>

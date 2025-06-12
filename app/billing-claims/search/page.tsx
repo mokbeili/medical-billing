@@ -27,7 +27,7 @@ interface BillingClaim {
   serviceCodes: {
     id: number;
     status: string;
-    code: {
+    billingCode: {
       code: string;
       title: string;
     };
@@ -187,7 +187,8 @@ export default function BillingClaimsSearchPage() {
                             key={serviceCode.id}
                             className="text-sm text-gray-900"
                           >
-                            {serviceCode.code.code} - {serviceCode.code.title} (
+                            {serviceCode.billingCode.code} -{" "}
+                            {serviceCode.billingCode.title} (
                             {serviceCode.status})
                           </p>
                         ))}
