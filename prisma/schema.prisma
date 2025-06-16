@@ -241,7 +241,6 @@ model Service {
   serviceDate          DateTime            @default(now()) @map("service_date")
   summary              String              @default("")
   serviceLocation      String              @map("service_location")
-  specialCircumstances String?             @map("special_circumstances")
   claim                BillingClaim?       @relation(fields: [claimId], references: [id], onDelete: Restrict)
   patient              Patient?            @relation(fields: [patientId], references: [id])
   physician            Physician           @relation(fields: [physicianId], references: [id])
@@ -260,15 +259,16 @@ model Service {
 }
 
 model ServiceCodes {
-  id                 Int         @id @default(autoincrement())
-  serviceId          Int         @map("service_id")
-  codeId             Int         @map("code_id")
-  serviceStartTime   DateTime?   @map("service_start_time")
-  serviceEndTime     DateTime?   @map("service_end_time")
-  bilateralIndicator String?     @map("bilateral_indicator")
-  numberOfUnits      Int?        @map("number_of_units")
-  service            Service     @relation(fields: [serviceId], references: [id])
-  billingCode        BillingCode @relation(fields: [codeId], references: [id])
+  id                   Int         @id @default(autoincrement())
+  serviceId            Int         @map("service_id")
+  codeId               Int         @map("code_id")
+  specialCircumstances String?     @map("special_circumstances")
+  service              Service     @relation(fields: [serviceId], references: [id])
+  billingCode          BillingCode @relation(fields: [codeId], references: [id])
+  numberOfUnits        Int         @map("number_of_units")
+  serviceStartTime     DateTime?   @map("service_start_time")
+  serviceEndTime       DateTime?   @map("service_end_time")
+  bilateralIndicator   String?     @map("bilateral_indicator")
 
   @@index([serviceId])
   @@index([codeId])

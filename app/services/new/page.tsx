@@ -83,7 +83,6 @@ interface Service {
   summary: string;
   serviceDate: string;
   serviceLocation: string | null;
-  specialCircumstances: string | null;
 }
 
 interface ServiceCode {
@@ -94,6 +93,7 @@ interface ServiceCode {
   serviceEndTime: string | null;
   numberOfUnits: number | null;
   bilateralIndicator: string | null;
+  specialCircumstances: string | null;
 }
 
 interface ServiceErrors {

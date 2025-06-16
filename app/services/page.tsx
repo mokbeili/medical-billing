@@ -71,9 +71,7 @@ export default function ServiceRecordsPage() {
   const { data: session, status } = useSession();
   const [services, setServices] = useState<Service[]>([]);
   const [filteredServices, setFilteredServices] = useState<Service[]>([]);
-  const [selectedServiceCodes, setSelectedServiceCodes] = useState<number[]>(
-    []
-  );
+  const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [filters, setFilters] = useState({
     patientName: "",
     billingNumber: "",
@@ -163,51 +161,42 @@ export default function ServiceRecordsPage() {
     setFilteredServices(filtered);
   }, [services, filters]);
 
-  const handleServiceCodeSelect = (serviceCodeId: number) => {
-    const service = services.find((s) =>
-      s.serviceCodes.some((c) => c.id === serviceCodeId)
-    );
-    if (!service) return;
-
-    if (selectedServiceCodes.includes(serviceCodeId)) {
-      setSelectedServiceCodes(
-        selectedServiceCodes.filter((id) => id !== serviceCodeId)
-      );
+  const handleServiceSelect = (serviceId: string) => {
+    if (selectedServices.includes(serviceId)) {
+      setSelectedServices(selectedServices.filter((id) => id !== serviceId));
     } else {
       // Check if this is the first selection
-      if (selectedServiceCodes.length === 0) {
-        setSelectedServiceCodes([serviceCodeId]);
+      if (selectedServices.length === 0) {
+        setSelectedServices([serviceId]);
       } else {
-        // Get the first selected service code to compare physician and jurisdiction
-        const firstSelected = services.find((s) =>
-          s.serviceCodes.some((c) => c.id === selectedServiceCodes[0])
+        // Get the first selected service to compare physician and jurisdiction
+        const firstSelected = services.find(
+          (s) => s.id === selectedServices[0]
         );
-        if (!firstSelected) return;
+        const currentService = services.find((s) => s.id === serviceId);
+
+        if (!firstSelected || !currentService) return;
 
         // Check if the physician and jurisdiction match
-        const firstServiceCode = firstSelected.serviceCodes.find(
-          (c) => c.id === selectedServiceCodes[0]
-        );
-        const currentServiceCode = service.serviceCodes.find(
-          (c) => c.id === serviceCodeId
-        );
+        const firstServiceCode = firstSelected.serviceCodes[0];
+        const currentServiceCode = currentService.serviceCodes[0];
 
         if (
           firstServiceCode &&
           currentServiceCode &&
           firstSelected.patient.physician?.id ===
-            service.patient.physician?.id &&
+            currentService.patient.physician?.id &&
           firstServiceCode.billingCode.section.jurisdiction_id ===
             currentServiceCode.billingCode.section.jurisdiction_id
         ) {
-          setSelectedServiceCodes([...selectedServiceCodes, serviceCodeId]);
+          setSelectedServices([...selectedServices, serviceId]);
         }
       }
     }
   };
 
   const handleCreateClaim = async () => {
-    if (selectedServiceCodes.length === 0) return;
+    if (selectedServices.length === 0) return;
 
     try {
       const response = await fetch("/api/billing-claims", {
@@ -216,7 +205,7 @@ export default function ServiceRecordsPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          serviceCodeIds: selectedServiceCodes,
+          serviceIds: selectedServices,
         }),
       });
 
@@ -229,11 +218,39 @@ export default function ServiceRecordsPage() {
           setServices(data);
           setFilteredServices(data);
         }
-        setSelectedServiceCodes([]);
+        setSelectedServices([]);
       }
     } catch (error) {
       console.error("Error creating claim:", error);
     }
+  };
+
+  const handleSelectAll = () => {
+    if (filteredServices.length === 0) return;
+
+    // If all filtered services are already selected, deselect all
+    if (
+      filteredServices.every((service) => selectedServices.includes(service.id))
+    ) {
+      setSelectedServices([]);
+      return;
+    }
+
+    // Get the first service to use as reference for validation
+    const firstService = filteredServices[0];
+    const firstServiceCode = firstService.serviceCodes[0];
+
+    // Only select services that match the first service's physician and jurisdiction
+    const validServices = filteredServices.filter((service) => {
+      const serviceCode = service.serviceCodes[0];
+      return (
+        service.patient.physician?.id === firstService.patient.physician?.id &&
+        serviceCode.billingCode.section.jurisdiction_id ===
+          firstServiceCode.billingCode.section.jurisdiction_id
+      );
+    });
+
+    setSelectedServices(validServices.map((service) => service.id));
   };
 
   if (status === "loading") {
@@ -257,9 +274,9 @@ export default function ServiceRecordsPage() {
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Services</h1>
           <div className="space-x-4">
-            {selectedServiceCodes.length > 0 && (
+            {selectedServices.length > 0 && (
               <Button onClick={handleCreateClaim}>
-                Create Claim ({selectedServiceCodes.length})
+                Create Claim ({selectedServices.length})
               </Button>
             )}
             <Link href="/services/new">
@@ -364,6 +381,22 @@ export default function ServiceRecordsPage() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={
+                            filteredServices.length > 0 &&
+                            filteredServices.every((service) =>
+                              selectedServices.includes(service.id)
+                            )
+                          }
+                          onChange={handleSelectAll}
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        />
+                        <span className="ml-2">Select</span>
+                      </div>
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Patient
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -380,6 +413,14 @@ export default function ServiceRecordsPage() {
                     return (
                       <>
                         <tr key={service.id}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <input
+                              type="checkbox"
+                              checked={selectedServices.includes(service.id)}
+                              onChange={() => handleServiceSelect(service.id)}
+                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                            />
+                          </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                             {`${service.patient.firstName} ${
                               service.patient.lastName
@@ -413,7 +454,7 @@ export default function ServiceRecordsPage() {
                         </tr>
                         {expandedServiceId === service.id && (
                           <tr>
-                            <td colSpan={3} className="bg-gray-50 px-6 py-4">
+                            <td colSpan={4} className="bg-gray-50 px-6 py-4">
                               <div className="overflow-x-auto">
                                 <table className="min-w-full divide-y divide-gray-200 border">
                                   <thead>

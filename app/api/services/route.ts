@@ -17,7 +17,6 @@ export async function POST(request: Request) {
       patientId,
       serviceDate,
       serviceLocation,
-      specialCircumstances,
       healthInstitutionId,
       referringPhysicianId,
     } = data;
@@ -34,7 +33,6 @@ export async function POST(request: Request) {
         patientId,
         serviceDate: new Date(serviceDate),
         serviceLocation,
-        specialCircumstances,
         healthInstitutionId,
         status: ClaimStatus.PENDING,
         referringPhysicianId,
