@@ -25,11 +25,11 @@ export async function GET(
       include: {
         physician: true,
         jurisdiction: true,
-        serviceCodes: {
+        services: {
           include: {
-            code: {
+            serviceCodes: {
               include: {
-                section: true,
+                billingCode: true,
               },
             },
           },
@@ -44,6 +44,60 @@ export async function GET(
     return NextResponse.json(claim);
   } catch (error) {
     console.error("Error fetching billing claim:", error);
+    return new NextResponse("Internal Server Error", { status: 500 });
+  }
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return new NextResponse("Unauthorized", { status: 401 });
+    }
+
+    // Find the claim and check if it has any PENDING services
+    const claim = await prisma.billingClaim.findUnique({
+      where: {
+        id: params.id,
+        physician: {
+          user: {
+            id: parseInt(session.user.id),
+          },
+        },
+      },
+      include: {
+        services: true,
+      },
+    });
+
+    if (!claim) {
+      return new NextResponse("Claim not found", { status: 404 });
+    }
+
+    // Check if all services are PENDING
+    const hasNonPendingServices = claim.services.some(
+      (service) => service.status !== "PENDING"
+    );
+
+    if (hasNonPendingServices) {
+      return new NextResponse("Cannot delete claim with non-PENDING services", {
+        status: 400,
+      });
+    }
+
+    // Delete the claim and its associated services
+    await prisma.billingClaim.delete({
+      where: {
+        id: params.id,
+      },
+    });
+
+    return new NextResponse(null, { status: 204 });
+  } catch (error) {
+    console.error("Error deleting billing claim:", error);
     return new NextResponse("Internal Server Error", { status: 500 });
   }
 }

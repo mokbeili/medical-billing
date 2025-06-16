@@ -23,9 +23,13 @@ export async function GET() {
       include: {
         physician: true,
         jurisdiction: true,
-        serviceCodes: {
+        services: {
           include: {
-            code: true,
+            serviceCodes: {
+              include: {
+                billingCode: true,
+              },
+            },
           },
         },
       },
