@@ -52,46 +52,52 @@ model Section {
 }
 
 model BillingCode {
-  id                    Int                    @id @default(autoincrement())
-  code                  String
-  title                 String
-  description           String?
-  section_id            Int
-  openai_embedding      String
-  created_at            DateTime               @default(now())
-  updated_at            DateTime               @updatedAt
-  code_class            String?
-  anes                  String?
-  details               String?
-  general_practice_cost String?
-  specialist_price      String?
-  referred_price        String?
-  non_referred_price    String?
-  billing_record_type   Int                    @default(50) @map("billing_record_type")
-  section               Section                @relation(fields: [section_id], references: [id])
-  serviceCodes          ServiceCodes[]
-  changeLogs            BillingCodeChangeLog[]
+  id                                           Int                    @id @default(autoincrement())
+  code                                         String
+  title                                        String
+  description                                  String?
+  section_id                                   Int
+  openai_embedding                             String
+  created_at                                   DateTime               @default(now())
+  updated_at                                   DateTime               @updatedAt
+  code_class                                   String?
+  anes                                         String?
+  details                                      String?
+  general_practice_cost                        String?
+  specialist_price                             String?
+  referred_price                               String?
+  non_referred_price                           String?
+  technical_component_price                    String?
+  interpretation_component_price               String?
+  technical_and_interpretation_component_price String?
+  billing_record_type                          Int                    @default(50) @map("billing_record_type")
+  section                                      Section                @relation(fields: [section_id], references: [id])
+  serviceCodes                                 ServiceCodes[]
+  changeLogs                                   BillingCodeChangeLog[]
 
   @@index([section_id])
   @@map("billing_codes")
 }
 
 model BillingCodeChangeLog {
-  id                    Int         @id @default(autoincrement())
-  billing_code_id       Int
-  code                  String
-  title                 String
-  description           String?
-  code_class            String?
-  anes                  String?
-  details               String?
-  general_practice_cost String?
-  specialist_price      String?
-  referred_price        String?
-  non_referred_price    String?
-  billing_record_type   Int         @default(50) @map("billing_record_type")
-  changed_at            DateTime    @default(now())
-  billing_code          BillingCode @relation(fields: [billing_code_id], references: [id])
+  id                                           Int         @id @default(autoincrement())
+  billing_code_id                              Int
+  code                                         String
+  title                                        String
+  description                                  String?
+  code_class                                   String?
+  anes                                         String?
+  details                                      String?
+  general_practice_cost                        String?
+  specialist_price                             String?
+  referred_price                               String?
+  non_referred_price                           String?
+  technical_component_price                    String?
+  interpretation_component_price               String?
+  technical_and_interpretation_component_price String?
+  billing_record_type                          Int         @default(50) @map("billing_record_type")
+  changed_at                                   DateTime    @default(now())
+  billing_code                                 BillingCode @relation(fields: [billing_code_id], references: [id])
 
   @@index([billing_code_id])
   @@map("billing_code_change_logs")

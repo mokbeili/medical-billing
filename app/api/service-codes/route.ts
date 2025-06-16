@@ -47,6 +47,7 @@ export async function POST(request: Request) {
               : null,
             bilateralIndicator: code.bilateralIndicator,
             numberOfUnits: code.numberOfUnits || 1,
+            specialCircumstances: code.specialCircumstances,
           },
           include: {
             service: true,

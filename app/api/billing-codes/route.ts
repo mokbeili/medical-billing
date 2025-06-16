@@ -132,12 +132,6 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-
-    const body = await request.json();
     const {
       code,
       title,
@@ -150,29 +144,13 @@ export async function POST(request: Request) {
       specialistPrice,
       referredPrice,
       nonReferredPrice,
+      technicalComponentPrice,
+      interpretationComponentPrice,
+      technicalAndInterpretationComponentPrice,
       billingRecordType,
-    } = body;
+    } = await request.json();
 
-    if (!code || !title || !sectionId) {
-      return new NextResponse("Missing required fields", { status: 400 });
-    }
-
-    // Check for duplicates
-    const existingCode = await prisma.billingCode.findFirst({
-      where: {
-        code,
-        title,
-        section_id: sectionId,
-      },
-    });
-
-    if (existingCode) {
-      return new NextResponse(
-        "A billing code with this code and title already exists in this section",
-        { status: 400 }
-      );
-    }
-
+    // Create the billing code
     const billingCode = await prisma.billingCode.create({
       data: {
         code,
@@ -186,7 +164,11 @@ export async function POST(request: Request) {
         specialist_price: specialistPrice,
         referred_price: referredPrice,
         non_referred_price: nonReferredPrice,
-        billing_record_type: billingRecordType || 50,
+        technical_component_price: technicalComponentPrice,
+        interpretation_component_price: interpretationComponentPrice,
+        technical_and_interpretation_component_price:
+          technicalAndInterpretationComponentPrice,
+        billing_record_type: billingRecordType,
         openai_embedding: "", // This will be updated by the background job
       },
       include: {

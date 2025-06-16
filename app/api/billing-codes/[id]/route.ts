@@ -26,6 +26,9 @@ export async function PUT(
       specialistPrice,
       referredPrice,
       nonReferredPrice,
+      technicalComponentPrice,
+      interpretationComponentPrice,
+      technicalAndInterpretationComponentPrice,
       billingRecordType,
     } = body;
 
@@ -58,6 +61,11 @@ export async function PUT(
         specialist_price: currentBillingCode.specialist_price,
         referred_price: currentBillingCode.referred_price,
         non_referred_price: currentBillingCode.non_referred_price,
+        technical_component_price: currentBillingCode.technical_component_price,
+        interpretation_component_price:
+          currentBillingCode.interpretation_component_price,
+        technical_and_interpretation_component_price:
+          currentBillingCode.technical_and_interpretation_component_price,
         billing_record_type: currentBillingCode.billing_record_type,
       },
     });
@@ -71,7 +79,11 @@ export async function PUT(
         code,
         title,
         description,
-        section_id: sectionId,
+        section: {
+          connect: {
+            id: sectionId,
+          },
+        },
         code_class: codeClass,
         anes,
         details,
@@ -79,6 +91,10 @@ export async function PUT(
         specialist_price: specialistPrice,
         referred_price: referredPrice,
         non_referred_price: nonReferredPrice,
+        technical_component_price: technicalComponentPrice,
+        interpretation_component_price: interpretationComponentPrice,
+        technical_and_interpretation_component_price:
+          technicalAndInterpretationComponentPrice,
         billing_record_type: billingRecordType,
       },
       include: {

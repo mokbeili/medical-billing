@@ -84,6 +84,10 @@ interface Service {
   summary: string;
   serviceDate: string;
   serviceLocation: string | null;
+  specialCircumstances: {
+    codeId: number;
+    value: string;
+  } | null;
 }
 
 interface ServiceCode {
@@ -148,7 +152,6 @@ export default function CreateServicePage() {
     summary: "",
     serviceDate: new Date().toISOString().split("T")[0],
     serviceLocation: null as string | null,
-    specialCircumstances: null as string | null,
     billingCodes: [] as Array<{
       codeId: number;
       status: string;
@@ -157,6 +160,7 @@ export default function CreateServicePage() {
       serviceEndTime: string | null;
       numberOfUnits: number | null;
       bilateralIndicator: string | null;
+      specialCircumstances: string | null;
     }>,
   });
 
@@ -384,6 +388,7 @@ export default function CreateServicePage() {
             serviceEndTime: null,
             numberOfUnits: null,
             bilateralIndicator: null,
+            specialCircumstances: null,
           },
         ],
       });
@@ -449,7 +454,23 @@ export default function CreateServicePage() {
       serviceDate: !formData.serviceDate,
     };
     setServiceErrors(newServiceErrors);
-    return !Object.values(newServiceErrors).some(Boolean);
+
+    // Check if any W/X codes are missing special circumstances
+    const hasWorXWithoutSpecialCircumstances = formData.billingCodes.some(
+      (code) => {
+        const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
+        return (
+          selectedCode &&
+          isWorXSection(selectedCode) &&
+          !code.specialCircumstances
+        );
+      }
+    );
+
+    return (
+      !Object.values(newServiceErrors).some(Boolean) &&
+      !hasWorXWithoutSpecialCircumstances
+    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -493,7 +514,6 @@ export default function CreateServicePage() {
         summary: formData.summary,
         serviceDate: baseDate.toISOString(),
         serviceLocation: formData.serviceLocation,
-        specialCircumstances: formData.specialCircumstances,
       };
 
       const serviceResponse = await fetch("/api/services", {
@@ -525,7 +545,10 @@ export default function CreateServicePage() {
           : null,
         numberOfUnits: code.numberOfUnits || null,
         bilateralIndicator: code.bilateralIndicator,
+        specialCircumstances: code.specialCircumstances,
       }));
+
+      console.log(serviceCodesData);
 
       const serviceCodesResponse = await fetch("/api/service-codes", {
         method: "POST",
@@ -561,6 +584,25 @@ export default function CreateServicePage() {
     if (code.billing_record_type === 57 && type57Count >= 2) return true;
     return false;
   };
+
+  const isWorXSection = (code: BillingCode) => {
+    return code.section.code === "W" || code.section.code === "X";
+  };
+
+  const isHSection = (code: BillingCode) => {
+    return code.section.code === "H";
+  };
+
+  const isWorXWithoutSpecialCircumstances = formData.billingCodes.some(
+    (code) => {
+      const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
+      return (
+        selectedCode &&
+        isWorXSection(selectedCode) &&
+        !code.specialCircumstances
+      );
+    }
+  );
 
   const getCodeStatusColor = (code: BillingCode) => {
     const type50Count = selectedCodes.filter(
@@ -1064,86 +1106,6 @@ export default function CreateServicePage() {
               </div>
 
               <div className="space-y-2">
-                <label className="block text-sm font-medium">
-                  Special Circumstances
-                </label>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant={
-                      formData.specialCircumstances === "TF"
-                        ? "default"
-                        : "outline"
-                    }
-                    onClick={() =>
-                      setFormData({
-                        ...formData,
-                        specialCircumstances:
-                          formData.specialCircumstances === "TF" ? null : "TF",
-                      })
-                    }
-                    className="flex-1"
-                  >
-                    TF
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={
-                      formData.specialCircumstances === "PF"
-                        ? "default"
-                        : "outline"
-                    }
-                    onClick={() =>
-                      setFormData({
-                        ...formData,
-                        specialCircumstances:
-                          formData.specialCircumstances === "PF" ? null : "PF",
-                      })
-                    }
-                    className="flex-1"
-                  >
-                    PF
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={
-                      formData.specialCircumstances === "CF"
-                        ? "default"
-                        : "outline"
-                    }
-                    onClick={() =>
-                      setFormData({
-                        ...formData,
-                        specialCircumstances:
-                          formData.specialCircumstances === "CF" ? null : "CF",
-                      })
-                    }
-                    className="flex-1"
-                  >
-                    CF
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={
-                      formData.specialCircumstances === "TA"
-                        ? "default"
-                        : "outline"
-                    }
-                    onClick={() =>
-                      setFormData({
-                        ...formData,
-                        specialCircumstances:
-                          formData.specialCircumstances === "TA" ? null : "TA",
-                      })
-                    }
-                    className="flex-1"
-                  >
-                    TA
-                  </Button>
-                </div>
-              </div>
-
-              <div className="space-y-2">
                 <label className="block text-sm font-medium">ICD Code</label>
                 <div className="relative">
                   <Input
@@ -1355,6 +1317,106 @@ export default function CreateServicePage() {
                               </SelectContent>
                             </Select>
                           </div>
+
+                          {isWorXSection(code) && (
+                            <div className="col-span-2 space-y-2">
+                              <label className="block text-sm font-medium">
+                                Special Circumstances{" "}
+                                <span className="text-red-500">*</span>
+                              </label>
+                              <div className="flex gap-2">
+                                <Button
+                                  type="button"
+                                  variant={
+                                    formData.billingCodes[index]
+                                      .specialCircumstances === "TF"
+                                      ? "default"
+                                      : "outline"
+                                  }
+                                  onClick={() =>
+                                    handleUpdateBillingCode(index, {
+                                      specialCircumstances: "TF",
+                                    })
+                                  }
+                                  className="flex-1"
+                                >
+                                  Technical
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant={
+                                    formData.billingCodes[index]
+                                      .specialCircumstances === "PF"
+                                      ? "default"
+                                      : "outline"
+                                  }
+                                  onClick={() =>
+                                    handleUpdateBillingCode(index, {
+                                      specialCircumstances: "PF",
+                                    })
+                                  }
+                                  className="flex-1"
+                                >
+                                  Interpretation
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant={
+                                    formData.billingCodes[index]
+                                      .specialCircumstances === "CF"
+                                      ? "default"
+                                      : "outline"
+                                  }
+                                  onClick={() =>
+                                    handleUpdateBillingCode(index, {
+                                      specialCircumstances: "CF",
+                                    })
+                                  }
+                                  className="flex-1"
+                                >
+                                  Both
+                                </Button>
+                              </div>
+                              {serviceErrors.billingCodes &&
+                                !formData.billingCodes[index]
+                                  .specialCircumstances && (
+                                  <p className="text-sm text-red-500">
+                                    Please select a special circumstance
+                                  </p>
+                                )}
+                            </div>
+                          )}
+
+                          {isHSection(code) && (
+                            <div className="col-span-2 space-y-2">
+                              <label className="block text-sm font-medium">
+                                Special Circumstances
+                              </label>
+                              <div className="flex gap-2">
+                                <Button
+                                  type="button"
+                                  variant={
+                                    formData.billingCodes[index]
+                                      .specialCircumstances === "TA"
+                                      ? "default"
+                                      : "outline"
+                                  }
+                                  onClick={() =>
+                                    handleUpdateBillingCode(index, {
+                                      specialCircumstances:
+                                        formData.billingCodes[index]
+                                          .specialCircumstances === "TA"
+                                          ? null
+                                          : "TA",
+                                    })
+                                  }
+                                  className="flex-1"
+                                >
+                                  Takeover
+                                </Button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}

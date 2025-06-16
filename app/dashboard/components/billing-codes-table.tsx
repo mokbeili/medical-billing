@@ -34,6 +34,9 @@ interface BillingCode {
   specialist_price: string | null;
   referred_price: string | null;
   non_referred_price: string | null;
+  technical_component_price: string | null;
+  interpretation_component_price: string | null;
+  technical_and_interpretation_component_price: string | null;
   billing_record_type: number;
   section: {
     id: number;
@@ -61,6 +64,9 @@ interface BillingCodeChangeLog {
   specialist_price: string | null;
   referred_price: string | null;
   non_referred_price: string | null;
+  technical_component_price: string | null;
+  interpretation_component_price: string | null;
+  technical_and_interpretation_component_price: string | null;
   changed_at: string;
 }
 
@@ -98,6 +104,9 @@ interface BillingCodeFormProps {
     specialistPrice: string;
     referredPrice: string;
     nonReferredPrice: string;
+    technicalComponentPrice: string;
+    interpretationComponentPrice: string;
+    technicalAndInterpretationComponentPrice: string;
     billingRecordType: number;
   };
   onSubmit: (data: any) => Promise<void>;
@@ -125,6 +134,9 @@ function BillingCodeForm({
       specialistPrice: "",
       referredPrice: "",
       nonReferredPrice: "",
+      technicalComponentPrice: "",
+      interpretationComponentPrice: "",
+      technicalAndInterpretationComponentPrice: "",
       billingRecordType: 50,
     }
   );
@@ -358,16 +370,57 @@ function BillingCodeForm({
         </div>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="billingRecordType">Billing Record Type</Label>
-        <Input
-          id="billingRecordType"
-          name="billingRecordType"
-          type="number"
-          value={formData.billingRecordType}
-          onChange={handleFormChange}
-          placeholder="Enter billing record type"
-        />
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="technicalComponentPrice">
+            Technical Component Price
+          </Label>
+          <Input
+            id="technicalComponentPrice"
+            name="technicalComponentPrice"
+            value={formData.technicalComponentPrice}
+            onChange={handleFormChange}
+            placeholder="Enter technical component price"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="interpretationComponentPrice">
+            Interpretation Component Price
+          </Label>
+          <Input
+            id="interpretationComponentPrice"
+            name="interpretationComponentPrice"
+            value={formData.interpretationComponentPrice}
+            onChange={handleFormChange}
+            placeholder="Enter interpretation component price"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="technicalAndInterpretationComponentPrice">
+            Technical & Interpretation Price
+          </Label>
+          <Input
+            id="technicalAndInterpretationComponentPrice"
+            name="technicalAndInterpretationComponentPrice"
+            value={formData.technicalAndInterpretationComponentPrice}
+            onChange={handleFormChange}
+            placeholder="Enter technical & interpretation price"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="billingRecordType">Billing Record Type</Label>
+          <Input
+            id="billingRecordType"
+            name="billingRecordType"
+            type="number"
+            value={formData.billingRecordType}
+            onChange={handleFormChange}
+            placeholder="Enter billing record type"
+          />
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -489,6 +542,11 @@ export function BillingCodesTable() {
           specialistPrice: formData.specialistPrice || null,
           referredPrice: formData.referredPrice || null,
           nonReferredPrice: formData.nonReferredPrice || null,
+          technicalComponentPrice: formData.technicalComponentPrice || null,
+          interpretationComponentPrice:
+            formData.interpretationComponentPrice || null,
+          technicalAndInterpretationComponentPrice:
+            formData.technicalAndInterpretationComponentPrice || null,
         }),
       });
 
@@ -536,6 +594,11 @@ export function BillingCodesTable() {
           specialistPrice: formData.specialistPrice || null,
           referredPrice: formData.referredPrice || null,
           nonReferredPrice: formData.nonReferredPrice || null,
+          technicalComponentPrice: formData.technicalComponentPrice || null,
+          interpretationComponentPrice:
+            formData.interpretationComponentPrice || null,
+          technicalAndInterpretationComponentPrice:
+            formData.technicalAndInterpretationComponentPrice || null,
         }),
       });
 
@@ -662,6 +725,15 @@ export function BillingCodesTable() {
                         nonReferredPrice:
                           billingCodes.find((code) => code.id === editingId)!
                             .non_referred_price || "",
+                        technicalComponentPrice:
+                          billingCodes.find((code) => code.id === editingId)!
+                            .technical_component_price || "",
+                        interpretationComponentPrice:
+                          billingCodes.find((code) => code.id === editingId)!
+                            .interpretation_component_price || "",
+                        technicalAndInterpretationComponentPrice:
+                          billingCodes.find((code) => code.id === editingId)!
+                            .technical_and_interpretation_component_price || "",
                         billingRecordType:
                           billingCodes.find((code) => code.id === editingId)!
                             .billing_record_type || 50,
@@ -815,6 +887,23 @@ export function BillingCodesTable() {
                         )}
                         {log.non_referred_price && (
                           <div>Non-referred: {log.non_referred_price}</div>
+                        )}
+                        {log.technical_component_price && (
+                          <div>
+                            Technical Component: {log.technical_component_price}
+                          </div>
+                        )}
+                        {log.interpretation_component_price && (
+                          <div>
+                            Interpretation Component:{" "}
+                            {log.interpretation_component_price}
+                          </div>
+                        )}
+                        {log.technical_and_interpretation_component_price && (
+                          <div>
+                            Technical & Interpretation:{" "}
+                            {log.technical_and_interpretation_component_price}
+                          </div>
                         )}
                       </div>
                     </TableCell>
