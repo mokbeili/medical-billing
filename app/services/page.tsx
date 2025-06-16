@@ -18,6 +18,8 @@ import Layout from "../components/layout/Layout";
 
 interface Service {
   id: string;
+  serviceDate: string;
+  claimId: string | null;
   patient: {
     firstName: string;
     lastName: string;
@@ -44,7 +46,8 @@ interface Service {
   serviceCodes: {
     id: number;
     status: ClaimStatus;
-    serviceDate: string;
+    specialCircumstances: string | null;
+    bilateralIndicator: string | null;
     serviceStartTime: string | null;
     serviceEndTime: string | null;
     summary: string;
@@ -59,10 +62,6 @@ interface Service {
         jurisdiction_id: string;
       };
     };
-    claim: {
-      id: string;
-      friendlyId: string;
-    } | null;
   }[];
 }
 
@@ -79,6 +78,7 @@ export default function ServiceRecordsPage() {
     serviceDate: "",
     code: "",
     section: "",
+    includeClaimed: false,
   });
   const [expandedServiceId, setExpandedServiceId] = useState<string | null>(
     null
@@ -106,6 +106,11 @@ export default function ServiceRecordsPage() {
   useEffect(() => {
     let filtered = [...services];
 
+    // Filter out services with claims by default unless includeClaimed is true
+    if (!filters.includeClaimed) {
+      filtered = filtered.filter((service) => service.claimId === null);
+    }
+
     if (filters.status && filters.status !== "ALL") {
       filtered = filtered.filter((service) =>
         service.serviceCodes.some((code) => code.status === filters.status)
@@ -130,11 +135,10 @@ export default function ServiceRecordsPage() {
 
     if (filters.serviceDate) {
       const searchTerm = filters.serviceDate.toLowerCase();
-      filtered = filtered.filter((service) =>
-        service.serviceCodes.some(
-          (code) =>
-            new Date(code.serviceDate).toISOString().slice(0, 16) === searchTerm
-        )
+      filtered = filtered.filter(
+        (service) =>
+          new Date(service.serviceDate).toISOString().slice(0, 16) ===
+          searchTerm
       );
     }
 
@@ -310,6 +314,25 @@ export default function ServiceRecordsPage() {
             </div>
 
             <div className="space-y-2">
+              <label className="block text-sm font-medium">
+                Include Services with Claims
+              </label>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  checked={filters.includeClaimed}
+                  onChange={(e) =>
+                    setFilters({ ...filters, includeClaimed: e.target.checked })
+                  }
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <span className="text-sm text-gray-500">
+                  Show services with claims
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
               <label className="block text-sm font-medium">Patient Name</label>
               <Input
                 placeholder="Search by patient name"
@@ -419,6 +442,7 @@ export default function ServiceRecordsPage() {
                               checked={selectedServices.includes(service.id)}
                               onChange={() => handleServiceSelect(service.id)}
                               className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                              disabled={service.claimId !== null}
                             />
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
@@ -469,7 +493,6 @@ export default function ServiceRecordsPage() {
                                   </thead>
                                   <tbody>
                                     {service.serviceCodes.map((serviceCode) => {
-                                      const claim = serviceCode.claim;
                                       return (
                                         <tr key={serviceCode.id}>
                                           <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
