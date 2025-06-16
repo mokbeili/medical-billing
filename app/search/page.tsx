@@ -20,6 +20,7 @@ interface SearchResult {
   similarity?: number;
   displayCode: string;
   searchType?: string;
+  billing_record_type: number;
 }
 
 interface SearchResponse {

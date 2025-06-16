@@ -137,6 +137,7 @@ export async function GET(request: Request) {
         code: true,
         title: true,
         description: true,
+        billing_record_type: true,
         section: {
           select: {
             code: true,
@@ -164,6 +165,7 @@ export async function GET(request: Request) {
           code: true,
           title: true,
           description: true,
+          billing_record_type: true,
           section: {
             select: {
               code: true,
@@ -187,6 +189,7 @@ export async function GET(request: Request) {
           code: true,
           title: true,
           description: true,
+          billing_record_type: true,
           section: {
             select: {
               code: true,
@@ -224,6 +227,7 @@ export async function GET(request: Request) {
           code: true,
           title: true,
           description: true,
+          billing_record_type: true,
           section: {
             select: {
               code: true,

@@ -42,6 +42,7 @@ interface BillingCode {
   code: string;
   title: string;
   description: string | null;
+  billing_record_type: number;
   section: {
     code: string;
     title: string;
@@ -151,6 +152,7 @@ export default function CreateServicePage() {
     billingCodes: [] as Array<{
       codeId: number;
       status: string;
+      billing_record_type: number;
       serviceStartTime: string | null;
       serviceEndTime: string | null;
       numberOfUnits: number | null;
@@ -377,6 +379,7 @@ export default function CreateServicePage() {
           {
             codeId: code.id,
             status: "PENDING",
+            billing_record_type: code.billing_record_type,
             serviceStartTime: null,
             serviceEndTime: null,
             numberOfUnits: null,
@@ -541,6 +544,60 @@ export default function CreateServicePage() {
     } catch (error) {
       console.error("Error creating service and service codes:", error);
     }
+  };
+
+  const isCodeDisabled = (code: BillingCode) => {
+    console.log(code);
+    console.log(selectedCodes.map((c) => c.billing_record_type));
+    const type50Count = selectedCodes.filter(
+      (c) => c.billing_record_type === 50
+    ).length;
+    const type57Count = selectedCodes.filter(
+      (c) => c.billing_record_type === 57
+    ).length;
+    console.log(type50Count, type57Count);
+
+    if (code.billing_record_type === 50 && type50Count >= 6) return true;
+    if (code.billing_record_type === 57 && type57Count >= 2) return true;
+    return false;
+  };
+
+  const getCodeStatusColor = (code: BillingCode) => {
+    const type50Count = selectedCodes.filter(
+      (c) => c.billing_record_type === 50
+    ).length;
+    const type57Count = selectedCodes.filter(
+      (c) => c.billing_record_type === 57
+    ).length;
+
+    if (code.billing_record_type === 50) {
+      if (type50Count >= 6) return "text-red-500";
+      if (type50Count >= 4) return "text-yellow-500";
+      return "text-green-500";
+    }
+    if (code.billing_record_type === 57) {
+      if (type57Count >= 2) return "text-red-500";
+      if (type57Count >= 1) return "text-yellow-500";
+      return "text-green-500";
+    }
+    return "";
+  };
+
+  const getCodeStatusText = (code: BillingCode) => {
+    const type50Count = selectedCodes.filter(
+      (c) => c.billing_record_type === 50
+    ).length;
+    const type57Count = selectedCodes.filter(
+      (c) => c.billing_record_type === 57
+    ).length;
+
+    if (code.billing_record_type === 50 && type50Count >= 6) {
+      return "Maximum of 6 type 50 codes reached";
+    }
+    if (code.billing_record_type === 57 && type57Count >= 2) {
+      return "Maximum of 2 type 57 codes reached";
+    }
+    return "";
   };
 
   if (status === "loading") {
@@ -1161,14 +1218,25 @@ export default function CreateServicePage() {
                       {searchResults.map((code) => (
                         <div
                           key={code.id}
-                          className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                          onClick={() => handleAddCode(code)}
+                          className={`px-4 py-2 hover:bg-gray-100 cursor-pointer ${
+                            isCodeDisabled(code)
+                              ? "opacity-50 cursor-not-allowed"
+                              : ""
+                          }`}
+                          onClick={() =>
+                            !isCodeDisabled(code) && handleAddCode(code)
+                          }
                         >
                           <div className="font-medium">
                             {code.code} ({code.section.title})
                           </div>
                           <div className="text-sm text-gray-600">
                             {code.title}
+                          </div>
+                          <div
+                            className={`text-sm ${getCodeStatusColor(code)}`}
+                          >
+                            {getCodeStatusText(code)}
                           </div>
                         </div>
                       ))}

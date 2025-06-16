@@ -29,13 +29,33 @@ export async function POST(request: Request) {
     // Create the service
     const service = await prisma.service.create({
       data: {
-        physicianId,
-        patientId,
+        physician: {
+          connect: {
+            id: physicianId,
+          },
+        },
+        patient: {
+          connect: {
+            id: patientId,
+          },
+        },
         serviceDate: new Date(serviceDate),
         serviceLocation,
-        healthInstitutionId,
+        healthInstitution: healthInstitutionId
+          ? {
+              connect: {
+                id: healthInstitutionId,
+              },
+            }
+          : undefined,
         status: ClaimStatus.PENDING,
-        referringPhysicianId,
+        referringPhysician: referringPhysicianId
+          ? {
+              connect: {
+                id: referringPhysicianId,
+              },
+            }
+          : undefined,
       },
       include: {
         patient: true,
