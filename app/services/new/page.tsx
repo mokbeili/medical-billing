@@ -42,6 +42,18 @@ interface BillingCode {
   code: string;
   title: string;
   description: string | null;
+  low_fee: number;
+  high_fee: number;
+  service_class: string | null;
+  add_on_indicator: string | null;
+  multiple_unit_indicator: string | null;
+  fee_determinant: string;
+  anaesthesia_indicator: string | null;
+  submit_at_100_percent: string | null;
+  referring_practitioner_required: string | null;
+  start_time_required: string | null;
+  stop_time_required: string | null;
+  technical_fee: number | null;
   billing_record_type: number;
   section: {
     code: string;
@@ -978,68 +990,60 @@ export default function CreateServicePage() {
                   <Input
                     type="date"
                     value={formData.serviceDate}
-                    onChange={(e) =>
-                      setFormData({ ...formData, serviceDate: e.target.value })
-                    }
+                    onChange={(e) => {
+                      const selectedDate = new Date(e.target.value);
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      if (selectedDate <= today) {
+                        setFormData({
+                          ...formData,
+                          serviceDate: e.target.value,
+                        });
+                      }
+                    }}
                     className={
                       serviceErrors.serviceDate ? "border-red-500" : ""
                     }
+                    max={new Date().toISOString().split("T")[0]}
                   />
                   <Button
                     type="button"
                     variant="outline"
                     onClick={() => {
-                      const date = new Date();
-                      date.setDate(date.getDate() - 1);
-                      setFormData({
-                        ...formData,
-                        serviceDate: date.toISOString().split("T")[0],
-                      });
+                      const currentDate = new Date(formData.serviceDate);
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+
+                      if (currentDate < today) {
+                        currentDate.setDate(currentDate.getDate() + 1);
+                        setFormData({
+                          ...formData,
+                          serviceDate: currentDate.toISOString().split("T")[0],
+                        });
+                      }
                     }}
+                    disabled={
+                      new Date(formData.serviceDate)
+                        .toISOString()
+                        .split("T")[0] ===
+                      new Date().toISOString().split("T")[0]
+                    }
                   >
-                    -1
+                    ↑
                   </Button>
                   <Button
                     type="button"
                     variant="outline"
                     onClick={() => {
-                      const date = new Date();
-                      date.setDate(date.getDate() - 2);
+                      const currentDate = new Date(formData.serviceDate);
+                      currentDate.setDate(currentDate.getDate() - 1);
                       setFormData({
                         ...formData,
-                        serviceDate: date.toISOString().split("T")[0],
+                        serviceDate: currentDate.toISOString().split("T")[0],
                       });
                     }}
                   >
-                    -2
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      const date = new Date();
-                      date.setDate(date.getDate() - 3);
-                      setFormData({
-                        ...formData,
-                        serviceDate: date.toISOString().split("T")[0],
-                      });
-                    }}
-                  >
-                    -3
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      const date = new Date();
-                      date.setDate(date.getDate() - 4);
-                      setFormData({
-                        ...formData,
-                        serviceDate: date.toISOString().split("T")[0],
-                      });
-                    }}
-                  >
-                    -4
+                    ↓
                   </Button>
                 </div>
                 {serviceErrors.serviceDate && (

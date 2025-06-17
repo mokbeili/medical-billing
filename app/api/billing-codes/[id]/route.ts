@@ -13,39 +13,37 @@ export async function PUT(
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    const body = await request.json();
-    const {
-      code,
-      title,
-      description,
-      sectionId,
-      codeClass,
-      anes,
-      details,
-      generalPracticeCost,
-      specialistPrice,
-      referredPrice,
-      nonReferredPrice,
-      technicalComponentPrice,
-      interpretationComponentPrice,
-      technicalAndInterpretationComponentPrice,
-      billingRecordType,
-    } = body;
-
-    if (!code || !title || !sectionId) {
-      return new NextResponse("Missing required fields", { status: 400 });
-    }
-
-    // Get the current billing code before updating
+    const data = await request.json();
     const currentBillingCode = await prisma.billingCode.findUnique({
-      where: {
-        id: parseInt(params.id),
-      },
+      where: { id: parseInt(params.id) },
     });
 
     if (!currentBillingCode) {
       return new NextResponse("Billing code not found", { status: 404 });
     }
+
+    const updatedBillingCode = await prisma.billingCode.update({
+      where: { id: parseInt(params.id) },
+      data: {
+        code: data.code,
+        title: data.title,
+        description: data.description,
+        section_id: parseInt(data.sectionId),
+        low_fee: data.low_fee,
+        high_fee: data.high_fee,
+        service_class: data.service_class,
+        add_on_indicator: data.add_on_indicator,
+        multiple_unit_indicator: data.multiple_unit_indicator,
+        fee_determinant: data.fee_determinant,
+        anaesthesia_indicator: data.anaesthesia_indicator,
+        submit_at_100_percent: data.submit_at_100_percent,
+        referring_practitioner_required: data.referring_practitioner_required,
+        start_time_required: data.start_time_required,
+        stop_time_required: data.stop_time_required,
+        technical_fee: data.technical_fee,
+        billing_record_type: data.billingRecordType,
+      },
+    });
 
     // Create a change log entry
     await prisma.billingCodeChangeLog.create({
@@ -54,66 +52,27 @@ export async function PUT(
         code: currentBillingCode.code,
         title: currentBillingCode.title,
         description: currentBillingCode.description,
-        code_class: currentBillingCode.code_class,
-        anes: currentBillingCode.anes,
-        details: currentBillingCode.details,
-        general_practice_cost: currentBillingCode.general_practice_cost,
-        specialist_price: currentBillingCode.specialist_price,
-        referred_price: currentBillingCode.referred_price,
-        non_referred_price: currentBillingCode.non_referred_price,
-        technical_component_price: currentBillingCode.technical_component_price,
-        interpretation_component_price:
-          currentBillingCode.interpretation_component_price,
-        technical_and_interpretation_component_price:
-          currentBillingCode.technical_and_interpretation_component_price,
+        low_fee: currentBillingCode.low_fee,
+        high_fee: currentBillingCode.high_fee,
+        service_class: currentBillingCode.service_class,
+        add_on_indicator: currentBillingCode.add_on_indicator,
+        multiple_unit_indicator: currentBillingCode.multiple_unit_indicator,
+        fee_determinant: currentBillingCode.fee_determinant,
+        anaesthesia_indicator: currentBillingCode.anaesthesia_indicator,
+        submit_at_100_percent: currentBillingCode.submit_at_100_percent,
+        referring_practitioner_required:
+          currentBillingCode.referring_practitioner_required,
+        start_time_required: currentBillingCode.start_time_required,
+        stop_time_required: currentBillingCode.stop_time_required,
+        technical_fee: currentBillingCode.technical_fee,
         billing_record_type: currentBillingCode.billing_record_type,
       },
     });
 
-    // Update the billing code
-    const billingCode = await prisma.billingCode.update({
-      where: {
-        id: parseInt(params.id),
-      },
-      data: {
-        code,
-        title,
-        description,
-        section: {
-          connect: {
-            id: sectionId,
-          },
-        },
-        code_class: codeClass,
-        anes,
-        details,
-        general_practice_cost: generalPracticeCost,
-        specialist_price: specialistPrice,
-        referred_price: referredPrice,
-        non_referred_price: nonReferredPrice,
-        technical_component_price: technicalComponentPrice,
-        interpretation_component_price: interpretationComponentPrice,
-        technical_and_interpretation_component_price:
-          technicalAndInterpretationComponentPrice,
-        billing_record_type: billingRecordType,
-      },
-      include: {
-        section: {
-          include: {
-            jurisdiction: {
-              include: {
-                provider: true,
-              },
-            },
-          },
-        },
-      },
-    });
-
-    return NextResponse.json(billingCode);
+    return NextResponse.json(updatedBillingCode);
   } catch (error) {
     console.error("Error updating billing code:", error);
-    return new NextResponse("Internal Server Error", { status: 500 });
+    return new NextResponse("Error updating billing code", { status: 500 });
   }
 }
 

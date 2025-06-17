@@ -27,16 +27,18 @@ interface BillingCode {
   code: string;
   title: string;
   description: string | null;
-  code_class: string | null;
-  anes: string | null;
-  details: string | null;
-  general_practice_cost: string | null;
-  specialist_price: string | null;
-  referred_price: string | null;
-  non_referred_price: string | null;
-  technical_component_price: string | null;
-  interpretation_component_price: string | null;
-  technical_and_interpretation_component_price: string | null;
+  low_fee: number;
+  high_fee: number;
+  service_class: string | null;
+  add_on_indicator: string | null;
+  multiple_unit_indicator: string | null;
+  fee_determinant: string;
+  anaesthesia_indicator: string | null;
+  submit_at_100_percent: string | null;
+  referring_practitioner_required: string | null;
+  start_time_required: string | null;
+  stop_time_required: string | null;
+  technical_fee: number | null;
   billing_record_type: number;
   section: {
     id: number;
@@ -57,16 +59,18 @@ interface BillingCodeChangeLog {
   code: string;
   title: string;
   description: string | null;
-  code_class: string | null;
-  anes: string | null;
-  details: string | null;
-  general_practice_cost: string | null;
-  specialist_price: string | null;
-  referred_price: string | null;
-  non_referred_price: string | null;
-  technical_component_price: string | null;
-  interpretation_component_price: string | null;
-  technical_and_interpretation_component_price: string | null;
+  low_fee: number;
+  high_fee: number;
+  service_class: string | null;
+  add_on_indicator: string | null;
+  multiple_unit_indicator: string | null;
+  fee_determinant: string;
+  anaesthesia_indicator: string | null;
+  submit_at_100_percent: string | null;
+  referring_practitioner_required: string | null;
+  start_time_required: string | null;
+  stop_time_required: string | null;
+  technical_fee: number | null;
   changed_at: string;
 }
 
@@ -97,16 +101,18 @@ interface BillingCodeFormProps {
     description: string;
     sectionId: string;
     section: Section | null;
-    codeClass: string;
-    anes: string;
-    details: string;
-    generalPracticeCost: string;
-    specialistPrice: string;
-    referredPrice: string;
-    nonReferredPrice: string;
-    technicalComponentPrice: string;
-    interpretationComponentPrice: string;
-    technicalAndInterpretationComponentPrice: string;
+    low_fee: number;
+    high_fee: number;
+    service_class: string;
+    add_on_indicator: string;
+    multiple_unit_indicator: string;
+    fee_determinant: string;
+    anaesthesia_indicator: string;
+    submit_at_100_percent: string;
+    referring_practitioner_required: string;
+    start_time_required: string;
+    stop_time_required: string;
+    technical_fee: number;
     billingRecordType: number;
   };
   onSubmit: (data: any) => Promise<void>;
@@ -120,26 +126,27 @@ function BillingCodeForm({
   onCancel,
   error,
 }: BillingCodeFormProps) {
-  const [formData, setFormData] = useState(
-    initialData || {
-      code: "",
-      title: "",
-      description: "",
-      sectionId: "",
-      section: null,
-      codeClass: "",
-      anes: "",
-      details: "",
-      generalPracticeCost: "",
-      specialistPrice: "",
-      referredPrice: "",
-      nonReferredPrice: "",
-      technicalComponentPrice: "",
-      interpretationComponentPrice: "",
-      technicalAndInterpretationComponentPrice: "",
-      billingRecordType: 50,
-    }
-  );
+  const [formData, setFormData] = useState({
+    code: initialData?.code || "",
+    title: initialData?.title || "",
+    description: initialData?.description || "",
+    sectionId: initialData?.sectionId || "",
+    section: initialData?.section || null,
+    low_fee: initialData?.low_fee || 0,
+    high_fee: initialData?.high_fee || 0,
+    service_class: initialData?.service_class || "",
+    add_on_indicator: initialData?.add_on_indicator || "",
+    multiple_unit_indicator: initialData?.multiple_unit_indicator || "",
+    fee_determinant: initialData?.fee_determinant || "",
+    anaesthesia_indicator: initialData?.anaesthesia_indicator || "",
+    submit_at_100_percent: initialData?.submit_at_100_percent || "",
+    referring_practitioner_required:
+      initialData?.referring_practitioner_required || "",
+    start_time_required: initialData?.start_time_required || "",
+    stop_time_required: initialData?.stop_time_required || "",
+    technical_fee: initialData?.technical_fee || 0,
+    billingRecordType: initialData?.billingRecordType || 50,
+  });
   const [sectionSearchQuery, setSectionSearchQuery] = useState("");
   const [sectionSearchResults, setSectionSearchResults] = useState<Section[]>(
     []
@@ -272,20 +279,20 @@ function BillingCodeForm({
           <Label htmlFor="code">Code</Label>
           <Input
             id="code"
-            name="code"
             value={formData.code}
-            onChange={handleFormChange}
-            placeholder="Enter billing code"
+            onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+            required
           />
         </div>
         <div className="space-y-2">
           <Label htmlFor="title">Title</Label>
           <Input
             id="title"
-            name="title"
             value={formData.title}
-            onChange={handleFormChange}
-            placeholder="Enter title"
+            onChange={(e) =>
+              setFormData({ ...formData, title: e.target.value })
+            }
+            required
           />
         </div>
       </div>
@@ -294,143 +301,179 @@ function BillingCodeForm({
         <Label htmlFor="description">Description</Label>
         <Textarea
           id="description"
-          name="description"
           value={formData.description}
-          onChange={handleFormChange}
-          placeholder="Enter description"
+          onChange={(e) =>
+            setFormData({ ...formData, description: e.target.value })
+          }
         />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="specialistPrice">Specialist Price</Label>
+          <Label htmlFor="low_fee">Low Fee</Label>
           <Input
-            id="specialistPrice"
-            name="specialistPrice"
-            value={formData.specialistPrice}
-            onChange={handleFormChange}
-            placeholder="Enter specialist price"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="generalPracticeCost">General Practice Cost</Label>
-          <Input
-            id="generalPracticeCost"
-            name="generalPracticeCost"
-            value={formData.generalPracticeCost}
-            onChange={handleFormChange}
-            placeholder="Enter general practice cost"
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="referredPrice">Referred Price</Label>
-          <Input
-            id="referredPrice"
-            name="referredPrice"
-            value={formData.referredPrice}
-            onChange={handleFormChange}
-            placeholder="Enter referred price"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="nonReferredPrice">Non-Referred Price</Label>
-          <Input
-            id="nonReferredPrice"
-            name="nonReferredPrice"
-            value={formData.nonReferredPrice}
-            onChange={handleFormChange}
-            placeholder="Enter non-referred price"
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="codeClass">Code Class</Label>
-          <Input
-            id="codeClass"
-            name="codeClass"
-            value={formData.codeClass}
-            onChange={handleFormChange}
-            placeholder="Enter code class"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="anes">Anesthesia</Label>
-          <Input
-            id="anes"
-            name="anes"
-            value={formData.anes}
-            onChange={handleFormChange}
-            placeholder="Enter anesthesia details"
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="technicalComponentPrice">
-            Technical Component Price
-          </Label>
-          <Input
-            id="technicalComponentPrice"
-            name="technicalComponentPrice"
-            value={formData.technicalComponentPrice}
-            onChange={handleFormChange}
-            placeholder="Enter technical component price"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="interpretationComponentPrice">
-            Interpretation Component Price
-          </Label>
-          <Input
-            id="interpretationComponentPrice"
-            name="interpretationComponentPrice"
-            value={formData.interpretationComponentPrice}
-            onChange={handleFormChange}
-            placeholder="Enter interpretation component price"
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="technicalAndInterpretationComponentPrice">
-            Technical & Interpretation Price
-          </Label>
-          <Input
-            id="technicalAndInterpretationComponentPrice"
-            name="technicalAndInterpretationComponentPrice"
-            value={formData.technicalAndInterpretationComponentPrice}
-            onChange={handleFormChange}
-            placeholder="Enter technical & interpretation price"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="billingRecordType">Billing Record Type</Label>
-          <Input
-            id="billingRecordType"
-            name="billingRecordType"
+            id="low_fee"
             type="number"
-            value={formData.billingRecordType}
-            onChange={handleFormChange}
-            placeholder="Enter billing record type"
+            step="0.01"
+            value={formData.low_fee}
+            onChange={(e) =>
+              setFormData({ ...formData, low_fee: parseFloat(e.target.value) })
+            }
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="high_fee">High Fee</Label>
+          <Input
+            id="high_fee"
+            type="number"
+            step="0.01"
+            value={formData.high_fee}
+            onChange={(e) =>
+              setFormData({ ...formData, high_fee: parseFloat(e.target.value) })
+            }
+            required
           />
         </div>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="details">Details</Label>
-        <Textarea
-          id="details"
-          name="details"
-          value={formData.details}
-          onChange={handleFormChange}
-          placeholder="Enter additional details"
+        <Label htmlFor="service_class">Service Class</Label>
+        <Input
+          id="service_class"
+          value={formData.service_class}
+          onChange={(e) =>
+            setFormData({ ...formData, service_class: e.target.value })
+          }
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="add_on_indicator">Add-on Indicator</Label>
+        <Input
+          id="add_on_indicator"
+          value={formData.add_on_indicator}
+          onChange={(e) =>
+            setFormData({ ...formData, add_on_indicator: e.target.value })
+          }
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="multiple_unit_indicator">Multiple Unit Indicator</Label>
+        <Input
+          id="multiple_unit_indicator"
+          value={formData.multiple_unit_indicator}
+          onChange={(e) =>
+            setFormData({
+              ...formData,
+              multiple_unit_indicator: e.target.value,
+            })
+          }
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="fee_determinant">Fee Determinant</Label>
+        <Input
+          id="fee_determinant"
+          value={formData.fee_determinant}
+          onChange={(e) =>
+            setFormData({ ...formData, fee_determinant: e.target.value })
+          }
+          required
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="anaesthesia_indicator">Anaesthesia Indicator</Label>
+        <Input
+          id="anaesthesia_indicator"
+          value={formData.anaesthesia_indicator}
+          onChange={(e) =>
+            setFormData({ ...formData, anaesthesia_indicator: e.target.value })
+          }
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="submit_at_100_percent">Submit at 100%</Label>
+        <Input
+          id="submit_at_100_percent"
+          value={formData.submit_at_100_percent}
+          onChange={(e) =>
+            setFormData({ ...formData, submit_at_100_percent: e.target.value })
+          }
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="referring_practitioner_required">
+          Referring Practitioner Required
+        </Label>
+        <Input
+          id="referring_practitioner_required"
+          value={formData.referring_practitioner_required}
+          onChange={(e) =>
+            setFormData({
+              ...formData,
+              referring_practitioner_required: e.target.value,
+            })
+          }
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="start_time_required">Start Time Required</Label>
+        <Input
+          id="start_time_required"
+          value={formData.start_time_required}
+          onChange={(e) =>
+            setFormData({ ...formData, start_time_required: e.target.value })
+          }
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="stop_time_required">Stop Time Required</Label>
+        <Input
+          id="stop_time_required"
+          value={formData.stop_time_required}
+          onChange={(e) =>
+            setFormData({ ...formData, stop_time_required: e.target.value })
+          }
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="technical_fee">Technical Fee</Label>
+        <Input
+          id="technical_fee"
+          type="number"
+          step="0.01"
+          value={formData.technical_fee}
+          onChange={(e) =>
+            setFormData({
+              ...formData,
+              technical_fee: parseFloat(e.target.value),
+            })
+          }
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="billingRecordType">Billing Record Type</Label>
+        <Input
+          id="billingRecordType"
+          type="number"
+          value={formData.billingRecordType}
+          onChange={(e) =>
+            setFormData({
+              ...formData,
+              billingRecordType: parseInt(e.target.value),
+            })
+          }
+          required
         />
       </div>
 
@@ -535,18 +578,19 @@ export function BillingCodesTable() {
           title: formData.title,
           description: formData.description,
           sectionId: formData.section.id,
-          codeClass: formData.codeClass || null,
-          anes: formData.anes || null,
-          details: formData.details || null,
-          generalPracticeCost: formData.generalPracticeCost || null,
-          specialistPrice: formData.specialistPrice || null,
-          referredPrice: formData.referredPrice || null,
-          nonReferredPrice: formData.nonReferredPrice || null,
-          technicalComponentPrice: formData.technicalComponentPrice || null,
-          interpretationComponentPrice:
-            formData.interpretationComponentPrice || null,
-          technicalAndInterpretationComponentPrice:
-            formData.technicalAndInterpretationComponentPrice || null,
+          low_fee: formData.low_fee || null,
+          high_fee: formData.high_fee || null,
+          service_class: formData.service_class || null,
+          add_on_indicator: formData.add_on_indicator || null,
+          multiple_unit_indicator: formData.multiple_unit_indicator || null,
+          fee_determinant: formData.fee_determinant || null,
+          anaesthesia_indicator: formData.anaesthesia_indicator || null,
+          submit_at_100_percent: formData.submit_at_100_percent || null,
+          referring_practitioner_required:
+            formData.referring_practitioner_required || null,
+          start_time_required: formData.start_time_required || null,
+          stop_time_required: formData.stop_time_required || null,
+          technical_fee: formData.technical_fee || null,
         }),
       });
 
@@ -587,18 +631,19 @@ export function BillingCodesTable() {
           title: formData.title,
           description: formData.description,
           sectionId: formData.section.id,
-          codeClass: formData.codeClass || null,
-          anes: formData.anes || null,
-          details: formData.details || null,
-          generalPracticeCost: formData.generalPracticeCost || null,
-          specialistPrice: formData.specialistPrice || null,
-          referredPrice: formData.referredPrice || null,
-          nonReferredPrice: formData.nonReferredPrice || null,
-          technicalComponentPrice: formData.technicalComponentPrice || null,
-          interpretationComponentPrice:
-            formData.interpretationComponentPrice || null,
-          technicalAndInterpretationComponentPrice:
-            formData.technicalAndInterpretationComponentPrice || null,
+          low_fee: formData.low_fee || null,
+          high_fee: formData.high_fee || null,
+          service_class: formData.service_class || null,
+          add_on_indicator: formData.add_on_indicator || null,
+          multiple_unit_indicator: formData.multiple_unit_indicator || null,
+          fee_determinant: formData.fee_determinant || null,
+          anaesthesia_indicator: formData.anaesthesia_indicator || null,
+          submit_at_100_percent: formData.submit_at_100_percent || null,
+          referring_practitioner_required:
+            formData.referring_practitioner_required || null,
+          start_time_required: formData.start_time_required || null,
+          stop_time_required: formData.stop_time_required || null,
+          technical_fee: formData.technical_fee || null,
         }),
       });
 
@@ -704,36 +749,42 @@ export function BillingCodesTable() {
                         section: billingCodes.find(
                           (code) => code.id === editingId
                         )!.section,
-                        codeClass:
+                        low_fee:
                           billingCodes.find((code) => code.id === editingId)!
-                            .code_class || "",
-                        anes:
+                            .low_fee || 0,
+                        high_fee:
                           billingCodes.find((code) => code.id === editingId)!
-                            .anes || "",
-                        details:
+                            .high_fee || 0,
+                        service_class:
                           billingCodes.find((code) => code.id === editingId)!
-                            .details || "",
-                        generalPracticeCost:
+                            .service_class || "",
+                        add_on_indicator:
                           billingCodes.find((code) => code.id === editingId)!
-                            .general_practice_cost || "",
-                        specialistPrice:
+                            .add_on_indicator || "",
+                        multiple_unit_indicator:
                           billingCodes.find((code) => code.id === editingId)!
-                            .specialist_price || "",
-                        referredPrice:
+                            .multiple_unit_indicator || "",
+                        fee_determinant:
                           billingCodes.find((code) => code.id === editingId)!
-                            .referred_price || "",
-                        nonReferredPrice:
+                            .fee_determinant || "",
+                        anaesthesia_indicator:
                           billingCodes.find((code) => code.id === editingId)!
-                            .non_referred_price || "",
-                        technicalComponentPrice:
+                            .anaesthesia_indicator || "",
+                        submit_at_100_percent:
                           billingCodes.find((code) => code.id === editingId)!
-                            .technical_component_price || "",
-                        interpretationComponentPrice:
+                            .submit_at_100_percent || "",
+                        referring_practitioner_required:
                           billingCodes.find((code) => code.id === editingId)!
-                            .interpretation_component_price || "",
-                        technicalAndInterpretationComponentPrice:
+                            .referring_practitioner_required || "",
+                        start_time_required:
                           billingCodes.find((code) => code.id === editingId)!
-                            .technical_and_interpretation_component_price || "",
+                            .start_time_required || "",
+                        stop_time_required:
+                          billingCodes.find((code) => code.id === editingId)!
+                            .stop_time_required || "",
+                        technical_fee:
+                          billingCodes.find((code) => code.id === editingId)!
+                            .technical_fee || 0,
                         billingRecordType:
                           billingCodes.find((code) => code.id === editingId)!
                             .billing_record_type || 50,
@@ -873,37 +924,49 @@ export function BillingCodesTable() {
                     <TableCell>{log.description}</TableCell>
                     <TableCell>
                       <div className="space-y-1">
-                        {log.code_class && <div>Class: {log.code_class}</div>}
-                        {log.anes && <div>Anes: {log.anes}</div>}
-                        {log.details && <div>Details: {log.details}</div>}
-                        {log.general_practice_cost && (
-                          <div>GP Cost: {log.general_practice_cost}</div>
+                        {log.low_fee && <div>Low Fee: {log.low_fee}</div>}
+                        {log.high_fee && <div>High Fee: {log.high_fee}</div>}
+                        {log.service_class && (
+                          <div>Service Class: {log.service_class}</div>
                         )}
-                        {log.specialist_price && (
-                          <div>Specialist: {log.specialist_price}</div>
+                        {log.add_on_indicator && (
+                          <div>Add-on Indicator: {log.add_on_indicator}</div>
                         )}
-                        {log.referred_price && (
-                          <div>Referred: {log.referred_price}</div>
-                        )}
-                        {log.non_referred_price && (
-                          <div>Non-referred: {log.non_referred_price}</div>
-                        )}
-                        {log.technical_component_price && (
+                        {log.multiple_unit_indicator && (
                           <div>
-                            Technical Component: {log.technical_component_price}
+                            Multiple Unit Indicator:{" "}
+                            {log.multiple_unit_indicator}
                           </div>
                         )}
-                        {log.interpretation_component_price && (
+                        {log.fee_determinant && (
+                          <div>Fee Determinant: {log.fee_determinant}</div>
+                        )}
+                        {log.anaesthesia_indicator && (
                           <div>
-                            Interpretation Component:{" "}
-                            {log.interpretation_component_price}
+                            Anaesthesia Indicator: {log.anaesthesia_indicator}
                           </div>
                         )}
-                        {log.technical_and_interpretation_component_price && (
+                        {log.submit_at_100_percent && (
+                          <div>Submit at 100%: {log.submit_at_100_percent}</div>
+                        )}
+                        {log.referring_practitioner_required && (
                           <div>
-                            Technical & Interpretation:{" "}
-                            {log.technical_and_interpretation_component_price}
+                            Referring Practitioner Required:{" "}
+                            {log.referring_practitioner_required}
                           </div>
+                        )}
+                        {log.start_time_required && (
+                          <div>
+                            Start Time Required: {log.start_time_required}
+                          </div>
+                        )}
+                        {log.stop_time_required && (
+                          <div>
+                            Stop Time Required: {log.stop_time_required}
+                          </div>
+                        )}
+                        {log.technical_fee && (
+                          <div>Technical Fee: {log.technical_fee}</div>
                         )}
                       </div>
                     </TableCell>
