@@ -83,6 +83,8 @@ export default function SearchPage() {
         return "Exact Code Match";
       case "exact_title":
         return "Exact Title Match";
+      case "partial_code":
+        return "Partial Code Match";
       case "synonym":
         return "Synonym Match";
       case "ai":
@@ -100,6 +102,8 @@ export default function SearchPage() {
         return "bg-blue-100 text-blue-800";
       case "exact_title":
         return "bg-green-100 text-green-800";
+      case "partial_code":
+        return "bg-yellow-100 text-yellow-800";
       case "synonym":
         return "bg-purple-100 text-purple-800";
       case "ai":
