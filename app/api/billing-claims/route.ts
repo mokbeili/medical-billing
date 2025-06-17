@@ -180,9 +180,7 @@ export async function POST(request: Request) {
           ),
           location,
           feeCode: serviceCode.billingCode.code,
-          feeCents: Math.round(
-            parseFloat(serviceCode.billingCode.referred_price || "0") * 100
-          ),
+          feeCents: Math.round(serviceCode.billingCode.high_fee * 100),
           mode: "1", // TODO: Add mode to service code model
           formType: "8" as const,
           specialCircumstances: serviceCode.specialCircumstances || undefined,
