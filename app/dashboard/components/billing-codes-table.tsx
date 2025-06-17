@@ -3,6 +3,7 @@
 import { ChevronLeft, ChevronRight, History, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "../../components/ui/button";
+import { Checkbox } from "../../components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +13,13 @@ import {
 } from "../../components/ui/dialog";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../components/ui/select";
 import {
   Table,
   TableBody,
@@ -339,110 +347,177 @@ function BillingCodeForm({
 
       <div className="space-y-2">
         <Label htmlFor="service_class">Service Class</Label>
-        <Input
-          id="service_class"
-          value={formData.service_class}
-          onChange={(e) =>
-            setFormData({ ...formData, service_class: e.target.value })
-          }
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="add_on_indicator">Add-on Indicator</Label>
-        <Input
-          id="add_on_indicator"
-          value={formData.add_on_indicator}
-          onChange={(e) =>
-            setFormData({ ...formData, add_on_indicator: e.target.value })
-          }
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="multiple_unit_indicator">Multiple Unit Indicator</Label>
-        <Input
-          id="multiple_unit_indicator"
-          value={formData.multiple_unit_indicator}
-          onChange={(e) =>
+        <Select
+          value={formData.service_class || "none"}
+          onValueChange={(value) =>
             setFormData({
               ...formData,
-              multiple_unit_indicator: e.target.value,
+              service_class: value === "none" ? "" : value,
             })
           }
-        />
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select service class" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">None</SelectItem>
+            <SelectItem value="D">D</SelectItem>
+            <SelectItem value="V">V</SelectItem>
+            <SelectItem value="42">42</SelectItem>
+            <SelectItem value="10">10</SelectItem>
+            <SelectItem value="0">0</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="add_on_indicator"
+            checked={formData.add_on_indicator === "A"}
+            onCheckedChange={(checked: boolean) =>
+              setFormData({ ...formData, add_on_indicator: checked ? "A" : "" })
+            }
+          />
+          <Label htmlFor="add_on_indicator">Add-on Indicator</Label>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="multiple_unit_indicator"
+            checked={formData.multiple_unit_indicator === "U"}
+            onCheckedChange={(checked: boolean) =>
+              setFormData({
+                ...formData,
+                multiple_unit_indicator: checked ? "U" : "",
+              })
+            }
+          />
+          <Label htmlFor="multiple_unit_indicator">
+            Multiple Unit Indicator
+          </Label>
+        </div>
       </div>
 
       <div className="space-y-2">
         <Label htmlFor="fee_determinant">Fee Determinant</Label>
-        <Input
-          id="fee_determinant"
+        <Select
           value={formData.fee_determinant}
-          onChange={(e) =>
-            setFormData({ ...formData, fee_determinant: e.target.value })
+          onValueChange={(value) =>
+            setFormData({ ...formData, fee_determinant: value })
           }
           required
-        />
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select fee determinant" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="DH">DH</SelectItem>
+            <SelectItem value="X">X</SelectItem>
+            <SelectItem value="S">S</SelectItem>
+            <SelectItem value="Z">Z</SelectItem>
+            <SelectItem value="U">U</SelectItem>
+            <SelectItem value="E">E</SelectItem>
+            <SelectItem value="W">W</SelectItem>
+            <SelectItem value="D">D</SelectItem>
+            <SelectItem value="P">P</SelectItem>
+            <SelectItem value="TH">TH</SelectItem>
+            <SelectItem value="H">H</SelectItem>
+            <SelectItem value="T">T</SelectItem>
+            <SelectItem value="G">G</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="space-y-2">
         <Label htmlFor="anaesthesia_indicator">Anaesthesia Indicator</Label>
-        <Input
-          id="anaesthesia_indicator"
-          value={formData.anaesthesia_indicator}
-          onChange={(e) =>
-            setFormData({ ...formData, anaesthesia_indicator: e.target.value })
-          }
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="submit_at_100_percent">Submit at 100%</Label>
-        <Input
-          id="submit_at_100_percent"
-          value={formData.submit_at_100_percent}
-          onChange={(e) =>
-            setFormData({ ...formData, submit_at_100_percent: e.target.value })
-          }
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="referring_practitioner_required">
-          Referring Practitioner Required
-        </Label>
-        <Input
-          id="referring_practitioner_required"
-          value={formData.referring_practitioner_required}
-          onChange={(e) =>
+        <Select
+          value={formData.anaesthesia_indicator || "none"}
+          onValueChange={(value) =>
             setFormData({
               ...formData,
-              referring_practitioner_required: e.target.value,
+              anaesthesia_indicator: value === "none" ? "" : value,
             })
           }
-        />
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select anaesthesia indicator" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">None</SelectItem>
+            <SelectItem value="H">H</SelectItem>
+            <SelectItem value="L">L</SelectItem>
+            <SelectItem value="M">M</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="start_time_required">Start Time Required</Label>
-        <Input
-          id="start_time_required"
-          value={formData.start_time_required}
-          onChange={(e) =>
-            setFormData({ ...formData, start_time_required: e.target.value })
-          }
-        />
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="submit_at_100_percent"
+            checked={formData.submit_at_100_percent === "Y"}
+            onCheckedChange={(checked: boolean) =>
+              setFormData({
+                ...formData,
+                submit_at_100_percent: checked ? "Y" : "",
+              })
+            }
+          />
+          <Label htmlFor="submit_at_100_percent">Submit at 100%</Label>
+        </div>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="stop_time_required">Stop Time Required</Label>
-        <Input
-          id="stop_time_required"
-          value={formData.stop_time_required}
-          onChange={(e) =>
-            setFormData({ ...formData, stop_time_required: e.target.value })
-          }
-        />
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="referring_practitioner_required"
+            checked={formData.referring_practitioner_required === "Y"}
+            onCheckedChange={(checked: boolean) =>
+              setFormData({
+                ...formData,
+                referring_practitioner_required: checked ? "Y" : "",
+              })
+            }
+          />
+          <Label htmlFor="referring_practitioner_required">
+            Referring Practitioner Required
+          </Label>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="start_time_required"
+            checked={formData.start_time_required === "Y"}
+            onCheckedChange={(checked: boolean) =>
+              setFormData({
+                ...formData,
+                start_time_required: checked ? "Y" : "",
+              })
+            }
+          />
+          <Label htmlFor="start_time_required">Start Time Required</Label>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="stop_time_required"
+            checked={formData.stop_time_required === "Y"}
+            onCheckedChange={(checked: boolean) =>
+              setFormData({
+                ...formData,
+                stop_time_required: checked ? "Y" : "",
+              })
+            }
+          />
+          <Label htmlFor="stop_time_required">Stop Time Required</Label>
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -463,18 +538,21 @@ function BillingCodeForm({
 
       <div className="space-y-2">
         <Label htmlFor="billingRecordType">Billing Record Type</Label>
-        <Input
-          id="billingRecordType"
-          type="number"
-          value={formData.billingRecordType}
-          onChange={(e) =>
-            setFormData({
-              ...formData,
-              billingRecordType: parseInt(e.target.value),
-            })
+        <Select
+          value={formData.billingRecordType.toString()}
+          onValueChange={(value) =>
+            setFormData({ ...formData, billingRecordType: parseInt(value) })
           }
           required
-        />
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select billing record type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="50">50</SelectItem>
+            <SelectItem value="57">57</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {error && <div className="text-red-500 text-sm">{error}</div>}
