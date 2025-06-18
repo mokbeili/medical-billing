@@ -52,12 +52,6 @@ const needsMoreResults = (
   const hasPartialCodeMatch = currentResults.some(
     (result) => result.searchType === "partial_code"
   );
-  console.log(
-    currentResults.length < limit &&
-      !hasExactMatch &&
-      !hasExactTitleMatch &&
-      !hasPartialCodeMatch
-  );
   return (
     currentResults.length < limit &&
     !hasExactMatch &&
@@ -354,7 +348,7 @@ export async function GET(request: Request) {
         exactTitleMatches.length > 0
       ) &&
       !previous_log_id &&
-      query.length > 8
+      query.length > 3
     ) {
       const broaderMatches = await prisma.$queryRaw<RawSearchResult[]>`
           SELECT
