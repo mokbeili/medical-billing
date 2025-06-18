@@ -52,6 +52,12 @@ const needsMoreResults = (
   const hasPartialCodeMatch = currentResults.some(
     (result) => result.searchType === "partial_code"
   );
+  console.log(
+    currentResults.length < limit &&
+      !hasExactMatch &&
+      !hasExactTitleMatch &&
+      !hasPartialCodeMatch
+  );
   return (
     currentResults.length < limit &&
     !hasExactMatch &&
@@ -332,7 +338,7 @@ export async function GET(request: Request) {
         WHERE bc.openai_embedding IS NOT NULL 
           AND bc.openai_embedding != '[]'
           AND bc.openai_embedding != ''
-          AND 1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) > 0.90
+          AND 1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) > 0.80
         ORDER BY similarity DESC
         LIMIT ${limit - allResults.length}
       `;
@@ -348,7 +354,7 @@ export async function GET(request: Request) {
         exactTitleMatches.length > 0
       ) &&
       !previous_log_id &&
-      query.length > 30
+      query.length > 8
     ) {
       const broaderMatches = await prisma.$queryRaw<RawSearchResult[]>`
           SELECT
@@ -382,7 +388,7 @@ export async function GET(request: Request) {
           .join("\n");
 
         const prompt = `
-            You are a medical billing assistant for Saskatchewan physicians. Based on a suggested list of billing codes and service descriptions, your task is to:
+          You are a medical billing assistant for Saskatchewan physicians. Based on a suggested list of billing codes and service descriptions, your task is to:
 
             📌 1. Verify Billing Code Validity
             Use only codes listed in the Saskatchewan Physician Payment Schedule (April 2025).
@@ -519,7 +525,7 @@ export async function GET(request: Request) {
             },
           ],
           temperature: 0.3,
-          max_tokens: 300,
+          max_tokens: 500,
         });
 
         // Parse the JSON array from the completion
