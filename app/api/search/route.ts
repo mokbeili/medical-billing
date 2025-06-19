@@ -217,38 +217,21 @@ export async function GET(request: Request) {
         exactTitleMatches.length > 0
       )
     ) {
-      const partialMatches = await prisma.billingCode.findMany({
-        where: {
-          OR: [
-            {
-              title: {
-                contains: query,
-                mode: "insensitive",
-              },
-            },
-            {
-              description: {
-                contains: query,
-                mode: "insensitive",
-              },
-            },
-          ],
-        },
-        select: {
-          id: true,
-          code: true,
-          title: true,
-          description: true,
-          billing_record_type: true,
-          section: {
-            select: {
-              code: true,
-              title: true,
-            },
-          },
-        },
-        take: limit - allResults.length,
-      });
+      const partialMatches = await prisma.$queryRaw<RawSearchResult[]>`
+      SELECT 
+        bc.id,
+        bc.code,
+        bc.title,
+        bc.description,
+        json_build_object(
+          'code', s.code,
+          'title', s.title
+        ) as section
+      FROM billing_codes bc
+      JOIN sections s ON bc.section_id = s.id
+      where to_tsvector('english', s.code || ' ' || s.title || ' ' || bc.code || ' ' || bc.title || '' || bc.description) @@ 
+      plainto_tsquery('english', ${query})
+    `;
       addUniqueResults(partialMatches, [], "synonym");
     }
 
@@ -316,6 +299,9 @@ export async function GET(request: Request) {
       ) &&
       !previous_log_id
     ) {
+      // Get existing codes to exclude
+      const existingCodes = allResults.map((result) => result.code).join(",");
+
       const strictMatches = await prisma.$queryRaw<RawSearchResult[]>`
         SELECT 
           bc.id,
@@ -332,6 +318,7 @@ export async function GET(request: Request) {
         WHERE bc.openai_embedding IS NOT NULL 
           AND bc.openai_embedding != '[]'
           AND bc.openai_embedding != ''
+          AND bc.code NOT IN (${existingCodes.length > 0 ? existingCodes : ""})
           AND 1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) > 0.80
         ORDER BY similarity DESC
         LIMIT ${limit - allResults.length}
@@ -350,6 +337,9 @@ export async function GET(request: Request) {
       !previous_log_id &&
       query.length > 3
     ) {
+      // Get existing codes to exclude
+      const existingCodes = allResults.map((result) => result.code).join(",");
+
       const broaderMatches = await prisma.$queryRaw<RawSearchResult[]>`
           SELECT
             bc.id,
@@ -366,6 +356,9 @@ export async function GET(request: Request) {
           WHERE bc.openai_embedding IS NOT NULL
             AND bc.openai_embedding != '[]'
             AND bc.openai_embedding != ''
+            AND bc.code NOT IN (${
+              existingCodes.length > 0 ? existingCodes : ""
+            })
             AND 1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) > 0.20
           ORDER BY similarity DESC
           LIMIT ${BROADER_SEARCH_LIMIT}

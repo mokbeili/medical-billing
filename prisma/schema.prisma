@@ -52,30 +52,31 @@ model Section {
 }
 
 model BillingCode {
-  id                              Int                    @id @default(autoincrement())
-  code                            String                 @db.VarChar(50)
-  title                           String                 @default("") @db.VarChar(256)
-  description                     String?                @db.VarChar(256)
+  id                              Int                      @id @default(autoincrement())
+  code                            String                   @db.VarChar(50)
+  title                           String                   @default("") @db.VarChar(256)
+  description                     String?                  @db.VarChar(256)
   section_id                      Int
   openai_embedding                String
-  created_at                      DateTime               @default(now())
-  updated_at                      DateTime               @updatedAt
-  low_fee                         Float                  @default(0)
-  high_fee                        Float                  @default(0)
-  service_class                   String?                @db.VarChar(50)
-  add_on_indicator                String?                @db.VarChar(50)
-  multiple_unit_indicator         String?                @db.VarChar(50)
-  fee_determinant                 String                 @default("") @db.VarChar(50)
-  anaesthesia_indicator           String?                @db.VarChar(50)
-  submit_at_100_percent           String?                @db.VarChar(50)
-  referring_practitioner_required String?                @db.VarChar(50)
-  start_time_required             String?                @db.VarChar(50)
-  stop_time_required              String?                @db.VarChar(50)
+  created_at                      DateTime                 @default(now())
+  updated_at                      DateTime                 @updatedAt
+  billing_record_type             Int                      @default(50) @map("billing_record_type")
+  low_fee                         Float                    @default(0)
+  high_fee                        Float                    @default(0)
+  service_class                   String?                  @db.VarChar(50)
+  add_on_indicator                String?                  @db.VarChar(50)
+  multiple_unit_indicator         String?                  @db.VarChar(50)
+  fee_determinant                 String                   @default("") @db.VarChar(50)
+  anaesthesia_indicator           String?                  @db.VarChar(50)
+  submit_at_100_percent           String?                  @db.VarChar(50)
+  referring_practitioner_required String?                  @db.VarChar(50)
+  start_time_required             String?                  @db.VarChar(50)
+  stop_time_required              String?                  @db.VarChar(50)
   technical_fee                   Float?
-  billing_record_type             Int                    @default(50) @map("billing_record_type")
-  section                         Section                @relation(fields: [section_id], references: [id])
-  serviceCodes                    ServiceCodes[]
+  embedding_vector                Unsupported("tsvector")? @map("embedding_vector")
   changeLogs                      BillingCodeChangeLog[]
+  section                         Section                  @relation(fields: [section_id], references: [id])
+  serviceCodes                    ServiceCodes[]
 
   @@index([section_id])
   @@map("billing_codes")
@@ -87,6 +88,8 @@ model BillingCodeChangeLog {
   code                            String      @db.VarChar(50)
   title                           String      @default("") @db.VarChar(256)
   description                     String?     @db.VarChar(256)
+  changed_at                      DateTime    @default(now())
+  billing_record_type             Int         @default(50) @map("billing_record_type")
   low_fee                         Float       @default(0)
   high_fee                        Float       @default(0)
   service_class                   String?     @db.VarChar(50)
@@ -99,8 +102,6 @@ model BillingCodeChangeLog {
   start_time_required             String?     @db.VarChar(50)
   stop_time_required              String?     @db.VarChar(50)
   technical_fee                   Float?
-  billing_record_type             Int         @default(50) @map("billing_record_type")
-  changed_at                      DateTime    @default(now())
   billing_code                    BillingCode @relation(fields: [billing_code_id], references: [id])
 
   @@index([billing_code_id])
@@ -146,12 +147,12 @@ model Patient {
   lastName       String       @map("last_name")
   middleInitial  String?      @map("middle_initial")
   billingNumber  String       @map("billing_number")
-  dateOfBirth    DateTime     @map("date_of_birth")
-  sex            String       @map("sex")
   jurisdictionId Int          @map("jurisdiction_id")
   physicianId    String       @map("physician_id")
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
+  dateOfBirth    DateTime     @map("date_of_birth")
+  sex            String       @map("sex")
   jurisdiction   Jurisdiction @relation(fields: [jurisdictionId], references: [id])
   physician      Physician    @relation(fields: [physicianId], references: [id])
   services       Service[]
@@ -165,22 +166,22 @@ model Physician {
   lastName              String               @map("last_name")
   middleInitial         String?              @map("middle_initial")
   billingNumber         String               @map("billing_number")
-  groupNumber           String?              @map("group_number")
-  healthInstitutionId   Int?                 @map("health_institution_id")
-  streetAddress         String?              @map("street_address")
-  city                  String?
-  province              String?
-  postalCode            String?              @map("postal_code")
   userId                Int                  @map("user_id")
   jurisdictionId        Int                  @map("jurisdiction_id")
-  mostRecentClaimNumber Int                  @default(10000) @map("most_recent_claim_number")
   createdAt             DateTime             @default(now()) @map("created_at")
   updatedAt             DateTime             @updatedAt @map("updated_at")
+  city                  String?
+  groupNumber           String?              @map("group_number")
+  healthInstitutionId   Int?                 @map("health_institution_id")
+  postalCode            String?              @map("postal_code")
+  province              String?
+  streetAddress         String?              @map("street_address")
+  mostRecentClaimNumber Int                  @default(10000) @map("most_recent_claim_number")
   billingClaims         BillingClaim[]
   patients              Patient[]
+  healthInstitution     HealthInstitution?   @relation(fields: [healthInstitutionId], references: [id])
   jurisdiction          Jurisdiction         @relation(fields: [jurisdictionId], references: [id])
   user                  User                 @relation(fields: [userId], references: [id])
-  healthInstitution     HealthInstitution?   @relation(fields: [healthInstitutionId], references: [id])
   referringPhysicians   ReferringPhysician[]
   SearchQueryLog        SearchQueryLog[]
   Service               Service[]
@@ -212,11 +213,11 @@ model HealthInstitution {
   latitude    Float
   longitude   Float
   phoneNumber String      @map("phone_number")
-  number      String?
   createdAt   DateTime    @default(now()) @map("created_at")
   updatedAt   DateTime    @updatedAt @map("updated_at")
-  services    Service[]
+  number      String?
   Physician   Physician[]
+  services    Service[]
 
   @@map("health_institutions")
 }
@@ -226,9 +227,9 @@ model BillingClaim {
   friendlyId     String           @unique @map("friendly_id")
   physicianId    String           @map("physician_id")
   jurisdictionId Int              @map("jurisdiction_id")
-  batchClaimText String?          @map("batch_claim_text") @db.Text
   createdAt      DateTime         @default(now()) @map("created_at")
   updatedAt      DateTime         @updatedAt @map("updated_at")
+  batchClaimText String?          @map("batch_claim_text")
   jurisdiction   Jurisdiction     @relation(fields: [jurisdictionId], references: [id])
   physician      Physician        @relation(fields: [physicianId], references: [id])
   SearchQueryLog SearchQueryLog[]
@@ -244,20 +245,20 @@ model Service {
   createdAt            DateTime            @default(now()) @map("created_at")
   updatedAt            DateTime            @updatedAt @map("updated_at")
   patientId            String?             @map("patient_id")
-  physicianId          String              @map("physician_id")
   icdCodeId            Int?                @map("icd_code_id")
   referringPhysicianId Int?                @map("referring_physician_id")
   healthInstitutionId  Int?                @map("health_institution_id")
   serviceDate          DateTime            @default(now()) @map("service_date")
   summary              String              @default("")
   serviceLocation      String              @map("service_location")
+  physicianId          String              @map("physician_id")
+  serviceCodes         ServiceCodes[]
   claim                BillingClaim?       @relation(fields: [claimId], references: [id], onDelete: Restrict)
+  healthInstitution    HealthInstitution?  @relation(fields: [healthInstitutionId], references: [id])
+  icdCode              ICDCode?            @relation(fields: [icdCodeId], references: [id])
   patient              Patient?            @relation(fields: [patientId], references: [id])
   physician            Physician           @relation(fields: [physicianId], references: [id])
-  icdCode              ICDCode?            @relation(fields: [icdCodeId], references: [id])
   referringPhysician   ReferringPhysician? @relation(fields: [referringPhysicianId], references: [id])
-  healthInstitution    HealthInstitution?  @relation(fields: [healthInstitutionId], references: [id])
-  serviceCodes         ServiceCodes[]
 
   @@index([claimId])
   @@index([patientId])
@@ -270,15 +271,15 @@ model Service {
 
 model ServiceCodes {
   id                   Int         @id @default(autoincrement())
-  serviceId            Int         @map("service_id")
   codeId               Int         @map("code_id")
-  specialCircumstances String?     @map("special_circumstances")
-  service              Service     @relation(fields: [serviceId], references: [id])
-  billingCode          BillingCode @relation(fields: [codeId], references: [id])
-  numberOfUnits        Int         @map("number_of_units")
   serviceStartTime     DateTime?   @map("service_start_time")
   serviceEndTime       DateTime?   @map("service_end_time")
   bilateralIndicator   String?     @map("bilateral_indicator")
+  numberOfUnits        Int         @map("number_of_units")
+  serviceId            Int         @map("service_id")
+  specialCircumstances String?     @map("special_circumstances")
+  billingCode          BillingCode @relation(fields: [codeId], references: [id])
+  service              Service     @relation(fields: [serviceId], references: [id])
 
   @@index([serviceId])
   @@index([codeId])
