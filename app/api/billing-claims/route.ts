@@ -52,6 +52,49 @@ export async function POST(request: Request) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
+    const determinePrice = (service: any, serviceCode: any) => {
+      // Access billing code through the relation
+      const billingCode = serviceCode.billingCode;
+      const hasTechnicalFee =
+        billingCode.technical_fee !== null &&
+        billingCode.technical_fee !== undefined;
+
+      // Access patient and physician through the service relation
+      const hasReferringPhysician = service.referringPhysician !== null;
+      const specialCircumstances = serviceCode.specialCircumstances;
+      const isSpecialist =
+        service.patient?.physician?.referringPhysicians[0]?.specialty !==
+        "General Practice";
+
+      // Case 1: No technical fee
+      if (!hasTechnicalFee) {
+        // If referring physician is not null, choose high fee
+        if (hasReferringPhysician || isSpecialist) {
+          return billingCode.high_fee;
+        }
+        // Otherwise charge the low fee
+        return billingCode.low_fee;
+      }
+
+      // Case 2: Has technical fee
+      if (hasTechnicalFee) {
+        switch (specialCircumstances) {
+          case "CF":
+            return billingCode.high_fee;
+          case "PF":
+            return billingCode.low_fee;
+          case "TF":
+            return billingCode.technical_fee;
+          default:
+            // Default to low fee if special circumstances is not recognized
+            return billingCode.low_fee;
+        }
+      }
+
+      // Fallback to low fee
+      return billingCode.low_fee;
+    };
+
     const body = await request.json();
     const { serviceIds } = body;
 
@@ -180,7 +223,7 @@ export async function POST(request: Request) {
           ),
           location,
           feeCode: serviceCode.billingCode.code,
-          feeCents: Math.round(serviceCode.billingCode.high_fee * 100),
+          feeCents: Math.round(determinePrice(service, serviceCode) * 100),
           mode: "1", // TODO: Add mode to service code model
           formType: "8" as const,
           specialCircumstances: serviceCode.specialCircumstances || undefined,
