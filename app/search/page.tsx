@@ -21,6 +21,10 @@ interface SearchResult {
   displayCode: string;
   searchType?: string;
   billing_record_type: number;
+  referring_practitioner_required: boolean;
+  multiple_unit_indicator: string;
+  start_time_required: boolean;
+  stop_time_required: boolean;
 }
 
 interface SearchResponse {

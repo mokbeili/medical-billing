@@ -478,9 +478,21 @@ export default function CreateServicePage() {
       }
     );
 
+    // Check if any codes require referring physician but none is selected
+    const requiresReferringPhysician = formData.billingCodes.some((code) => {
+      const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
+      return (
+        selectedCode && selectedCode.referring_practitioner_required === "Y"
+      );
+    });
+
+    const hasReferringPhysicianError =
+      requiresReferringPhysician && !formData.referringPhysicianId;
+
     return (
       !Object.values(newServiceErrors).some(Boolean) &&
-      !hasWorXWithoutSpecialCircumstances
+      !hasWorXWithoutSpecialCircumstances &&
+      !hasReferringPhysicianError
     );
   };
 
@@ -559,8 +571,6 @@ export default function CreateServicePage() {
         specialCircumstances: code.specialCircumstances,
       }));
 
-      console.log(serviceCodesData);
-
       const serviceCodesResponse = await fetch("/api/service-codes", {
         method: "POST",
         headers: {
@@ -581,15 +591,12 @@ export default function CreateServicePage() {
   };
 
   const isCodeDisabled = (code: BillingCode) => {
-    console.log(code);
-    console.log(selectedCodes.map((c) => c.billing_record_type));
     const type50Count = selectedCodes.filter(
       (c) => c.billing_record_type === 50
     ).length;
     const type57Count = selectedCodes.filter(
       (c) => c.billing_record_type === 57
     ).length;
-    console.log(type50Count, type57Count);
 
     if (code.billing_record_type === 50 && type50Count >= 6) return true;
     if (code.billing_record_type === 57 && type57Count >= 2) return true;
@@ -909,6 +916,15 @@ export default function CreateServicePage() {
               <div className="space-y-2">
                 <label className="block text-sm font-medium">
                   Referring Physician
+                  {formData.billingCodes.some((code) => {
+                    const selectedCode = selectedCodes.find(
+                      (c) => c.id === code.codeId
+                    );
+                    return (
+                      selectedCode &&
+                      selectedCode.referring_practitioner_required === "Y"
+                    );
+                  }) && <span className="text-red-500">*</span>}
                 </label>
                 <div className="relative">
                   <Input
@@ -916,6 +932,19 @@ export default function CreateServicePage() {
                     value={referringPhysicianSearchQuery}
                     onChange={(e) =>
                       setReferringPhysicianSearchQuery(e.target.value)
+                    }
+                    className={
+                      formData.billingCodes.some((code) => {
+                        const selectedCode = selectedCodes.find(
+                          (c) => c.id === code.codeId
+                        );
+                        return (
+                          selectedCode &&
+                          selectedCode.referring_practitioner_required === "Y"
+                        );
+                      }) && !formData.referringPhysicianId
+                        ? "border-red-500"
+                        : ""
                     }
                   />
                   {isSearchingReferringPhysician && (
@@ -945,6 +974,22 @@ export default function CreateServicePage() {
                     </div>
                   )}
                 </div>
+
+                {formData.billingCodes.some((code) => {
+                  const selectedCode = selectedCodes.find(
+                    (c) => c.id === code.codeId
+                  );
+                  return (
+                    selectedCode &&
+                    selectedCode.referring_practitioner_required === "Y"
+                  );
+                }) &&
+                  !formData.referringPhysicianId && (
+                    <p className="text-sm text-red-500">
+                      A referring physician is required for one or more selected
+                      billing codes
+                    </p>
+                  )}
 
                 {selectedReferringPhysician && (
                   <div className="mt-4 space-y-2">
@@ -1237,61 +1282,68 @@ export default function CreateServicePage() {
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <label className="block text-sm font-medium">
-                              Service Start Time
-                            </label>
-                            <Input
-                              type="time"
-                              value={
-                                formData.billingCodes[index].serviceStartTime ||
-                                ""
-                              }
-                              onChange={(e) =>
-                                handleUpdateBillingCode(index, {
-                                  serviceStartTime: e.target.value || null,
-                                })
-                              }
-                            />
-                          </div>
+                          {code.start_time_required === "Y" && (
+                            <div className="space-y-2">
+                              <label className="block text-sm font-medium">
+                                Service Start Time
+                              </label>
+                              <Input
+                                type="time"
+                                value={
+                                  formData.billingCodes[index]
+                                    .serviceStartTime || ""
+                                }
+                                onChange={(e) =>
+                                  handleUpdateBillingCode(index, {
+                                    serviceStartTime: e.target.value || null,
+                                  })
+                                }
+                              />
+                            </div>
+                          )}
 
-                          <div className="space-y-2">
-                            <label className="block text-sm font-medium">
-                              Service End Time
-                            </label>
-                            <Input
-                              type="time"
-                              value={
-                                formData.billingCodes[index].serviceEndTime ||
-                                ""
-                              }
-                              onChange={(e) =>
-                                handleUpdateBillingCode(index, {
-                                  serviceEndTime: e.target.value || null,
-                                })
-                              }
-                            />
-                          </div>
+                          {code.stop_time_required === "Y" && (
+                            <div className="space-y-2">
+                              <label className="block text-sm font-medium">
+                                Service End Time
+                              </label>
+                              <Input
+                                type="time"
+                                value={
+                                  formData.billingCodes[index].serviceEndTime ||
+                                  ""
+                                }
+                                onChange={(e) =>
+                                  handleUpdateBillingCode(index, {
+                                    serviceEndTime: e.target.value || null,
+                                  })
+                                }
+                              />
+                            </div>
+                          )}
 
-                          <div className="space-y-2">
-                            <label className="block text-sm font-medium">
-                              Number of Units
-                            </label>
-                            <Input
-                              type="number"
-                              min="1"
-                              value={
-                                formData.billingCodes[index].numberOfUnits || ""
-                              }
-                              onChange={(e) =>
-                                handleUpdateBillingCode(index, {
-                                  numberOfUnits: e.target.value
-                                    ? parseInt(e.target.value)
-                                    : null,
-                                })
-                              }
-                            />
-                          </div>
+                          {code.multiple_unit_indicator === "U" && (
+                            <div className="space-y-2">
+                              <label className="block text-sm font-medium">
+                                Number of Units
+                              </label>
+                              <Input
+                                type="number"
+                                min="1"
+                                value={
+                                  formData.billingCodes[index].numberOfUnits ||
+                                  ""
+                                }
+                                onChange={(e) =>
+                                  handleUpdateBillingCode(index, {
+                                    numberOfUnits: e.target.value
+                                      ? parseInt(e.target.value)
+                                      : null,
+                                  })
+                                }
+                              />
+                            </div>
+                          )}
 
                           <div className="space-y-2">
                             <label className="block text-sm font-medium">

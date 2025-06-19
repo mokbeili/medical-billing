@@ -12,6 +12,10 @@ interface BaseSearchResult {
   code: string;
   title: string;
   description: string | null;
+  referring_practitioner_required: boolean;
+  multiple_unit_indicator: string;
+  start_time_required: boolean;
+  stop_time_required: boolean;
   section: {
     code: string;
     title: string;
@@ -142,6 +146,10 @@ export async function GET(request: Request) {
         title: true,
         description: true,
         billing_record_type: true,
+        referring_practitioner_required: true,
+        multiple_unit_indicator: true,
+        start_time_required: true,
+        stop_time_required: true,
         section: {
           select: {
             code: true,
