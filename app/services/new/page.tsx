@@ -1,7 +1,6 @@
 "use client";
 
 import Layout from "@/app/components/layout/Layout";
-import { HealthInstitutionSelect } from "@/components/health-institution-select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -1428,7 +1427,7 @@ export default function CreateServicePage() {
                 )}
               </div>
 
-              <div className="space-y-2">
+              {/* <div className="space-y-2">
                 <label className="block text-sm font-medium">
                   Health Institution
                 </label>
@@ -1438,7 +1437,7 @@ export default function CreateServicePage() {
                     setFormData({ ...formData, healthInstitutionId: value })
                   }
                 />
-              </div>
+              </div> */}
 
               <div className="flex justify-end">
                 <Button type="submit">Submit</Button>
