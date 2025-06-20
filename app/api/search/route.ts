@@ -328,18 +328,15 @@ export async function GET(request: Request) {
             'code', s.code,
             'title', s.title
           ) as section,
-          1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) as similarity
+          1 - (bc.vector_embedding::vector <=> ${embeddingString}::vector) as similarity
         FROM billing_codes bc
         JOIN sections s ON bc.section_id = s.id
-        WHERE bc.openai_embedding IS NOT NULL 
-          AND bc.openai_embedding != '[]'
-          AND bc.openai_embedding != ''
+        WHERE bc.vector_embedding::vector IS NOT NULL 
           AND bc.code NOT IN (${existingCodes.length > 0 ? existingCodes : ""})
-          AND 1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) > 0.80
+          AND 1 - (bc.vector_embedding::vector <=> ${embeddingString}::vector) > 0.80
         ORDER BY similarity DESC
         LIMIT ${limit - allResults.length}
       `;
-
       addUniqueResults(strictMatches, [], "ai_strict");
     }
 
@@ -366,16 +363,14 @@ export async function GET(request: Request) {
               'code', s.code,
               'title', s.title
             ) as section,
-            1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) as similarity
+            1 - (bc.vector_embedding <=> ${embeddingString}::vector) as similarity
           FROM billing_codes bc
           JOIN sections s ON bc.section_id = s.id
-          WHERE bc.openai_embedding IS NOT NULL
-            AND bc.openai_embedding != '[]'
-            AND bc.openai_embedding != ''
+          WHERE bc.vector_embedding IS NOT NULL
             AND bc.code NOT IN (${
               existingCodes.length > 0 ? existingCodes : ""
             })
-            AND 1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) > 0.20
+            AND 1 - (bc.vector_embedding <=> ${embeddingString}::vector) > 0.70
           ORDER BY similarity DESC
           LIMIT ${BROADER_SEARCH_LIMIT}
         `;
@@ -528,7 +523,7 @@ export async function GET(request: Request) {
             },
           ],
           temperature: 0.3,
-          max_tokens: 500,
+          max_tokens: 300,
         });
 
         // Parse the JSON array from the completion

@@ -74,6 +74,7 @@ model BillingCode {
   stop_time_required              String?                  @db.VarChar(50)
   technical_fee                   Float?
   embedding_vector                Unsupported("tsvector")? @map("embedding_vector")
+  vector_embedding                Unsupported("vector")?
   changeLogs                      BillingCodeChangeLog[]
   section                         Section                  @relation(fields: [section_id], references: [id])
   serviceCodes                    ServiceCodes[]
