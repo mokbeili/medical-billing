@@ -280,10 +280,9 @@ export async function GET(request: Request) {
             id,
             search_string,
             results,
-            1 - (embeddings::vector <=> ${embeddingString}::vector) as similarity
+            1 - (vector_embedding::vector <=> ${embeddingString}::vector) as similarity
           FROM search_query_logs
-          WHERE embeddings IS NOT NULL 
-            AND embeddings != '[]'
+          WHERE vector_embedding IS NOT NULL
         )
         SELECT id, search_string, results
         FROM vector_comparison
