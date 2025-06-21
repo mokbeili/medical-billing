@@ -52,31 +52,31 @@ model Section {
 }
 
 model BillingCode {
-  id                              Int                       @id @default(autoincrement())
-  code                            String                    @db.VarChar(50)
-  title                           String                    @default("") @db.VarChar(256)
-  description                     String?                   @db.VarChar(256)
+  id                              Int                      @id @default(autoincrement())
+  code                            String                   @db.VarChar(50)
+  title                           String                   @default("") @db.VarChar(256)
+  description                     String?                  @db.VarChar(256)
   section_id                      Int
   openai_embedding                String
-  created_at                      DateTime                  @default(now())
-  updated_at                      DateTime                  @updatedAt
-  billing_record_type             Int                       @default(50) @map("billing_record_type")
-  low_fee                         Float                     @default(0)
-  high_fee                        Float                     @default(0)
-  service_class                   String?                   @db.VarChar(50)
-  add_on_indicator                String?                   @db.VarChar(50)
-  multiple_unit_indicator         String?                   @db.VarChar(50)
-  fee_determinant                 String                    @default("") @db.VarChar(50)
-  anaesthesia_indicator           String?                   @db.VarChar(50)
-  submit_at_100_percent           String?                   @db.VarChar(50)
-  referring_practitioner_required String?                   @db.VarChar(50)
-  start_time_required             String?                   @db.VarChar(50)
-  stop_time_required              String?                   @db.VarChar(50)
+  created_at                      DateTime                 @default(now())
+  updated_at                      DateTime                 @updatedAt
+  billing_record_type             Int                      @default(50) @map("billing_record_type")
+  low_fee                         Float                    @default(0)
+  high_fee                        Float                    @default(0)
+  service_class                   String?                  @db.VarChar(50)
+  add_on_indicator                String?                  @db.VarChar(50)
+  multiple_unit_indicator         String?                  @db.VarChar(50)
+  fee_determinant                 String                   @default("") @db.VarChar(50)
+  anaesthesia_indicator           String?                  @db.VarChar(50)
+  submit_at_100_percent           String?                  @db.VarChar(50)
+  referring_practitioner_required String?                  @db.VarChar(50)
+  start_time_required             String?                  @db.VarChar(50)
+  stop_time_required              String?                  @db.VarChar(50)
   technical_fee                   Float?
-  embedding_vector                Unsupported("tsvector")?  @map("embedding_vector")
+  embedding_vector                Unsupported("tsvector")? @map("embedding_vector")
   changeLogs                      BillingCodeChangeLog[]
-  billing_code_embeddings         billing_code_embeddings[]
-  section                         Section                   @relation(fields: [section_id], references: [id])
+  billing_code_embeddings         billing_code_embeddings?
+  section                         Section                  @relation(fields: [section_id], references: [id])
   serviceCodes                    ServiceCodes[]
 
   @@index([section_id])
@@ -334,7 +334,7 @@ model SearchQueryLog {
 
 model billing_code_embeddings {
   id                Int                   @id @default(autoincrement())
-  billing_code_id   Int
+  billing_code_id   Int                   @unique(map: "billing_code_embeddings_billing_code_id_unique")
   vector_embeddings Unsupported("vector")
   created_at        DateTime?             @default(now()) @db.Timestamptz(6)
   updated_at        DateTime?             @default(now()) @db.Timestamptz(6)
