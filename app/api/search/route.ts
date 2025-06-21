@@ -280,9 +280,10 @@ export async function GET(request: Request) {
             id,
             search_string,
             results,
-            1 - (vector_embedding::vector <=> ${embeddingString}::vector) as similarity
+            1 - (embeddings::vector <=> ${embeddingString}::vector) as similarity
           FROM search_query_logs
-          WHERE vector_embedding IS NOT NULL
+          WHERE embeddings IS NOT NULL 
+          and previous_log_id is null
         )
         SELECT id, search_string, results
         FROM vector_comparison
@@ -327,12 +328,12 @@ export async function GET(request: Request) {
             'code', s.code,
             'title', s.title
           ) as section,
-          1 - (bc.vector_embedding::vector <=> ${embeddingString}::vector) as similarity
+          1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) as similarity
         FROM billing_codes bc
         JOIN sections s ON bc.section_id = s.id
-        WHERE bc.vector_embedding::vector IS NOT NULL 
+        WHERE bc.openai_embedding::vector IS NOT NULL 
           AND bc.code NOT IN (${existingCodes.length > 0 ? existingCodes : ""})
-          AND 1 - (bc.vector_embedding::vector <=> ${embeddingString}::vector) > 0.80
+          AND 1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) > 0.80
         ORDER BY similarity DESC
         LIMIT ${limit - allResults.length}
       `;
@@ -362,14 +363,14 @@ export async function GET(request: Request) {
               'code', s.code,
               'title', s.title
             ) as section,
-            1 - (bc.vector_embedding <=> ${embeddingString}::vector) as similarity
+            1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) as similarity
           FROM billing_codes bc
           JOIN sections s ON bc.section_id = s.id
-          WHERE bc.vector_embedding IS NOT NULL
+          WHERE bc.openai_embedding IS NOT NULL
             AND bc.code NOT IN (${
               existingCodes.length > 0 ? existingCodes : ""
             })
-            AND 1 - (bc.vector_embedding <=> ${embeddingString}::vector) > 0.70
+            AND 1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) > 0.70
           ORDER BY similarity DESC
           LIMIT ${BROADER_SEARCH_LIMIT}
         `;

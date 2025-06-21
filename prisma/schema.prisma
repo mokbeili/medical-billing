@@ -80,6 +80,9 @@ model BillingCode {
   serviceCodes                    ServiceCodes[]
 
   @@index([section_id])
+  @@index([code])
+  @@index([title])
+  @@index([vector_embedding])
   @@map("billing_codes")
 }
 
@@ -305,27 +308,29 @@ model ReferringPhysician {
 }
 
 model SearchQueryLog {
-  id             Int              @id @default(autoincrement())
-  searchString   String           @map("search_string")
-  embeddings     String
-  results        String           @map("results")
-  jurisdictionId Int              @map("jurisdiction_id")
-  ipAddress      String?          @map("ip_address")
-  userAgent      String?          @map("user_agent")
-  deviceInfo     String?          @map("device_info")
-  createdAt      DateTime         @default(now()) @map("created_at")
-  updatedAt      DateTime         @updatedAt @map("updated_at")
-  previousLogId  Int?             @map("previous_log_id")
-  physicianId    String?
-  userId         Int?             @map("user_id")
-  billingClaimId String?
-  BillingClaim   BillingClaim?    @relation(fields: [billingClaimId], references: [id])
-  jurisdiction   Jurisdiction     @relation(fields: [jurisdictionId], references: [id])
-  Physician      Physician?       @relation(fields: [physicianId], references: [id])
-  previousLog    SearchQueryLog?  @relation("PreviousLog", fields: [previousLogId], references: [id])
-  nextLogs       SearchQueryLog[] @relation("PreviousLog")
-  user           User?            @relation(fields: [userId], references: [id])
+  id               Int                    @id @default(autoincrement())
+  searchString     String                 @map("search_string")
+  embeddings       String
+  results          String                 @map("results")
+  jurisdictionId   Int                    @map("jurisdiction_id")
+  ipAddress        String?                @map("ip_address")
+  userAgent        String?                @map("user_agent")
+  deviceInfo       String?                @map("device_info")
+  createdAt        DateTime               @default(now()) @map("created_at")
+  updatedAt        DateTime               @updatedAt @map("updated_at")
+  previousLogId    Int?                   @map("previous_log_id")
+  physicianId      String?
+  userId           Int?                   @map("user_id")
+  billingClaimId   String?
+  vector_embedding Unsupported("vector")?
+  BillingClaim     BillingClaim?          @relation(fields: [billingClaimId], references: [id])
+  jurisdiction     Jurisdiction           @relation(fields: [jurisdictionId], references: [id])
+  Physician        Physician?             @relation(fields: [physicianId], references: [id])
+  previousLog      SearchQueryLog?        @relation("PreviousLog", fields: [previousLogId], references: [id])
+  nextLogs         SearchQueryLog[]       @relation("PreviousLog")
+  user             User?                  @relation(fields: [userId], references: [id])
 
+  @@index([vector_embedding])
   @@map("search_query_logs")
 }
 
