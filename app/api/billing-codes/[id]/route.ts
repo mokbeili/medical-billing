@@ -28,7 +28,7 @@ export async function PUT(
         code: data.code,
         title: data.title,
         description: data.description,
-        section_id: parseInt(data.sectionId),
+        section_id: data.sectionId,
         low_fee: data.low_fee,
         high_fee: data.high_fee,
         service_class: data.service_class,

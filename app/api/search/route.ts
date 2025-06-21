@@ -277,11 +277,12 @@ export async function GET(request: Request) {
       >`
         WITH vector_comparison AS (
           SELECT 
-            id,
-            search_string,
-            results,
-            1 - (embeddings::vector <=> ${embeddingString}::vector) as similarity
-          FROM search_query_logs
+            sql.id,
+            sql.search_string,
+            sql.results,
+            1 - (sqe.vector_embeddings <=> ${embeddingString}::vector) as similarity
+          FROM search_query_logs sql 
+          JOIN search_query_embeddings sqe ON sql.id = sqe.search_query_log_id
           WHERE embeddings IS NOT NULL 
           and previous_log_id is null
         )
@@ -328,12 +329,13 @@ export async function GET(request: Request) {
             'code', s.code,
             'title', s.title
           ) as section,
-          1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) as similarity
+          1 - (bce.vector_embeddings <=> ${embeddingString}::vector) as similarity
         FROM billing_codes bc
+        join billing_code_embeddings bce on bc.id = bce.billing_code_id
         JOIN sections s ON bc.section_id = s.id
         WHERE bc.openai_embedding::vector IS NOT NULL 
           AND bc.code NOT IN (${existingCodes.length > 0 ? existingCodes : ""})
-          AND 1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) > 0.80
+          AND 1 - (bce.vector_embeddings <=> ${embeddingString}::vector) > 0.80
         ORDER BY similarity DESC
         LIMIT ${limit - allResults.length}
       `;
@@ -363,14 +365,15 @@ export async function GET(request: Request) {
               'code', s.code,
               'title', s.title
             ) as section,
-            1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) as similarity
+            1 - (bce.vector_embeddings <=> ${embeddingString}::vector) as similarity
           FROM billing_codes bc
+          join billing_code_embeddings bce on bc.id = bce.billing_code_id
           JOIN sections s ON bc.section_id = s.id
           WHERE bc.openai_embedding IS NOT NULL
             AND bc.code NOT IN (${
               existingCodes.length > 0 ? existingCodes : ""
             })
-            AND 1 - (bc.openai_embedding::vector <=> ${embeddingString}::vector) > 0.70
+            AND 1 - (bce.vector_embeddings <=> ${embeddingString}::vector) > 0.70
           ORDER BY similarity DESC
           LIMIT ${BROADER_SEARCH_LIMIT}
         `;

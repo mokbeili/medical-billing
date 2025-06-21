@@ -52,37 +52,36 @@ model Section {
 }
 
 model BillingCode {
-  id                              Int                      @id @default(autoincrement())
-  code                            String                   @db.VarChar(50)
-  title                           String                   @default("") @db.VarChar(256)
-  description                     String?                  @db.VarChar(256)
+  id                              Int                       @id @default(autoincrement())
+  code                            String                    @db.VarChar(50)
+  title                           String                    @default("") @db.VarChar(256)
+  description                     String?                   @db.VarChar(256)
   section_id                      Int
   openai_embedding                String
-  created_at                      DateTime                 @default(now())
-  updated_at                      DateTime                 @updatedAt
-  billing_record_type             Int                      @default(50) @map("billing_record_type")
-  low_fee                         Float                    @default(0)
-  high_fee                        Float                    @default(0)
-  service_class                   String?                  @db.VarChar(50)
-  add_on_indicator                String?                  @db.VarChar(50)
-  multiple_unit_indicator         String?                  @db.VarChar(50)
-  fee_determinant                 String                   @default("") @db.VarChar(50)
-  anaesthesia_indicator           String?                  @db.VarChar(50)
-  submit_at_100_percent           String?                  @db.VarChar(50)
-  referring_practitioner_required String?                  @db.VarChar(50)
-  start_time_required             String?                  @db.VarChar(50)
-  stop_time_required              String?                  @db.VarChar(50)
+  created_at                      DateTime                  @default(now())
+  updated_at                      DateTime                  @updatedAt
+  billing_record_type             Int                       @default(50) @map("billing_record_type")
+  low_fee                         Float                     @default(0)
+  high_fee                        Float                     @default(0)
+  service_class                   String?                   @db.VarChar(50)
+  add_on_indicator                String?                   @db.VarChar(50)
+  multiple_unit_indicator         String?                   @db.VarChar(50)
+  fee_determinant                 String                    @default("") @db.VarChar(50)
+  anaesthesia_indicator           String?                   @db.VarChar(50)
+  submit_at_100_percent           String?                   @db.VarChar(50)
+  referring_practitioner_required String?                   @db.VarChar(50)
+  start_time_required             String?                   @db.VarChar(50)
+  stop_time_required              String?                   @db.VarChar(50)
   technical_fee                   Float?
-  embedding_vector                Unsupported("tsvector")? @map("embedding_vector")
-  vector_embedding                Unsupported("vector")?
+  embedding_vector                Unsupported("tsvector")?  @map("embedding_vector")
   changeLogs                      BillingCodeChangeLog[]
-  section                         Section                  @relation(fields: [section_id], references: [id])
+  billing_code_embeddings         billing_code_embeddings[]
+  section                         Section                   @relation(fields: [section_id], references: [id])
   serviceCodes                    ServiceCodes[]
 
   @@index([section_id])
   @@index([code])
   @@index([title])
-  @@index([vector_embedding])
   @@map("billing_codes")
 }
 
@@ -308,30 +307,50 @@ model ReferringPhysician {
 }
 
 model SearchQueryLog {
-  id               Int                    @id @default(autoincrement())
-  searchString     String                 @map("search_string")
-  embeddings       String
-  results          String                 @map("results")
-  jurisdictionId   Int                    @map("jurisdiction_id")
-  ipAddress        String?                @map("ip_address")
-  userAgent        String?                @map("user_agent")
-  deviceInfo       String?                @map("device_info")
-  createdAt        DateTime               @default(now()) @map("created_at")
-  updatedAt        DateTime               @updatedAt @map("updated_at")
-  previousLogId    Int?                   @map("previous_log_id")
-  physicianId      String?
-  userId           Int?                   @map("user_id")
-  billingClaimId   String?
-  vector_embedding Unsupported("vector")?
-  BillingClaim     BillingClaim?          @relation(fields: [billingClaimId], references: [id])
-  jurisdiction     Jurisdiction           @relation(fields: [jurisdictionId], references: [id])
-  Physician        Physician?             @relation(fields: [physicianId], references: [id])
-  previousLog      SearchQueryLog?        @relation("PreviousLog", fields: [previousLogId], references: [id])
-  nextLogs         SearchQueryLog[]       @relation("PreviousLog")
-  user             User?                  @relation(fields: [userId], references: [id])
+  id                      Int                       @id @default(autoincrement())
+  searchString            String                    @map("search_string")
+  embeddings              String
+  results                 String                    @map("results")
+  jurisdictionId          Int                       @map("jurisdiction_id")
+  ipAddress               String?                   @map("ip_address")
+  userAgent               String?                   @map("user_agent")
+  deviceInfo              String?                   @map("device_info")
+  createdAt               DateTime                  @default(now()) @map("created_at")
+  updatedAt               DateTime                  @updatedAt @map("updated_at")
+  previousLogId           Int?                      @map("previous_log_id")
+  physicianId             String?
+  userId                  Int?                      @map("user_id")
+  billingClaimId          String?
+  search_query_embeddings search_query_embeddings[]
+  BillingClaim            BillingClaim?             @relation(fields: [billingClaimId], references: [id])
+  jurisdiction            Jurisdiction              @relation(fields: [jurisdictionId], references: [id])
+  Physician               Physician?                @relation(fields: [physicianId], references: [id])
+  previousLog             SearchQueryLog?           @relation("PreviousLog", fields: [previousLogId], references: [id])
+  nextLogs                SearchQueryLog[]          @relation("PreviousLog")
+  user                    User?                     @relation(fields: [userId], references: [id])
 
-  @@index([vector_embedding])
   @@map("search_query_logs")
+}
+
+model billing_code_embeddings {
+  id                Int                   @id @default(autoincrement())
+  billing_code_id   Int
+  vector_embeddings Unsupported("vector")
+  created_at        DateTime?             @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime?             @default(now()) @db.Timestamptz(6)
+  billing_codes     BillingCode           @relation(fields: [billing_code_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model search_query_embeddings {
+  id                  Int                   @id @default(autoincrement())
+  search_query_log_id Int
+  vector_embeddings   Unsupported("vector")
+  created_at          DateTime?             @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime?             @default(now()) @db.Timestamptz(6)
+  search_query_logs   SearchQueryLog        @relation(fields: [search_query_log_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([search_query_log_id], map: "idx_search_query_embeddings_log_id")
+  @@index([vector_embeddings], map: "idx_search_query_embeddings_vector")
 }
 
 enum Role {
