@@ -90,7 +90,7 @@ export default function SearchPage() {
       case "partial_code":
         return "Partial Code Match";
       case "synonym":
-        return "Word Match";
+        return "Text Match";
       case "ai_strict":
         return "AI Match";
       default:
