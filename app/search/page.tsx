@@ -91,10 +91,8 @@ export default function SearchPage() {
         return "Partial Code Match";
       case "synonym":
         return "Synonym Match";
-      case "ai":
-        return "AI Semantic Search";
       case "ai_strict":
-        return "AI Strict Match";
+        return "AI Match";
       default:
         return "AI Refined Selection";
     }
