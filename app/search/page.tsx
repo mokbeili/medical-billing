@@ -121,22 +121,13 @@ export default function SearchPage() {
     <Layout>
       <div className="min-h-screen bg-gray-50">
         <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex justify-between items-center mb-8">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                Medical Billing Code Search
-              </h1>
-              <h4 className="text-m text-gray-900 mt-2">
-                Search for medical billing codes by code, title, or visit
-                description.
-              </h4>
-            </div>
-            <Link href="/signup">
-              <Button variant="outline">Sign Up for Full Access</Button>
-            </Link>
+          <div className="flex justify-between items-center mb-12">
+            <h1 className="text-3xl font-bold text-gray-900">
+              Billing Code Search
+            </h1>
           </div>
 
-          <div className="bg-white shadow-sm rounded-lg p-6">
+          <div className="bg-white shadow-sm rounded-lg">
             <div className="mb-6">
               <textarea
                 value={searchQuery}
@@ -243,9 +234,6 @@ export default function SearchPage() {
             )}
 
             <div className="mt-8 p-4 bg-blue-50 rounded-lg">
-              <h3 className="text-lg font-semibold text-blue-800 mb-2">
-                Want to do more with billing codes?
-              </h3>
               <p className="text-sm text-blue-700 mb-4">
                 Sign up for full access to create and manage billing claims,
                 track submissions, and more.
