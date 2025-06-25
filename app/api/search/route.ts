@@ -133,31 +133,34 @@ export async function GET(request: Request) {
       .replace(/^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$/g, "")
       .replace(/^0+(?=\d)/, "") // Remove leading zeros before any digit
       .replace(/\.?0*$/, "");
-    const exactCodeMatch = await prisma.billingCode.findFirst({
-      where: {
-        code: {
-          equals: cleanedQuery,
-          mode: "insensitive",
-        },
-      },
-      select: {
-        id: true,
-        code: true,
-        title: true,
-        description: true,
-        billing_record_type: true,
-        referring_practitioner_required: true,
-        multiple_unit_indicator: true,
-        start_time_required: true,
-        stop_time_required: true,
-        section: {
-          select: {
-            code: true,
-            title: true,
-          },
-        },
-      },
-    });
+
+    // Try exact match using raw SQL to handle leading zero removal
+    const exactCodeMatches = await prisma.$queryRaw<BaseSearchResult[]>`
+      SELECT 
+        bc.id,
+        bc.code,
+        bc.title,
+        bc.description,
+        bc.referring_practitioner_required,
+        bc.multiple_unit_indicator,
+        bc.start_time_required,
+        bc.stop_time_required,
+        json_build_object(
+          'code', s.code,
+          'title', s.title
+        ) as section
+      FROM billing_codes bc
+      JOIN sections s ON bc.section_id = s.id
+      WHERE 
+        bc.code ILIKE ${query.trim()} OR
+        bc.code ILIKE ${cleanedQuery} OR
+        LTRIM(bc.code, '0') ILIKE ${cleanedQuery} OR
+        LTRIM(bc.code, '0') ILIKE ${query.trim()}
+      LIMIT 1
+    `;
+
+    const exactCodeMatch =
+      exactCodeMatches.length > 0 ? exactCodeMatches[0] : null;
 
     if (exactCodeMatch) {
       addUniqueResults([exactCodeMatch], [], "exact_code");
