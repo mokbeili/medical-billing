@@ -345,7 +345,7 @@ export default function ServiceRecordsPage() {
 
             <div className="space-y-2">
               <label className="block text-sm font-medium">
-                Billing Number
+                Health Services Number
               </label>
               <Input
                 placeholder="Search by billing number"

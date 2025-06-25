@@ -803,7 +803,7 @@ export default function CreateServicePage() {
                       </div>
                       <div className="space-y-2">
                         <label className="block text-sm font-medium">
-                          Billing Number
+                          Health Services Number
                         </label>
                         <Input
                           value={newPatient.billingNumber}
@@ -1345,33 +1345,78 @@ export default function CreateServicePage() {
                             </div>
                           )}
 
-                          <div className="space-y-2">
-                            <label className="block text-sm font-medium">
-                              Bilateral Indicator
-                            </label>
-                            <Select
-                              value={
-                                formData.billingCodes[index]
-                                  .bilateralIndicator || "none"
-                              }
-                              onValueChange={(value) =>
-                                handleUpdateBillingCode(index, {
-                                  bilateralIndicator:
-                                    value === "none" ? null : value,
-                                })
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select bilateral indicator" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="none">None</SelectItem>
-                                <SelectItem value="L">Left</SelectItem>
-                                <SelectItem value="R">Right</SelectItem>
-                                <SelectItem value="B">Both</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
+                          {code.title.includes("Bilateral") && (
+                            <div className="space-y-2">
+                              <label className="block text-sm font-medium">
+                                Bilateral Indicator
+                              </label>
+                              <div className="flex gap-2">
+                                <Button
+                                  type="button"
+                                  variant={
+                                    formData.billingCodes[index]
+                                      .bilateralIndicator === "L"
+                                      ? "default"
+                                      : "outline"
+                                  }
+                                  onClick={() =>
+                                    handleUpdateBillingCode(index, {
+                                      bilateralIndicator:
+                                        formData.billingCodes[index]
+                                          .bilateralIndicator === "L"
+                                          ? null
+                                          : "L",
+                                    })
+                                  }
+                                  className="flex-1"
+                                >
+                                  Left
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant={
+                                    formData.billingCodes[index]
+                                      .bilateralIndicator === "R"
+                                      ? "default"
+                                      : "outline"
+                                  }
+                                  onClick={() =>
+                                    handleUpdateBillingCode(index, {
+                                      bilateralIndicator:
+                                        formData.billingCodes[index]
+                                          .bilateralIndicator === "R"
+                                          ? null
+                                          : "R",
+                                    })
+                                  }
+                                  className="flex-1"
+                                >
+                                  Right
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant={
+                                    formData.billingCodes[index]
+                                      .bilateralIndicator === "B"
+                                      ? "default"
+                                      : "outline"
+                                  }
+                                  onClick={() =>
+                                    handleUpdateBillingCode(index, {
+                                      bilateralIndicator:
+                                        formData.billingCodes[index]
+                                          .bilateralIndicator === "B"
+                                          ? null
+                                          : "B",
+                                    })
+                                  }
+                                  className="flex-1"
+                                >
+                                  Both
+                                </Button>
+                              </div>
+                            </div>
+                          )}
 
                           {isWorXSection(code) && (
                             <div className="col-span-2 space-y-2">
