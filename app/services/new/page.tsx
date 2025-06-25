@@ -397,7 +397,7 @@ export default function CreateServicePage() {
             billing_record_type: code.billing_record_type,
             serviceStartTime: null,
             serviceEndTime: null,
-            numberOfUnits: null,
+            numberOfUnits: code.multiple_unit_indicator === "U" ? 1 : null,
             bilateralIndicator: null,
             specialCircumstances: null,
           },
@@ -1327,21 +1327,60 @@ export default function CreateServicePage() {
                               <label className="block text-sm font-medium">
                                 Number of Units
                               </label>
-                              <Input
-                                type="number"
-                                min="1"
-                                value={
-                                  formData.billingCodes[index].numberOfUnits ||
-                                  ""
-                                }
-                                onChange={(e) =>
-                                  handleUpdateBillingCode(index, {
-                                    numberOfUnits: e.target.value
-                                      ? parseInt(e.target.value)
-                                      : null,
-                                  })
-                                }
-                              />
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    const currentValue =
+                                      formData.billingCodes[index]
+                                        .numberOfUnits || 0;
+                                    if (currentValue > 1) {
+                                      handleUpdateBillingCode(index, {
+                                        numberOfUnits: currentValue - 1,
+                                      });
+                                    }
+                                  }}
+                                  disabled={
+                                    (formData.billingCodes[index]
+                                      .numberOfUnits || 0) <= 1
+                                  }
+                                >
+                                  -
+                                </Button>
+                                <Input
+                                  type="number"
+                                  min="1"
+                                  value={
+                                    formData.billingCodes[index]
+                                      .numberOfUnits || ""
+                                  }
+                                  onChange={(e) =>
+                                    handleUpdateBillingCode(index, {
+                                      numberOfUnits: e.target.value
+                                        ? parseInt(e.target.value)
+                                        : null,
+                                    })
+                                  }
+                                  className="w-16 text-center text-lg font-semibold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                />
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    const currentValue =
+                                      formData.billingCodes[index]
+                                        .numberOfUnits || 0;
+                                    handleUpdateBillingCode(index, {
+                                      numberOfUnits: currentValue + 1,
+                                    });
+                                  }}
+                                >
+                                  +
+                                </Button>
+                              </div>
                             </div>
                           )}
 
