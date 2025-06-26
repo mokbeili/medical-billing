@@ -45,16 +45,6 @@ function pad(
   ).slice(0, length);
 }
 
-function checkDigit(value: string): string {
-  const weights = [9, 8, 7, 6, 5, 4, 3, 2];
-  const sum = value.split("").reduce((acc, digit, index) => {
-    const product = parseInt(digit) * weights[index];
-    return acc + (product > 9 ? product - 9 : product);
-  }, 0);
-  const remainder = sum % 11;
-  return remainder === 0 ? "0" : (11 - remainder).toString();
-}
-
 function formatHeader(p: PractitionerHeader): string {
   return (
     "10" +

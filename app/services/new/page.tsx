@@ -123,6 +123,7 @@ interface NewPatientErrors {
   billingNumber: boolean;
   dateOfBirth: boolean;
   sex: boolean;
+  billingNumberCheckDigit: boolean;
 }
 
 export default function CreateServicePage() {
@@ -325,8 +326,16 @@ export default function CreateServicePage() {
         return;
       }
 
-      if (newPatient.billingNumber.length !== 8) {
+      if (newPatient.billingNumber.length != 9) {
         setNewPatientErrors({ ...newPatientErrors, billingNumber: true });
+        return;
+      }
+
+      if (!checkDigit(newPatient.billingNumber)) {
+        setNewPatientErrors({
+          ...newPatientErrors,
+          billingNumberCheckDigit: true,
+        });
         return;
       }
 
@@ -382,6 +391,19 @@ export default function CreateServicePage() {
     } catch (error) {
       console.error("Error creating patient:", error);
     }
+  };
+
+  const checkDigit = (value: string): boolean => {
+    const weights = [9, 8, 7, 6, 5, 4, 3, 2];
+    const sum = value
+      .slice(0, 8)
+      .split("")
+      .reduce((acc, digit, index) => {
+        const product = parseInt(digit) * weights[index];
+        return acc + product;
+      }, 0);
+    const remainder = sum % 11 > 0 ? 11 - (sum % 11) : 0;
+    return String(remainder) === value[8];
   };
 
   const handleAddCode = (code: BillingCode) => {
@@ -814,16 +836,20 @@ export default function CreateServicePage() {
                             })
                           }
                           placeholder="hsn (8 characters)"
-                          maxLength={8}
+                          maxLength={9}
                           className={
-                            newPatientErrors.billingNumber
+                            newPatientErrors.billingNumber ||
+                            newPatientErrors.billingNumberCheckDigit
                               ? "border-red-500"
                               : ""
                           }
                         />
-                        {newPatientErrors.billingNumber && (
+                        {(newPatientErrors.billingNumber ||
+                          newPatientErrors.billingNumberCheckDigit) && (
                           <p className="text-sm text-red-500">
-                            Billing number must be exactly 8 characters long
+                            {newPatientErrors.billingNumber
+                              ? "Billing number must be exactly 9 characters long"
+                              : "Billing number is invalid"}
                           </p>
                         )}
                       </div>
@@ -901,7 +927,8 @@ export default function CreateServicePage() {
                           !newPatient.firstName ||
                           !newPatient.lastName ||
                           !newPatient.billingNumber ||
-                          newPatient.billingNumber.length !== 8 ||
+                          newPatient.billingNumber.length !== 9 ||
+                          !checkDigit(newPatient.billingNumber) ||
                           !newPatient.dateOfBirth ||
                           !newPatient.sex
                         }
