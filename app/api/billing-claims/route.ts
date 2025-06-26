@@ -118,6 +118,7 @@ export async function POST(request: Request) {
             physician: {
               include: {
                 jurisdiction: true,
+                referringPhysicians: true,
               },
             },
           },
@@ -198,7 +199,8 @@ export async function POST(request: Request) {
         })
         .replace(/\//g, "");
       const location = service.serviceLocation || "0";
-      const facilityNumber = service.healthInstitution?.id.toString();
+      // const facilityNumber = service.healthInstitution?.id.toString();
+      const facilityNumber = "00000";
       const serviceLocation = service.serviceLocation;
       return service.serviceCodes
         .sort(
@@ -253,6 +255,9 @@ export async function POST(request: Request) {
           facilityNumber,
           claimType: serviceCode.billingCode.billing_record_type.toString(),
           serviceLocation,
+          billingRecordType: String(
+            serviceCode.billingCode.billing_record_type
+          ) as "50" | "57",
         }));
     });
 

@@ -32,6 +32,7 @@ type ServiceRecord = {
   facilityNumber?: string;
   claimType?: string;
   serviceLocation?: string;
+  billingRecordType: "50" | "57";
 };
 
 function pad(
@@ -63,7 +64,7 @@ function formatHeader(p: PractitionerHeader): string {
 
 function formatService50(practitionerNumber: string, s: ServiceRecord): string {
   return (
-    "50" +
+    s.billingRecordType +
     pad(practitionerNumber, 4) +
     pad(s.claimNumber, 5) +
     s.sequence.toString() +

@@ -256,7 +256,7 @@ model Service {
   serviceLocation      String              @map("service_location")
   physicianId          String              @map("physician_id")
   serviceCodes         ServiceCodes[]
-  claim                BillingClaim?       @relation(fields: [claimId], references: [id], onDelete: Restrict)
+  claim                BillingClaim?       @relation(fields: [claimId], references: [id], onDelete: SetNull)
   healthInstitution    HealthInstitution?  @relation(fields: [healthInstitutionId], references: [id])
   icdCode              ICDCode?            @relation(fields: [icdCodeId], references: [id])
   patient              Patient?            @relation(fields: [patientId], references: [id])
