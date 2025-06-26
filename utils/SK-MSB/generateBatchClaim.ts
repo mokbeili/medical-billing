@@ -67,7 +67,7 @@ function formatService50(practitionerNumber: string, s: ServiceRecord): string {
     pad(practitionerNumber, 4) +
     pad(s.claimNumber, 5) +
     s.sequence.toString() +
-    pad(s.hsn + checkDigit(s.hsn), 9) +
+    pad(s.hsn, 9) +
     s.dob +
     s.sex +
     pad(s.name.toUpperCase(), 25, "left") +
