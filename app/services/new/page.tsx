@@ -187,6 +187,7 @@ export default function CreateServicePage() {
     billingNumber: false,
     dateOfBirth: false,
     sex: false,
+    billingNumberCheckDigit: false,
   });
 
   useEffect(() => {
