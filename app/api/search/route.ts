@@ -145,6 +145,7 @@ export async function GET(request: Request) {
         bc.multiple_unit_indicator,
         bc.start_time_required,
         bc.stop_time_required,
+        bc.billing_record_type,
         json_build_object(
           'code', s.code,
           'title', s.title
@@ -242,6 +243,11 @@ export async function GET(request: Request) {
         bc.code,
         bc.title,
         bc.description,
+        bc.billing_record_type,
+        bc.referring_practitioner_required,
+        bc.multiple_unit_indicator,
+        bc.start_time_required,
+        bc.stop_time_required,
         json_build_object(
           'code', s.code,
           'title', s.title
@@ -328,6 +334,11 @@ export async function GET(request: Request) {
           bc.code,
           bc.title,
           bc.description,
+          bc.billing_record_type,
+          bc.referring_practitioner_required,
+          bc.multiple_unit_indicator,
+          bc.start_time_required,
+          bc.stop_time_required,
           json_build_object(
             'code', s.code,
             'title', s.title

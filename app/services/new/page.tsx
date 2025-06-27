@@ -110,6 +110,7 @@ interface ServiceCode {
   numberOfUnits: number | null;
   bilateralIndicator: string | null;
   specialCircumstances: string | null;
+  serviceDate: string | null;
 }
 
 interface ServiceErrors {
@@ -173,6 +174,7 @@ export default function CreateServicePage() {
       numberOfUnits: number | null;
       bilateralIndicator: string | null;
       specialCircumstances: string | null;
+      serviceDate: string | null;
     }>,
   });
 
@@ -423,6 +425,7 @@ export default function CreateServicePage() {
             numberOfUnits: code.multiple_unit_indicator === "U" ? 1 : null,
             bilateralIndicator: null,
             specialCircumstances: null,
+            serviceDate: formData.serviceDate,
           },
         ],
       });
@@ -584,14 +587,23 @@ export default function CreateServicePage() {
         codeId: code.codeId,
         status: code.status,
         serviceStartTime: code.serviceStartTime
-          ? combineDateTime(baseDate, code.serviceStartTime)
+          ? combineDateTime(
+              new Date(code.serviceDate || formData.serviceDate),
+              code.serviceStartTime
+            )
           : null,
         serviceEndTime: code.serviceEndTime
-          ? combineDateTime(baseDate, code.serviceEndTime)
+          ? combineDateTime(
+              new Date(code.serviceDate || formData.serviceDate),
+              code.serviceEndTime
+            )
           : null,
         numberOfUnits: code.numberOfUnits || null,
         bilateralIndicator: code.bilateralIndicator,
         specialCircumstances: code.specialCircumstances,
+        serviceDate: code.serviceDate
+          ? new Date(code.serviceDate).toISOString()
+          : baseDate.toISOString(),
       }));
 
       const serviceCodesResponse = await fetch("/api/service-codes", {
@@ -1056,7 +1068,7 @@ export default function CreateServicePage() {
 
               <div className="space-y-2">
                 <label className="block text-sm font-medium">
-                  Service Date
+                  Service Start Date
                 </label>
                 <div className="flex gap-2 items-center">
                   <Input
@@ -1309,51 +1321,95 @@ export default function CreateServicePage() {
                           </Button>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
-                          {code.start_time_required === "Y" && (
-                            <div className="space-y-2">
-                              <label className="block text-sm font-medium">
-                                Service Start Time
-                              </label>
+                        <div className="flex gap-4 items-start justify-around">
+                          <div className="space-y-2">
+                            <label className="block text-sm font-medium">
+                              Service Date
+                            </label>
+                            <div className="flex gap-2 items-center">
                               <Input
-                                type="time"
+                                type="date"
                                 value={
-                                  formData.billingCodes[index]
-                                    .serviceStartTime || ""
+                                  formData.billingCodes[index].serviceDate ||
+                                  formData.serviceDate
                                 }
-                                onChange={(e) =>
-                                  handleUpdateBillingCode(index, {
-                                    serviceStartTime: e.target.value || null,
-                                  })
-                                }
+                                onChange={(e) => {
+                                  const selectedDate = new Date(e.target.value);
+                                  const serviceDate = new Date(
+                                    formData.serviceDate
+                                  );
+                                  serviceDate.setHours(0, 0, 0, 0);
+                                  if (selectedDate >= serviceDate) {
+                                    handleUpdateBillingCode(index, {
+                                      serviceDate: e.target.value,
+                                    });
+                                  }
+                                }}
+                                min={formData.serviceDate}
                               />
-                            </div>
-                          )}
-
-                          {code.stop_time_required === "Y" && (
-                            <div className="space-y-2">
-                              <label className="block text-sm font-medium">
-                                Service End Time
-                              </label>
-                              <Input
-                                type="time"
-                                value={
-                                  formData.billingCodes[index].serviceEndTime ||
-                                  ""
-                                }
-                                onChange={(e) =>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => {
+                                  const currentDate = new Date(
+                                    formData.billingCodes[index].serviceDate ||
+                                      formData.serviceDate
+                                  );
+                                  currentDate.setDate(
+                                    currentDate.getDate() + 1
+                                  );
                                   handleUpdateBillingCode(index, {
-                                    serviceEndTime: e.target.value || null,
-                                  })
+                                    serviceDate: currentDate
+                                      .toISOString()
+                                      .split("T")[0],
+                                  });
+                                }}
+                              >
+                                ↑
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => {
+                                  const currentDate = new Date(
+                                    formData.billingCodes[index].serviceDate ||
+                                      formData.serviceDate
+                                  );
+                                  const serviceDate = new Date(
+                                    formData.serviceDate
+                                  );
+                                  serviceDate.setHours(0, 0, 0, 0);
+                                  currentDate.setDate(
+                                    currentDate.getDate() - 1
+                                  );
+                                  if (currentDate >= serviceDate) {
+                                    handleUpdateBillingCode(index, {
+                                      serviceDate: currentDate
+                                        .toISOString()
+                                        .split("T")[0],
+                                    });
+                                  }
+                                }}
+                                disabled={
+                                  new Date(
+                                    formData.billingCodes[index].serviceDate ||
+                                      formData.serviceDate
+                                  )
+                                    .toISOString()
+                                    .split("T")[0] === formData.serviceDate
                                 }
-                              />
+                              >
+                                ↓
+                              </Button>
                             </div>
-                          )}
+                          </div>
 
                           {code.multiple_unit_indicator === "U" && (
                             <div className="space-y-2">
                               <label className="block text-sm font-medium">
-                                Number of Units
+                                {code.billing_record_type == 57
+                                  ? "Total Visits"
+                                  : "Number of Units"}
                               </label>
                               <div className="flex items-center gap-2">
                                 <Button
@@ -1409,6 +1465,48 @@ export default function CreateServicePage() {
                                   +
                                 </Button>
                               </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          {code.start_time_required === "Y" && (
+                            <div className="space-y-2">
+                              <label className="block text-sm font-medium">
+                                Service Start Time
+                              </label>
+                              <Input
+                                type="time"
+                                value={
+                                  formData.billingCodes[index]
+                                    .serviceStartTime || ""
+                                }
+                                onChange={(e) =>
+                                  handleUpdateBillingCode(index, {
+                                    serviceStartTime: e.target.value || null,
+                                  })
+                                }
+                              />
+                            </div>
+                          )}
+
+                          {code.stop_time_required === "Y" && (
+                            <div className="space-y-2">
+                              <label className="block text-sm font-medium">
+                                Service End Time
+                              </label>
+                              <Input
+                                type="time"
+                                value={
+                                  formData.billingCodes[index].serviceEndTime ||
+                                  ""
+                                }
+                                onChange={(e) =>
+                                  handleUpdateBillingCode(index, {
+                                    serviceEndTime: e.target.value || null,
+                                  })
+                                }
+                              />
                             </div>
                           )}
 
