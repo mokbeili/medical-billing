@@ -50,6 +50,7 @@ interface Service {
     bilateralIndicator: string | null;
     serviceStartTime: string | null;
     serviceEndTime: string | null;
+    serviceDate: string | null;
     summary: string;
     createdAt: string;
     billingCode: {
@@ -423,7 +424,7 @@ export default function ServiceRecordsPage() {
                       Patient
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Service Date
+                      Service Start Date
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
@@ -489,6 +490,9 @@ export default function ServiceRecordsPage() {
                                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         Section
                                       </th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Date
+                                      </th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -509,6 +513,17 @@ export default function ServiceRecordsPage() {
                                               serviceCode.billingCode.section
                                                 .title
                                             }
+                                          </td>
+                                          <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
+                                            {serviceCode.serviceDate
+                                              ? new Date(
+                                                  serviceCode.serviceDate
+                                                )
+                                                  .toISOString()
+                                                  .slice(0, 10)
+                                              : new Date(service.serviceDate)
+                                                  .toISOString()
+                                                  .slice(0, 10)}
                                           </td>
                                         </tr>
                                       );

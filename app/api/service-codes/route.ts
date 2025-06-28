@@ -45,6 +45,7 @@ export async function POST(request: Request) {
             serviceEndTime: code.serviceEndTime
               ? new Date(code.serviceEndTime)
               : null,
+            serviceDate: code.serviceDate ? new Date(code.serviceDate) : null,
             bilateralIndicator: code.bilateralIndicator,
             numberOfUnits: code.numberOfUnits || 1,
             specialCircumstances: code.specialCircumstances,
