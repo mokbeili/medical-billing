@@ -278,6 +278,7 @@ model ServiceCodes {
   serviceStartTime     DateTime?   @map("service_start_time")
   serviceEndTime       DateTime?   @map("service_end_time")
   serviceDate          DateTime?   @map("service_date")
+  serviceEndDate       DateTime?   @map("service_end_date")
   bilateralIndicator   String?     @map("bilateral_indicator")
   numberOfUnits        Int         @map("number_of_units")
   serviceId            Int         @map("service_id")

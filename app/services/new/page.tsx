@@ -111,6 +111,7 @@ interface ServiceCode {
   bilateralIndicator: string | null;
   specialCircumstances: string | null;
   serviceDate: string | null;
+  serviceEndDate: string | null;
 }
 
 interface ServiceErrors {
@@ -118,7 +119,6 @@ interface ServiceErrors {
   patient: boolean;
   billingCodes: boolean;
   serviceDate: boolean;
-  type57DateUnitCombinations: boolean;
 }
 
 interface NewPatientErrors {
@@ -176,10 +176,7 @@ export default function CreateServicePage() {
       bilateralIndicator: string | null;
       specialCircumstances: string | null;
       serviceDate: string | null;
-      dateUnitCombinations: Array<{
-        serviceDate: string;
-        numberOfUnits: number;
-      }>;
+      serviceEndDate: string | null;
     }>,
   });
 
@@ -188,7 +185,6 @@ export default function CreateServicePage() {
     patient: false,
     billingCodes: false,
     serviceDate: false,
-    type57DateUnitCombinations: false,
   });
 
   const [newPatientErrors, setNewPatientErrors] = useState<NewPatientErrors>({
@@ -419,12 +415,6 @@ export default function CreateServicePage() {
     if (!selectedCodes.find((c) => c.id === code.id)) {
       setSelectedCodes([...selectedCodes, code]);
 
-      // Initialize dateUnitCombinations based on code type
-      const initialDateUnitCombinations =
-        code.billing_record_type === 57
-          ? [{ serviceDate: formData.serviceDate, numberOfUnits: 1 }]
-          : [];
-
       setFormData({
         ...formData,
         billingCodes: [
@@ -435,15 +425,11 @@ export default function CreateServicePage() {
             billing_record_type: code.billing_record_type,
             serviceStartTime: null,
             serviceEndTime: null,
-            numberOfUnits:
-              code.multiple_unit_indicator === "U" &&
-              code.billing_record_type !== 57
-                ? 1
-                : null,
+            numberOfUnits: code.multiple_unit_indicator === "U" ? 1 : null,
             bilateralIndicator: null,
             specialCircumstances: null,
             serviceDate: formData.serviceDate,
-            dateUnitCombinations: initialDateUnitCombinations,
+            serviceEndDate: null,
           },
         ],
       });
@@ -457,89 +443,20 @@ export default function CreateServicePage() {
     updates: Partial<(typeof formData.billingCodes)[0]>
   ) => {
     const updatedBillingCodes = [...formData.billingCodes];
-    updatedBillingCodes[index] = { ...updatedBillingCodes[index], ...updates };
-    setFormData({ ...formData, billingCodes: updatedBillingCodes });
-  };
+    const currentCode = updatedBillingCodes[index];
 
-  const handleAddDateUnitCombination = (codeIndex: number) => {
-    const updatedBillingCodes = [...formData.billingCodes];
-    const currentCode = updatedBillingCodes[codeIndex];
+    // If serviceDate is being updated, check if it's greater than serviceEndDate
+    if (updates.serviceDate && currentCode.serviceEndDate) {
+      const newStartDate = new Date(updates.serviceDate);
+      const currentEndDate = new Date(currentCode.serviceEndDate);
 
-    // Determine the appropriate date for the new combination
-    let newDate = formData.serviceDate;
-
-    // If there are existing combinations, use the latest date as the floor
-    if (currentCode.dateUnitCombinations.length > 0) {
-      const latestCombination =
-        currentCode.dateUnitCombinations[
-          currentCode.dateUnitCombinations.length - 1
-        ];
-      const latestDate = new Date(latestCombination.serviceDate);
-      latestDate.setDate(latestDate.getDate() + 1); // Add one day to the latest date
-      newDate = latestDate.toISOString().split("T")[0];
-    }
-
-    // Add a new date/unit combination
-    currentCode.dateUnitCombinations.push({
-      serviceDate: newDate,
-      numberOfUnits: 1,
-    });
-
-    setFormData({ ...formData, billingCodes: updatedBillingCodes });
-  };
-
-  const handleRemoveDateUnitCombination = (
-    codeIndex: number,
-    combinationIndex: number
-  ) => {
-    const updatedBillingCodes = [...formData.billingCodes];
-    const currentCode = updatedBillingCodes[codeIndex];
-
-    // Remove the specified combination
-    currentCode.dateUnitCombinations.splice(combinationIndex, 1);
-
-    setFormData({ ...formData, billingCodes: updatedBillingCodes });
-  };
-
-  const handleUpdateDateUnitCombination = (
-    codeIndex: number,
-    combinationIndex: number,
-    updates: Partial<{ serviceDate: string; numberOfUnits: number }>
-  ) => {
-    const updatedBillingCodes = [...formData.billingCodes];
-    const currentCode = updatedBillingCodes[codeIndex];
-
-    // If updating serviceDate, implement floor mechanism
-    if (updates.serviceDate) {
-      const newDate = new Date(updates.serviceDate);
-
-      // Floor 1: Cannot be earlier than the main service date
-      const serviceDate = new Date(formData.serviceDate);
-      serviceDate.setHours(0, 0, 0, 0);
-
-      if (newDate < serviceDate) {
-        updates.serviceDate = serviceDate.toISOString().split("T")[0];
-      }
-
-      // Floor 2: Cannot be earlier than the date above it in the list
-      if (combinationIndex > 0) {
-        const previousCombination =
-          currentCode.dateUnitCombinations[combinationIndex - 1];
-        const previousDate = new Date(previousCombination.serviceDate);
-        previousDate.setHours(0, 0, 0, 0);
-
-        if (newDate < previousDate) {
-          updates.serviceDate = previousDate.toISOString().split("T")[0];
-        }
+      // If the new start date is greater than the current end date, update end date to match
+      if (newStartDate > currentEndDate) {
+        updates.serviceEndDate = updates.serviceDate;
       }
     }
 
-    // Update the specified combination
-    currentCode.dateUnitCombinations[combinationIndex] = {
-      ...currentCode.dateUnitCombinations[combinationIndex],
-      ...updates,
-    };
-
+    updatedBillingCodes[index] = { ...currentCode, ...updates };
     setFormData({ ...formData, billingCodes: updatedBillingCodes });
   };
 
@@ -589,11 +506,6 @@ export default function CreateServicePage() {
       patient: !formData.patientId,
       billingCodes: formData.billingCodes.length === 0,
       serviceDate: !formData.serviceDate,
-      type57DateUnitCombinations: formData.billingCodes.some(
-        (code) =>
-          code.billing_record_type === 57 &&
-          code.dateUnitCombinations.length === 0
-      ),
     };
     setServiceErrors(newServiceErrors);
 
@@ -623,8 +535,7 @@ export default function CreateServicePage() {
     return (
       !Object.values(newServiceErrors).some(Boolean) &&
       !hasWorXWithoutSpecialCircumstances &&
-      !hasReferringPhysicianError &&
-      !newServiceErrors.type57DateUnitCombinations
+      !hasReferringPhysicianError
     );
   };
 
@@ -647,8 +558,14 @@ export default function CreateServicePage() {
     }
 
     try {
-      // Create base date from service date
-      const baseDate = new Date(formData.serviceDate);
+      // Calculate the floored service date (earliest date among all billing codes)
+      const allServiceDates = formData.billingCodes
+        .map((code) => code.serviceDate || formData.serviceDate)
+        .map((dateStr) => new Date(dateStr));
+
+      const flooredServiceDate = new Date(
+        Math.min(...allServiceDates.map((date) => date.getTime()))
+      );
 
       // Helper function to combine date and time
       const combineDateTime = (date: Date, timeStr: string) => {
@@ -667,7 +584,7 @@ export default function CreateServicePage() {
         icdCodeId: formData.icdCodeId,
         healthInstitutionId: formData.healthInstitutionId,
         summary: formData.summary,
-        serviceDate: baseDate.toISOString(),
+        serviceDate: flooredServiceDate.toISOString(),
         serviceLocation: formData.serviceLocation,
       };
 
@@ -693,61 +610,33 @@ export default function CreateServicePage() {
       formData.billingCodes.forEach((code) => {
         const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
 
-        if (
-          selectedCode &&
-          selectedCode.billing_record_type === 57 &&
-          code.dateUnitCombinations.length > 0
-        ) {
-          // For type 57 codes, create a separate service code for each date/unit combination
-          code.dateUnitCombinations.forEach((combination) => {
-            serviceCodesData.push({
-              serviceId: createdService.id,
-              codeId: code.codeId,
-              status: code.status,
-              serviceStartTime: code.serviceStartTime
-                ? combineDateTime(
-                    new Date(combination.serviceDate),
-                    code.serviceStartTime
-                  )
-                : null,
-              serviceEndTime: code.serviceEndTime
-                ? combineDateTime(
-                    new Date(combination.serviceDate),
-                    code.serviceEndTime
-                  )
-                : null,
-              numberOfUnits: combination.numberOfUnits,
-              bilateralIndicator: code.bilateralIndicator,
-              specialCircumstances: code.specialCircumstances,
-              serviceDate: new Date(combination.serviceDate).toISOString(),
-            });
-          });
-        } else {
-          // For non-type 57 codes, use the existing logic
-          serviceCodesData.push({
-            serviceId: createdService.id,
-            codeId: code.codeId,
-            status: code.status,
-            serviceStartTime: code.serviceStartTime
-              ? combineDateTime(
-                  new Date(code.serviceDate || formData.serviceDate),
-                  code.serviceStartTime
-                )
-              : null,
-            serviceEndTime: code.serviceEndTime
-              ? combineDateTime(
-                  new Date(code.serviceDate || formData.serviceDate),
-                  code.serviceEndTime
-                )
-              : null,
-            numberOfUnits: code.numberOfUnits || null,
-            bilateralIndicator: code.bilateralIndicator,
-            specialCircumstances: code.specialCircumstances,
-            serviceDate: code.serviceDate
-              ? new Date(code.serviceDate).toISOString()
-              : baseDate.toISOString(),
-          });
-        }
+        // Create service code for each billing code
+        serviceCodesData.push({
+          serviceId: createdService.id,
+          codeId: code.codeId,
+          status: code.status,
+          serviceStartTime: code.serviceStartTime
+            ? combineDateTime(
+                new Date(code.serviceDate || formData.serviceDate),
+                code.serviceStartTime
+              )
+            : null,
+          serviceEndTime: code.serviceEndTime
+            ? combineDateTime(
+                new Date(code.serviceDate || formData.serviceDate),
+                code.serviceEndTime
+              )
+            : null,
+          numberOfUnits: code.numberOfUnits || null,
+          bilateralIndicator: code.bilateralIndicator,
+          specialCircumstances: code.specialCircumstances,
+          serviceDate: code.serviceDate
+            ? new Date(code.serviceDate).toISOString()
+            : flooredServiceDate.toISOString(),
+          serviceEndDate: code.serviceEndDate
+            ? new Date(code.serviceEndDate).toISOString()
+            : null,
+        });
       });
 
       const serviceCodesResponse = await fetch("/api/service-codes", {
@@ -788,6 +677,10 @@ export default function CreateServicePage() {
 
   const isHSection = (code: BillingCode) => {
     return code.section.code === "H";
+  };
+
+  const isType57Code = (code: BillingCode) => {
+    return code.billing_record_type === 57;
   };
 
   const isWorXWithoutSpecialCircumstances = formData.billingCodes.some(
@@ -1283,6 +1176,96 @@ export default function CreateServicePage() {
 
               <div className="space-y-2">
                 <label className="block text-sm font-medium">
+                  Service End Date
+                </label>
+                <div className="flex gap-4 items-start justify-around">
+                  <Input
+                    type="date"
+                    value={
+                      formData.billingCodes.find((code) => code.serviceEndDate)
+                        ?.serviceEndDate || ""
+                    }
+                    onChange={(e) => {
+                      const selectedDate = new Date(e.target.value);
+                      const startDate = new Date(formData.serviceDate);
+                      if (selectedDate >= startDate) {
+                        // Update all billing codes with the new end date
+                        const updatedBillingCodes = formData.billingCodes.map(
+                          (code) => ({
+                            ...code,
+                            serviceEndDate: e.target.value,
+                          })
+                        );
+                        setFormData({
+                          ...formData,
+                          billingCodes: updatedBillingCodes,
+                        });
+                      }
+                    }}
+                    min={formData.serviceDate}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      const currentEndDate = formData.billingCodes.find(
+                        (code) => code.serviceEndDate
+                      )?.serviceEndDate;
+                      if (currentEndDate) {
+                        const newDate = new Date(currentEndDate);
+                        newDate.setDate(newDate.getDate() + 1);
+                        const updatedBillingCodes = formData.billingCodes.map(
+                          (code) => ({
+                            ...code,
+                            serviceEndDate: newDate.toISOString().split("T")[0],
+                          })
+                        );
+                        setFormData({
+                          ...formData,
+                          billingCodes: updatedBillingCodes,
+                        });
+                      }
+                    }}
+                  >
+                    ↑
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      const currentEndDate = formData.billingCodes.find(
+                        (code) => code.serviceEndDate
+                      )?.serviceEndDate;
+                      if (currentEndDate) {
+                        const newDate = new Date(currentEndDate);
+                        newDate.setDate(newDate.getDate() - 1);
+                        if (newDate >= new Date(formData.serviceDate)) {
+                          const updatedBillingCodes = formData.billingCodes.map(
+                            (code) => ({
+                              ...code,
+                              serviceEndDate: newDate
+                                .toISOString()
+                                .split("T")[0],
+                            })
+                          );
+                          setFormData({
+                            ...formData,
+                            billingCodes: updatedBillingCodes,
+                          });
+                        }
+                      }
+                    }}
+                  >
+                    ↓
+                  </Button>
+                </div>
+                <p className="text-sm text-gray-500">
+                  Optional: Set if service spans multiple days
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium">
                   Service Location
                 </label>
                 <div className="flex gap-2">
@@ -1443,12 +1426,6 @@ export default function CreateServicePage() {
                   </p>
                 )}
 
-                {serviceErrors.type57DateUnitCombinations && (
-                  <p className="text-sm text-red-500">
-                    Type 57 codes require at least one date/unit combination
-                  </p>
-                )}
-
                 {selectedCodes.length > 0 && (
                   <div className="mt-4 space-y-4">
                     {selectedCodes.map((code, index) => (
@@ -1472,281 +1449,111 @@ export default function CreateServicePage() {
                         </div>
 
                         <div className="flex gap-4 items-start justify-around">
-                          {code.billing_record_type === 57 ? (
-                            // Special handling for type 57 codes with multiple date/unit combinations
-                            <div className="w-full space-y-4">
-                              <div className="flex items-center justify-between">
+                          {isType57Code(code) && (
+                            <>
+                              <div className="space-y-2">
                                 <label className="block text-sm font-medium">
-                                  Date/Unit Combinations
+                                  Service Start Date
                                 </label>
+                                <Input
+                                  type="date"
+                                  defaultValue={formData.serviceDate}
+                                  value={
+                                    formData.billingCodes[index].serviceDate ||
+                                    formData.serviceDate
+                                  }
+                                  onChange={(e) =>
+                                    handleUpdateBillingCode(index, {
+                                      serviceDate: e.target.value,
+                                    })
+                                  }
+                                  min={new Date().toISOString().split("T")[0]}
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <label className="block text-sm font-medium">
+                                  Service End Date
+                                </label>
+                                <Input
+                                  type="date"
+                                  value={
+                                    formData.billingCodes[index]
+                                      .serviceEndDate || ""
+                                  }
+                                  onChange={(e) =>
+                                    handleUpdateBillingCode(index, {
+                                      serviceEndDate: e.target.value || null,
+                                    })
+                                  }
+                                  min={
+                                    formData.billingCodes[index].serviceDate ||
+                                    formData.serviceDate
+                                  }
+                                />
+                              </div>
+                            </>
+                          )}
+
+                          {code.multiple_unit_indicator === "U" && (
+                            <div className="space-y-2">
+                              <label className="block text-sm font-medium">
+                                Number of Units
+                              </label>
+                              <div className="flex items-center gap-2">
                                 <Button
                                   type="button"
                                   variant="outline"
                                   size="sm"
-                                  onClick={() =>
-                                    handleAddDateUnitCombination(index)
+                                  onClick={() => {
+                                    const currentValue =
+                                      formData.billingCodes[index]
+                                        .numberOfUnits || 0;
+                                    if (currentValue > 1) {
+                                      handleUpdateBillingCode(index, {
+                                        numberOfUnits: currentValue - 1,
+                                      });
+                                    }
+                                  }}
+                                  disabled={
+                                    (formData.billingCodes[index]
+                                      .numberOfUnits || 0) <= 1
                                   }
                                 >
-                                  + Add Date/Units
+                                  -
+                                </Button>
+                                <Input
+                                  type="number"
+                                  min="1"
+                                  value={
+                                    formData.billingCodes[index]
+                                      .numberOfUnits || ""
+                                  }
+                                  onChange={(e) =>
+                                    handleUpdateBillingCode(index, {
+                                      numberOfUnits: e.target.value
+                                        ? parseInt(e.target.value)
+                                        : 1,
+                                    })
+                                  }
+                                  className="w-16 text-center text-lg font-semibold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                />
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    const currentValue =
+                                      formData.billingCodes[index]
+                                        .numberOfUnits || 0;
+                                    handleUpdateBillingCode(index, {
+                                      numberOfUnits: currentValue + 1,
+                                    });
+                                  }}
+                                >
+                                  +
                                 </Button>
                               </div>
-
-                              {formData.billingCodes[index].dateUnitCombinations
-                                .length === 0 ? (
-                                <div className="text-sm text-gray-500 italic">
-                                  No date/unit combinations added yet. Click "+
-                                  Add Date/Units" to add one.
-                                </div>
-                              ) : (
-                                <div className="space-y-3">
-                                  {formData.billingCodes[
-                                    index
-                                  ].dateUnitCombinations.map(
-                                    (combination, combinationIndex) => (
-                                      <div
-                                        key={combinationIndex}
-                                        className="flex gap-4 items-center p-3 bg-gray-100 rounded-md"
-                                      >
-                                        <div className="space-y-2 flex-1">
-                                          <label className="block text-sm font-medium">
-                                            Service Date
-                                          </label>
-                                          <div className="flex gap-2 items-center">
-                                            <Input
-                                              type="date"
-                                              value={combination.serviceDate}
-                                              onChange={(e) => {
-                                                handleUpdateDateUnitCombination(
-                                                  index,
-                                                  combinationIndex,
-                                                  {
-                                                    serviceDate: e.target.value,
-                                                  }
-                                                );
-                                              }}
-                                              min={formData.serviceDate}
-                                            />
-                                            <Button
-                                              type="button"
-                                              variant="outline"
-                                              size="sm"
-                                              onClick={() => {
-                                                const currentDate = new Date(
-                                                  combination.serviceDate
-                                                );
-                                                currentDate.setDate(
-                                                  currentDate.getDate() + 1
-                                                );
-                                                handleUpdateDateUnitCombination(
-                                                  index,
-                                                  combinationIndex,
-                                                  {
-                                                    serviceDate: currentDate
-                                                      .toISOString()
-                                                      .split("T")[0],
-                                                  }
-                                                );
-                                              }}
-                                            >
-                                              ↑
-                                            </Button>
-                                            <Button
-                                              type="button"
-                                              variant="outline"
-                                              size="sm"
-                                              onClick={() => {
-                                                const currentDate = new Date(
-                                                  combination.serviceDate
-                                                );
-                                                currentDate.setDate(
-                                                  currentDate.getDate() - 1
-                                                );
-                                                handleUpdateDateUnitCombination(
-                                                  index,
-                                                  combinationIndex,
-                                                  {
-                                                    serviceDate: currentDate
-                                                      .toISOString()
-                                                      .split("T")[0],
-                                                  }
-                                                );
-                                              }}
-                                              disabled={
-                                                combination.serviceDate ===
-                                                formData.serviceDate
-                                              }
-                                            >
-                                              ↓
-                                            </Button>
-                                          </div>
-                                        </div>
-
-                                        <div className="space-y-2">
-                                          <label className="block text-sm font-medium">
-                                            Visit Count
-                                          </label>
-                                          <div className="flex items-center gap-2">
-                                            <Button
-                                              type="button"
-                                              variant="outline"
-                                              size="sm"
-                                              onClick={() => {
-                                                if (
-                                                  combination.numberOfUnits > 1
-                                                ) {
-                                                  handleUpdateDateUnitCombination(
-                                                    index,
-                                                    combinationIndex,
-                                                    {
-                                                      numberOfUnits:
-                                                        combination.numberOfUnits -
-                                                        1,
-                                                    }
-                                                  );
-                                                }
-                                              }}
-                                              disabled={
-                                                combination.numberOfUnits <= 1
-                                              }
-                                            >
-                                              -
-                                            </Button>
-                                            <Input
-                                              type="number"
-                                              min="1"
-                                              value={combination.numberOfUnits}
-                                              onChange={(e) =>
-                                                handleUpdateDateUnitCombination(
-                                                  index,
-                                                  combinationIndex,
-                                                  {
-                                                    numberOfUnits: e.target
-                                                      .value
-                                                      ? parseInt(e.target.value)
-                                                      : 1,
-                                                  }
-                                                )
-                                              }
-                                              className="w-16 text-center text-lg font-semibold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                            />
-                                            <Button
-                                              type="button"
-                                              variant="outline"
-                                              size="sm"
-                                              onClick={() => {
-                                                handleUpdateDateUnitCombination(
-                                                  index,
-                                                  combinationIndex,
-                                                  {
-                                                    numberOfUnits:
-                                                      combination.numberOfUnits +
-                                                      1,
-                                                  }
-                                                );
-                                              }}
-                                            >
-                                              +
-                                            </Button>
-                                          </div>
-                                        </div>
-
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() =>
-                                            handleRemoveDateUnitCombination(
-                                              index,
-                                              combinationIndex
-                                            )
-                                          }
-                                          className="text-red-500 hover:text-red-700"
-                                        >
-                                          Remove
-                                        </Button>
-                                      </div>
-                                    )
-                                  )}
-                                </div>
-                              )}
                             </div>
-                          ) : (
-                            // Original behavior for non-type 57 codes
-                            <>
-                              {code.multiple_unit_indicator === "U" && (
-                                <div className="space-y-2">
-                                  <label className="block text-sm font-medium">
-                                    Number of Units
-                                  </label>
-                                  <div className="flex items-center gap-2">
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => {
-                                        const currentValue =
-                                          formData.billingCodes[index]
-                                            .numberOfUnits || 0;
-                                        if (currentValue > 1) {
-                                          handleUpdateDateUnitCombination(
-                                            index,
-                                            0,
-                                            {
-                                              numberOfUnits: currentValue - 1,
-                                            }
-                                          );
-                                        }
-                                      }}
-                                      disabled={
-                                        (formData.billingCodes[index]
-                                          .numberOfUnits || 0) <= 1
-                                      }
-                                    >
-                                      -
-                                    </Button>
-                                    <Input
-                                      type="number"
-                                      min="1"
-                                      value={
-                                        formData.billingCodes[index]
-                                          .numberOfUnits || ""
-                                      }
-                                      onChange={(e) =>
-                                        handleUpdateDateUnitCombination(
-                                          index,
-                                          0,
-                                          {
-                                            numberOfUnits: e.target.value
-                                              ? parseInt(e.target.value)
-                                              : 1,
-                                          }
-                                        )
-                                      }
-                                      className="w-16 text-center text-lg font-semibold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                    />
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => {
-                                        const currentValue =
-                                          formData.billingCodes[index]
-                                            .numberOfUnits || 0;
-                                        handleUpdateDateUnitCombination(
-                                          index,
-                                          0,
-                                          {
-                                            numberOfUnits: currentValue + 1,
-                                          }
-                                        );
-                                      }}
-                                    >
-                                      +
-                                    </Button>
-                                  </div>
-                                </div>
-                              )}
-                            </>
                           )}
                         </div>
 
