@@ -118,3 +118,63 @@ export async function GET() {
     return new NextResponse("Internal Server Error", { status: 500 });
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return new NextResponse("Unauthorized", { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const ids = searchParams.get("ids");
+
+    if (!ids) {
+      return new NextResponse("Missing service code IDs", { status: 400 });
+    }
+
+    const serviceCodeIds = ids.split(",").map((id) => parseInt(id.trim()));
+
+    if (serviceCodeIds.some(isNaN)) {
+      return new NextResponse("Invalid service code IDs", { status: 400 });
+    }
+
+    // Verify that all service codes belong to the authenticated user
+    const existingServiceCodes = await prisma.serviceCodes.findMany({
+      where: {
+        id: { in: serviceCodeIds },
+        service: {
+          patient: {
+            physician: {
+              user: {
+                id: parseInt(session.user.id),
+              },
+            },
+          },
+        },
+      },
+      select: { id: true },
+    });
+
+    if (existingServiceCodes.length !== serviceCodeIds.length) {
+      return new NextResponse("Some service codes not found or unauthorized", {
+        status: 404,
+      });
+    }
+
+    // Delete the service codes
+    const deletedServiceCodes = await prisma.serviceCodes.deleteMany({
+      where: {
+        id: { in: serviceCodeIds },
+      },
+    });
+
+    return NextResponse.json({
+      message: `Successfully deleted ${deletedServiceCodes.count} service code(s)`,
+      deletedCount: deletedServiceCodes.count,
+    });
+  } catch (error) {
+    console.error("Error deleting service codes:", error);
+    return new NextResponse("Internal Server Error", { status: 500 });
+  }
+}
