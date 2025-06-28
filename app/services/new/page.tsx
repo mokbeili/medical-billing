@@ -1583,7 +1583,7 @@ export default function CreateServicePage() {
 
                                         <div className="space-y-2">
                                           <label className="block text-sm font-medium">
-                                            Number of Units
+                                            Visit Count
                                           </label>
                                           <div className="flex items-center gap-2">
                                             <Button
@@ -1673,87 +1673,6 @@ export default function CreateServicePage() {
                           ) : (
                             // Original behavior for non-type 57 codes
                             <>
-                              <div className="space-y-2">
-                                <label className="block text-sm font-medium">
-                                  Service Date
-                                </label>
-                                <div className="flex gap-2 items-center">
-                                  <Input
-                                    type="date"
-                                    value={
-                                      formData.billingCodes[index]
-                                        .serviceDate || formData.serviceDate
-                                    }
-                                    onChange={(e) => {
-                                      handleUpdateDateUnitCombination(
-                                        index,
-                                        0,
-                                        {
-                                          serviceDate: e.target.value,
-                                        }
-                                      );
-                                    }}
-                                    min={formData.serviceDate}
-                                  />
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() => {
-                                      const currentDate = new Date(
-                                        formData.billingCodes[index]
-                                          .serviceDate || formData.serviceDate
-                                      );
-                                      currentDate.setDate(
-                                        currentDate.getDate() + 1
-                                      );
-                                      handleUpdateDateUnitCombination(
-                                        index,
-                                        0,
-                                        {
-                                          serviceDate: currentDate
-                                            .toISOString()
-                                            .split("T")[0],
-                                        }
-                                      );
-                                    }}
-                                  >
-                                    ↑
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() => {
-                                      const currentDate = new Date(
-                                        formData.billingCodes[index]
-                                          .serviceDate || formData.serviceDate
-                                      );
-                                      currentDate.setDate(
-                                        currentDate.getDate() - 1
-                                      );
-                                      handleUpdateDateUnitCombination(
-                                        index,
-                                        0,
-                                        {
-                                          serviceDate: currentDate
-                                            .toISOString()
-                                            .split("T")[0],
-                                        }
-                                      );
-                                    }}
-                                    disabled={
-                                      new Date(
-                                        formData.billingCodes[index]
-                                          .serviceDate || formData.serviceDate
-                                      )
-                                        .toISOString()
-                                        .split("T")[0] === formData.serviceDate
-                                    }
-                                  >
-                                    ↓
-                                  </Button>
-                                </div>
-                              </div>
-
                               {code.multiple_unit_indicator === "U" && (
                                 <div className="space-y-2">
                                   <label className="block text-sm font-medium">
