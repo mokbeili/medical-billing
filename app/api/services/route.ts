@@ -19,6 +19,8 @@ export async function POST(request: Request) {
       serviceLocation,
       healthInstitutionId,
       referringPhysicianId,
+      icdCodeId,
+      summary,
     } = data;
 
     // Validate required fields
@@ -41,6 +43,7 @@ export async function POST(request: Request) {
         },
         serviceDate: new Date(serviceDate),
         serviceLocation,
+        summary: summary || "",
         healthInstitution: healthInstitutionId
           ? {
               connect: {
@@ -56,10 +59,18 @@ export async function POST(request: Request) {
               },
             }
           : undefined,
+        icdCode: icdCodeId
+          ? {
+              connect: {
+                id: icdCodeId,
+              },
+            }
+          : undefined,
       },
       include: {
         patient: true,
         healthInstitution: true,
+        icdCode: true,
         serviceCodes: {
           include: {
             billingCode: true,
@@ -140,6 +151,8 @@ export async function PUT(request: Request) {
       serviceLocation,
       healthInstitutionId,
       referringPhysicianId,
+      icdCodeId,
+      summary,
       status,
     } = data;
 
@@ -186,6 +199,10 @@ export async function PUT(request: Request) {
       updateData.serviceLocation = serviceLocation;
     }
 
+    if (summary !== undefined) {
+      updateData.summary = summary;
+    }
+
     if (healthInstitutionId !== undefined) {
       updateData.healthInstitution = healthInstitutionId
         ? { connect: { id: healthInstitutionId } }
@@ -195,6 +212,12 @@ export async function PUT(request: Request) {
     if (referringPhysicianId !== undefined) {
       updateData.referringPhysician = referringPhysicianId
         ? { connect: { id: referringPhysicianId } }
+        : { disconnect: true };
+    }
+
+    if (icdCodeId !== undefined) {
+      updateData.icdCode = icdCodeId
+        ? { connect: { id: icdCodeId } }
         : { disconnect: true };
     }
 
