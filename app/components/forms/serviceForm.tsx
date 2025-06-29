@@ -128,7 +128,13 @@ interface NewPatientErrors {
   billingNumberCheckDigit: boolean;
 }
 
-export default function ServiceForm({ type }: { type: "new" | "edit" }) {
+export default function ServiceForm({
+  type,
+  serviceId,
+}: {
+  type: "new" | "edit";
+  serviceId?: string;
+}) {
   const router = useRouter();
   const { data: session, status } = useSession();
   const [physicians, setPhysicians] = useState<Physician[]>([]);
@@ -194,13 +200,80 @@ export default function ServiceForm({ type }: { type: "new" | "edit" }) {
     billingNumberCheckDigit: false,
   });
 
+  // Load existing service data for editing
+  useEffect(() => {
+    const loadExistingService = async () => {
+      if (type === "edit" && serviceId) {
+        try {
+          const response = await fetch(`/api/services/${serviceId}`);
+          if (response.ok) {
+            const service = await response.json();
+
+            // Set form data with existing service data
+            setFormData({
+              physicianId: service.physicianId,
+              patientId: service.patientId,
+              referringPhysicianId: service.referringPhysicianId,
+              icdCodeId: service.icdCodeId,
+              healthInstitutionId: service.healthInstitutionId,
+              summary: service.summary,
+              serviceDate: new Date(service.serviceDate)
+                .toISOString()
+                .split("T")[0],
+              serviceLocation: service.serviceLocation,
+              billingCodes: service.serviceCodes.map((sc: any) => ({
+                codeId: sc.codeId,
+                status: sc.status,
+                billing_record_type: sc.billingCode.billing_record_type,
+                serviceStartTime: sc.serviceStartTime
+                  ? new Date(sc.serviceStartTime).toTimeString().slice(0, 5)
+                  : null,
+                serviceEndTime: sc.serviceEndTime
+                  ? new Date(sc.serviceEndTime).toTimeString().slice(0, 5)
+                  : null,
+                numberOfUnits: sc.numberOfUnits,
+                bilateralIndicator: sc.bilateralIndicator,
+                specialCircumstances: sc.specialCircumstances,
+                serviceDate: sc.serviceDate
+                  ? new Date(sc.serviceDate).toISOString().split("T")[0]
+                  : null,
+                serviceEndDate: sc.serviceEndDate
+                  ? new Date(sc.serviceEndDate).toISOString().split("T")[0]
+                  : null,
+              })),
+            });
+
+            // Set selected codes
+            setSelectedCodes(
+              service.serviceCodes.map((sc: any) => sc.billingCode)
+            );
+
+            // Set selected ICD code if exists
+            if (service.icdCode) {
+              setSelectedIcdCode(service.icdCode);
+            }
+
+            // Set selected referring physician if exists
+            if (service.referringPhysician) {
+              setSelectedReferringPhysician(service.referringPhysician);
+            }
+          }
+        } catch (error) {
+          console.error("Error loading existing service:", error);
+        }
+      }
+    };
+
+    loadExistingService();
+  }, [type, serviceId]);
+
   useEffect(() => {
     const fetchPhysicians = async () => {
       try {
         const response = await fetch("/api/physicians");
         if (response.ok) {
           const data = await response.json();
-          if (data.length === 1) {
+          if (data.length === 1 && type === "new") {
             setFormData({
               ...formData,
               physicianId: data[0].id,
@@ -558,7 +631,10 @@ export default function ServiceForm({ type }: { type: "new" | "edit" }) {
     }
 
     try {
-      // Calculate the floored service date (earliest date among all billing codes)
+      // Use the user's selected service date as the primary service date
+      const primaryServiceDate = new Date(formData.serviceDate);
+
+      // Calculate the floored service date (earliest date among all billing codes) for validation only
       const allServiceDates = formData.billingCodes
         .map((code) => code.serviceDate || formData.serviceDate)
         .map((dateStr) => new Date(dateStr));
@@ -576,85 +652,191 @@ export default function ServiceForm({ type }: { type: "new" | "edit" }) {
         return newDate.toISOString();
       };
 
-      // First, create the service
-      const serviceData = {
-        physicianId: formData.physicianId,
-        patientId: formData.patientId,
-        referringPhysicianId: formData.referringPhysicianId,
-        icdCodeId: formData.icdCodeId,
-        healthInstitutionId: formData.healthInstitutionId,
-        summary: formData.summary,
-        serviceDate: flooredServiceDate.toISOString(),
-        serviceLocation: formData.serviceLocation,
-      };
+      if (type === "new") {
+        // Create new service
+        const serviceData = {
+          physicianId: formData.physicianId,
+          patientId: formData.patientId,
+          referringPhysicianId: formData.referringPhysicianId,
+          icdCodeId: formData.icdCodeId,
+          healthInstitutionId: formData.healthInstitutionId,
+          summary: formData.summary,
+          serviceDate: primaryServiceDate.toISOString(),
+          serviceLocation: formData.serviceLocation,
+        };
 
-      const serviceResponse = await fetch("/api/services", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.user?.id}`,
-        },
-        body: JSON.stringify(serviceData),
-      });
-
-      if (!serviceResponse.ok) {
-        console.error(serviceResponse);
-        throw new Error("Failed to create service");
-      }
-
-      const createdService = await serviceResponse.json();
-
-      // Then, create the service codes
-      const serviceCodesData: any[] = [];
-
-      formData.billingCodes.forEach((code) => {
-        const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
-
-        // Create service code for each billing code
-        serviceCodesData.push({
-          serviceId: createdService.id,
-          codeId: code.codeId,
-          status: code.status,
-          serviceStartTime: code.serviceStartTime
-            ? combineDateTime(
-                new Date(code.serviceDate || formData.serviceDate),
-                code.serviceStartTime
-              )
-            : null,
-          serviceEndTime: code.serviceEndTime
-            ? combineDateTime(
-                new Date(code.serviceDate || formData.serviceDate),
-                code.serviceEndTime
-              )
-            : null,
-          numberOfUnits: code.numberOfUnits || null,
-          bilateralIndicator: code.bilateralIndicator,
-          specialCircumstances: code.specialCircumstances,
-          serviceDate: code.serviceDate
-            ? new Date(code.serviceDate).toISOString()
-            : flooredServiceDate.toISOString(),
-          serviceEndDate: code.serviceEndDate
-            ? new Date(code.serviceEndDate).toISOString()
-            : null,
+        const serviceResponse = await fetch("/api/services", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.user?.id}`,
+          },
+          body: JSON.stringify(serviceData),
         });
-      });
 
-      const serviceCodesResponse = await fetch("/api/service-codes", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.user?.id}`,
-        },
-        body: JSON.stringify(serviceCodesData),
-      });
+        if (!serviceResponse.ok) {
+          console.error(serviceResponse);
+          throw new Error("Failed to create service");
+        }
 
-      if (!serviceCodesResponse.ok) {
-        throw new Error("Failed to create service codes");
+        const createdService = await serviceResponse.json();
+
+        // Create service codes
+        const serviceCodesData: any[] = [];
+
+        formData.billingCodes.forEach((code) => {
+          const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
+
+          serviceCodesData.push({
+            serviceId: createdService.id,
+            codeId: code.codeId,
+            status: code.status,
+            serviceStartTime: code.serviceStartTime
+              ? combineDateTime(
+                  new Date(code.serviceDate || formData.serviceDate),
+                  code.serviceStartTime
+                )
+              : null,
+            serviceEndTime: code.serviceEndTime
+              ? combineDateTime(
+                  new Date(code.serviceDate || formData.serviceDate),
+                  code.serviceEndTime
+                )
+              : null,
+            numberOfUnits: code.numberOfUnits || null,
+            bilateralIndicator: code.bilateralIndicator,
+            specialCircumstances: code.specialCircumstances,
+            serviceDate: code.serviceDate
+              ? new Date(code.serviceDate).toISOString()
+              : primaryServiceDate.toISOString(),
+            serviceEndDate: code.serviceEndDate
+              ? new Date(code.serviceEndDate).toISOString()
+              : null,
+          });
+        });
+
+        const serviceCodesResponse = await fetch("/api/service-codes", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.user?.id}`,
+          },
+          body: JSON.stringify(serviceCodesData),
+        });
+
+        if (!serviceCodesResponse.ok) {
+          throw new Error("Failed to create service codes");
+        }
+      } else if (type === "edit" && serviceId) {
+        // Update existing service
+        const serviceData = {
+          id: serviceId,
+          physicianId: formData.physicianId,
+          patientId: formData.patientId,
+          referringPhysicianId: formData.referringPhysicianId,
+          icdCodeId: formData.icdCodeId,
+          healthInstitutionId: formData.healthInstitutionId,
+          summary: formData.summary,
+          serviceDate: primaryServiceDate.toISOString(),
+          serviceLocation: formData.serviceLocation,
+        };
+
+        const serviceResponse = await fetch("/api/services", {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.user?.id}`,
+          },
+          body: JSON.stringify(serviceData),
+        });
+
+        if (!serviceResponse.ok) {
+          console.error(serviceResponse);
+          throw new Error("Failed to update service");
+        }
+
+        // Get existing service codes to delete them
+        const existingServiceResponse = await fetch(
+          `/api/services/${serviceId}`
+        );
+        if (existingServiceResponse.ok) {
+          const existingService = await existingServiceResponse.json();
+          const existingServiceCodeIds = existingService.serviceCodes.map(
+            (sc: any) => sc.id
+          );
+
+          // Delete existing service codes
+          if (existingServiceCodeIds.length > 0) {
+            const deleteResponse = await fetch(
+              `/api/service-codes?ids=${existingServiceCodeIds.join(",")}`,
+              {
+                method: "DELETE",
+                headers: {
+                  Authorization: `Bearer ${session.user?.id}`,
+                },
+              }
+            );
+
+            if (!deleteResponse.ok) {
+              throw new Error("Failed to delete existing service codes");
+            }
+          }
+        }
+
+        // Create new service codes
+        const serviceCodesData: any[] = [];
+
+        formData.billingCodes.forEach((code) => {
+          const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
+
+          serviceCodesData.push({
+            serviceId: parseInt(serviceId),
+            codeId: code.codeId,
+            status: code.status,
+            serviceStartTime: code.serviceStartTime
+              ? combineDateTime(
+                  new Date(code.serviceDate || formData.serviceDate),
+                  code.serviceStartTime
+                )
+              : null,
+            serviceEndTime: code.serviceEndTime
+              ? combineDateTime(
+                  new Date(code.serviceDate || formData.serviceDate),
+                  code.serviceEndTime
+                )
+              : null,
+            numberOfUnits: code.numberOfUnits || null,
+            bilateralIndicator: code.bilateralIndicator,
+            specialCircumstances: code.specialCircumstances,
+            serviceDate: code.serviceDate
+              ? new Date(code.serviceDate).toISOString()
+              : primaryServiceDate.toISOString(),
+            serviceEndDate: code.serviceEndDate
+              ? new Date(code.serviceEndDate).toISOString()
+              : null,
+          });
+        });
+
+        const serviceCodesResponse = await fetch("/api/service-codes", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.user?.id}`,
+          },
+          body: JSON.stringify(serviceCodesData),
+        });
+
+        if (!serviceCodesResponse.ok) {
+          throw new Error("Failed to create service codes");
+        }
       }
 
       router.push("/services");
     } catch (error) {
-      console.error("Error creating service and service codes:", error);
+      console.error(
+        "Error creating/updating service and service codes:",
+        error
+      );
     }
   };
 
@@ -1667,7 +1849,9 @@ export default function ServiceForm({ type }: { type: "new" | "edit" }) {
               </div> */}
 
           <div className="flex justify-end">
-            <Button type="submit">Submit</Button>
+            <Button type="submit">
+              {type === "edit" ? "Update" : "Submit"}
+            </Button>
           </div>
         </CardContent>
       </Card>

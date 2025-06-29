@@ -1,5 +1,6 @@
 "use client";
 
+import Layout from "@/app/components/layout/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -14,7 +15,6 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import Layout from "../components/layout/Layout";
 
 interface Service {
   id: string;
@@ -461,20 +461,30 @@ export default function ServiceRecordsPage() {
                               .slice(0, 10)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            <button
-                              className="text-blue-600 hover:underline focus:outline-none"
-                              onClick={() =>
-                                setExpandedServiceId(
-                                  expandedServiceId === service.id
-                                    ? null
-                                    : service.id
-                                )
-                              }
-                            >
-                              {expandedServiceId === service.id
-                                ? "Hide Codes"
-                                : "Show Codes"}
-                            </button>
+                            <div className="flex space-x-2">
+                              <button
+                                className="text-blue-600 hover:underline focus:outline-none"
+                                onClick={() =>
+                                  setExpandedServiceId(
+                                    expandedServiceId === service.id
+                                      ? null
+                                      : service.id
+                                  )
+                                }
+                              >
+                                {expandedServiceId === service.id
+                                  ? "Hide Codes"
+                                  : "Show Codes"}
+                              </button>
+                              {service.claimId === null && (
+                                <Link
+                                  href={`/services/edit/${service.id}`}
+                                  className="text-green-600 hover:underline focus:outline-none"
+                                >
+                                  Edit
+                                </Link>
+                              )}
+                            </div>
                           </td>
                         </tr>
                         {expandedServiceId === service.id && (
