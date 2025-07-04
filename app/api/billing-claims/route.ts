@@ -177,8 +177,8 @@ export async function POST(request: Request) {
       ? physician.mostRecentClaimNumber + 1
       : 10000;
 
-    const serviceRecords = services.flatMap((service, index) => {
-      const claimNumber = baseClaimNumber + index;
+    // First, collect all service records and sort them by service start time
+    const allServiceRecords = services.flatMap((service) => {
       const hsn = service.patient?.billingNumber || "";
       const dob = service.patient?.dateOfBirth
         ? new Date(service.patient.dateOfBirth)
@@ -199,18 +199,19 @@ export async function POST(request: Request) {
         })
         .replace(/\//g, "");
       const location = service.serviceLocation || "0";
-      // const facilityNumber = service.healthInstitution?.id.toString();
       const facilityNumber = "00000";
       const serviceLocation = service.serviceLocation;
+
       return service.serviceCodes
         .sort(
           (a, b) =>
             a.billingCode.billing_record_type -
             b.billingCode.billing_record_type
         )
-        .flatMap((serviceCode, serviceCodeIndex) => ({
-          claimNumber,
-          sequence: serviceCodeIndex,
+        .map((serviceCode, serviceCodeIndex) => ({
+          service,
+          serviceCode,
+          serviceCodeIndex,
           hsn,
           dob,
           sex,
@@ -258,8 +259,78 @@ export async function POST(request: Request) {
           billingRecordType: String(
             serviceCode.billingCode.billing_record_type
           ) as "50" | "57",
+          serviceStartTime: serviceCode.serviceStartTime
+            ? new Date(serviceCode.serviceStartTime).getTime()
+            : 0,
         }));
     });
+
+    // Sort all service records by service start time
+    allServiceRecords.sort((a, b) => {
+      // Handle null/undefined service start times
+      if (!a.serviceStartTime && !b.serviceStartTime) return 0;
+      if (!a.serviceStartTime) return 1; // Place null values at the end
+      if (!b.serviceStartTime) return -1; // Place null values at the end
+      return a.serviceStartTime - b.serviceStartTime;
+    });
+
+    // Group service records by claim number based on limits
+    const serviceRecords: any[] = [];
+    let currentClaimNumber = baseClaimNumber;
+    let type50Count = 0;
+    let type57Count = 0;
+    let sequence = 0;
+
+    for (const record of allServiceRecords) {
+      const recordType = record.billingRecordType;
+
+      // Check if we need a new claim number
+      if (
+        (recordType === "50" && type50Count >= 6) ||
+        (recordType === "57" && type57Count >= 2)
+      ) {
+        // Start a new claim
+        currentClaimNumber++;
+        type50Count = 0;
+        type57Count = 0;
+        sequence = 0;
+      }
+
+      // Add the record with the current claim number
+      serviceRecords.push({
+        claimNumber: currentClaimNumber,
+        sequence,
+        hsn: record.hsn,
+        dob: record.dob,
+        sex: record.sex,
+        name: record.name,
+        diagnosticCode: record.diagnosticCode,
+        refPractitioner: record.refPractitioner,
+        dateOfService: record.dateOfService,
+        units: record.units,
+        location: record.location,
+        feeCode: record.feeCode,
+        feeCents: record.feeCents,
+        mode: record.mode,
+        formType: record.formType,
+        specialCircumstances: record.specialCircumstances,
+        bilateral: record.bilateral,
+        startTime: record.startTime,
+        stopTime: record.stopTime,
+        facilityNumber: record.facilityNumber,
+        claimType: record.claimType,
+        serviceLocation: record.serviceLocation,
+        billingRecordType: record.billingRecordType,
+      });
+
+      // Update counters
+      if (recordType === "50") {
+        type50Count++;
+      } else if (recordType === "57") {
+        type57Count++;
+      }
+      sequence++;
+    }
 
     const batchClaimText = generateClaimBatch(
       practitionerHeader,
@@ -267,11 +338,15 @@ export async function POST(request: Request) {
     );
 
     // Update physician's most recent claim number
+    const highestClaimNumber =
+      serviceRecords.length > 0
+        ? Math.max(...serviceRecords.map((record) => record.claimNumber))
+        : baseClaimNumber - 1;
+
     await prisma.physician.update({
       where: { id: firstServiceCode.patient.physician.id },
       data: {
-        mostRecentClaimNumber:
-          physician.mostRecentClaimNumber + serviceRecords.length,
+        mostRecentClaimNumber: highestClaimNumber,
       },
     });
 

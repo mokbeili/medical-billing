@@ -840,19 +840,6 @@ export default function ServiceForm({
     }
   };
 
-  const isCodeDisabled = (code: BillingCode) => {
-    const type50Count = selectedCodes.filter(
-      (c) => c.billing_record_type === 50
-    ).length;
-    const type57Count = selectedCodes.filter(
-      (c) => c.billing_record_type === 57
-    ).length;
-
-    if (code.billing_record_type === 50 && type50Count >= 6) return true;
-    if (code.billing_record_type === 57 && type57Count >= 2) return true;
-    return false;
-  };
-
   const isWorXSection = (code: BillingCode) => {
     return code.section.code === "W" || code.section.code === "X";
   };
@@ -875,44 +862,6 @@ export default function ServiceForm({
       );
     }
   );
-
-  const getCodeStatusColor = (code: BillingCode) => {
-    const type50Count = selectedCodes.filter(
-      (c) => c.billing_record_type === 50
-    ).length;
-    const type57Count = selectedCodes.filter(
-      (c) => c.billing_record_type === 57
-    ).length;
-
-    if (code.billing_record_type === 50) {
-      if (type50Count >= 6) return "text-red-500";
-      if (type50Count >= 4) return "text-yellow-500";
-      return "text-green-500";
-    }
-    if (code.billing_record_type === 57) {
-      if (type57Count >= 2) return "text-red-500";
-      if (type57Count >= 1) return "text-yellow-500";
-      return "text-green-500";
-    }
-    return "";
-  };
-
-  const getCodeStatusText = (code: BillingCode) => {
-    const type50Count = selectedCodes.filter(
-      (c) => c.billing_record_type === 50
-    ).length;
-    const type57Count = selectedCodes.filter(
-      (c) => c.billing_record_type === 57
-    ).length;
-
-    if (code.billing_record_type === 50 && type50Count >= 6) {
-      return "Maximum of 6 type 50 codes reached";
-    }
-    if (code.billing_record_type === 57 && type57Count >= 2) {
-      return "Maximum of 2 type 57 codes reached";
-    }
-    return "";
-  };
 
   if (status === "loading") {
     return (
@@ -1277,39 +1226,24 @@ export default function ServiceForm({
                 type="date"
                 value={formData.serviceDate}
                 onChange={(e) => {
-                  const selectedDate = new Date(e.target.value);
-                  const today = new Date();
-                  today.setHours(0, 0, 0, 0);
-                  if (selectedDate <= today) {
-                    setFormData({
-                      ...formData,
-                      serviceDate: e.target.value,
-                    });
-                  }
+                  setFormData({
+                    ...formData,
+                    serviceDate: e.target.value,
+                  });
                 }}
                 className={serviceErrors.serviceDate ? "border-red-500" : ""}
-                max={new Date().toISOString().split("T")[0]}
               />
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => {
                   const currentDate = new Date(formData.serviceDate);
-                  const today = new Date();
-                  today.setHours(0, 0, 0, 0);
-
-                  if (currentDate < today) {
-                    currentDate.setDate(currentDate.getDate() + 1);
-                    setFormData({
-                      ...formData,
-                      serviceDate: currentDate.toISOString().split("T")[0],
-                    });
-                  }
+                  currentDate.setDate(currentDate.getDate() + 1);
+                  setFormData({
+                    ...formData,
+                    serviceDate: currentDate.toISOString().split("T")[0],
+                  });
                 }}
-                disabled={
-                  new Date(formData.serviceDate).toISOString().split("T")[0] ===
-                  new Date().toISOString().split("T")[0]
-                }
               >
                 ↑
               </Button>
@@ -1460,22 +1394,13 @@ export default function ServiceForm({
                   {searchResults.map((code) => (
                     <div
                       key={code.id}
-                      className={`px-4 py-2 hover:bg-gray-100 cursor-pointer ${
-                        isCodeDisabled(code)
-                          ? "opacity-50 cursor-not-allowed"
-                          : ""
-                      }`}
-                      onClick={() =>
-                        !isCodeDisabled(code) && handleAddCode(code)
-                      }
+                      className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                      onClick={() => handleAddCode(code)}
                     >
                       <div className="font-medium">
                         {code.code} ({code.section.title})
                       </div>
                       <div className="text-sm text-gray-600">{code.title}</div>
-                      <div className={`text-sm ${getCodeStatusColor(code)}`}>
-                        {getCodeStatusText(code)}
-                      </div>
                     </div>
                   ))}
                 </div>
@@ -1528,7 +1453,6 @@ export default function ServiceForm({
                                   serviceDate: e.target.value,
                                 })
                               }
-                              min={new Date().toISOString().split("T")[0]}
                             />
                           </div>
                           <div className="space-y-2">
@@ -1545,10 +1469,6 @@ export default function ServiceForm({
                                 handleUpdateBillingCode(index, {
                                   serviceEndDate: e.target.value || null,
                                 })
-                              }
-                              min={
-                                formData.billingCodes[index].serviceDate ||
-                                formData.serviceDate
                               }
                             />
                           </div>
