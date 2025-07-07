@@ -16,7 +16,6 @@ export async function POST(request: Request) {
       physicianId,
       patientId,
       serviceDate,
-      serviceLocation,
       healthInstitutionId,
       referringPhysicianId,
       icdCodeId,
@@ -42,7 +41,6 @@ export async function POST(request: Request) {
           },
         },
         serviceDate: new Date(serviceDate),
-        serviceLocation,
         summary: summary || "",
         healthInstitution: healthInstitutionId
           ? {
@@ -148,7 +146,6 @@ export async function PUT(request: Request) {
       physicianId,
       patientId,
       serviceDate,
-      serviceLocation,
       healthInstitutionId,
       referringPhysicianId,
       icdCodeId,
@@ -193,10 +190,6 @@ export async function PUT(request: Request) {
 
     if (serviceDate !== undefined) {
       updateData.serviceDate = new Date(serviceDate);
-    }
-
-    if (serviceLocation !== undefined) {
-      updateData.serviceLocation = serviceLocation;
     }
 
     if (summary !== undefined) {
