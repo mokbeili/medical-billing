@@ -287,9 +287,11 @@ export default function BillingClaimsSearchPage() {
                             className="border-l-2 border-gray-200 pl-3"
                           >
                             <p className="text-sm font-medium text-gray-900">
-                              {new Date(
-                                service.serviceDate
-                              ).toLocaleDateString()}{" "}
+                              {
+                                new Date(service.serviceDate)
+                                  .toISOString()
+                                  .split("T")[0]
+                              }{" "}
                               - {service.status}
                             </p>
                             <p className="text-sm text-gray-600">

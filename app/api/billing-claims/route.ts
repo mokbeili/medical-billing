@@ -194,13 +194,13 @@ export async function POST(request: Request) {
       }`;
       const diagnosticCode = service.icdCode?.code || "";
       const refPractitioner = service.referringPhysician?.code;
-      const dateOfService = new Date(service.serviceDate)
-        .toLocaleDateString("en-CA", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "2-digit",
-        })
-        .replace(/\//g, "");
+      const dateOfService = (() => {
+        const date = new Date(service.serviceDate);
+        const day = String(date.getUTCDate()).padStart(2, "0");
+        const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+        const year = String(date.getUTCFullYear()).slice(-2);
+        return day + month + year;
+      })();
       const location = "0"; // Default location since it's now in serviceCodes
       const facilityNumber = "00000";
 
@@ -220,15 +220,23 @@ export async function POST(request: Request) {
           name,
           diagnosticCode,
           refPractitioner,
-          dateOfService,
+          dateOfService: serviceCode.serviceDate
+            ? (() => {
+                const date = new Date(serviceCode.serviceDate);
+                const day = String(date.getUTCDate()).padStart(2, "0");
+                const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+                const year = String(date.getUTCFullYear()).slice(-2);
+                return day + month + year;
+              })()
+            : dateOfService,
           lastServiceDate: serviceCode.serviceEndDate
-            ? new Date(serviceCode.serviceEndDate)
-                .toLocaleDateString("en-CA", {
-                  day: "2-digit",
-                  month: "2-digit",
-                  year: "2-digit",
-                })
-                .replace(/\//g, "")
+            ? (() => {
+                const date = new Date(serviceCode.serviceEndDate);
+                const day = String(date.getUTCDate()).padStart(2, "0");
+                const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+                const year = String(date.getUTCFullYear()).slice(-2);
+                return day + month + year;
+              })()
             : undefined,
           units: String(
             serviceCode.numberOfUnits === undefined
