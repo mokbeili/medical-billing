@@ -94,7 +94,6 @@ interface Service {
   healthInstitutionId: number | null;
   summary: string;
   serviceDate: string;
-  serviceLocation: string | null;
   specialCircumstances: {
     codeId: number;
     value: string;
@@ -112,6 +111,8 @@ interface ServiceCode {
   specialCircumstances: string | null;
   serviceDate: string | null;
   serviceEndDate: string | null;
+  serviceLocation: string | null;
+  locationOfService: string | null;
 }
 
 interface ServiceErrors {
@@ -171,7 +172,6 @@ export default function ServiceForm({
     healthInstitutionId: null as number | null,
     summary: "",
     serviceDate: new Date().toISOString().split("T")[0],
-    serviceLocation: null as string | null,
     billingCodes: [] as Array<{
       codeId: number;
       status: string;
@@ -183,6 +183,8 @@ export default function ServiceForm({
       specialCircumstances: string | null;
       serviceDate: string | null;
       serviceEndDate: string | null;
+      serviceLocation: string | null;
+      locationOfService: string | null;
     }>,
   });
 
@@ -220,7 +222,6 @@ export default function ServiceForm({
               serviceDate: new Date(service.serviceDate)
                 .toISOString()
                 .split("T")[0],
-              serviceLocation: service.serviceLocation,
               billingCodes: service.serviceCodes.map((sc: any) => ({
                 codeId: sc.codeId,
                 status: sc.status,
@@ -240,6 +241,8 @@ export default function ServiceForm({
                 serviceEndDate: sc.serviceEndDate
                   ? new Date(sc.serviceEndDate).toISOString().split("T")[0]
                   : null,
+                serviceLocation: sc.serviceLocation,
+                locationOfService: sc.locationOfService,
               })),
             });
 
@@ -488,6 +491,12 @@ export default function ServiceForm({
     if (!selectedCodes.find((c) => c.id === code.id)) {
       setSelectedCodes([...selectedCodes, code]);
 
+      // Get the previous code's values for defaults
+      const previousCode =
+        formData.billingCodes[formData.billingCodes.length - 1];
+      const defaultServiceLocation = previousCode?.serviceLocation || null;
+      const defaultLocationOfService = previousCode?.locationOfService || null;
+
       setFormData({
         ...formData,
         billingCodes: [
@@ -503,6 +512,8 @@ export default function ServiceForm({
             specialCircumstances: null,
             serviceDate: formData.serviceDate,
             serviceEndDate: null,
+            serviceLocation: defaultServiceLocation,
+            locationOfService: defaultLocationOfService,
           },
         ],
       });
@@ -662,7 +673,6 @@ export default function ServiceForm({
           healthInstitutionId: formData.healthInstitutionId,
           summary: formData.summary,
           serviceDate: primaryServiceDate.toISOString(),
-          serviceLocation: formData.serviceLocation,
         };
 
         const serviceResponse = await fetch("/api/services", {
@@ -686,7 +696,6 @@ export default function ServiceForm({
 
         formData.billingCodes.forEach((code) => {
           const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
-
           serviceCodesData.push({
             serviceId: createdService.id,
             codeId: code.codeId,
@@ -712,6 +721,8 @@ export default function ServiceForm({
             serviceEndDate: code.serviceEndDate
               ? new Date(code.serviceEndDate).toISOString()
               : null,
+            serviceLocation: code.serviceLocation,
+            locationOfService: code.locationOfService,
           });
         });
 
@@ -738,7 +749,6 @@ export default function ServiceForm({
           healthInstitutionId: formData.healthInstitutionId,
           summary: formData.summary,
           serviceDate: primaryServiceDate.toISOString(),
-          serviceLocation: formData.serviceLocation,
         };
 
         const serviceResponse = await fetch("/api/services", {
@@ -814,6 +824,8 @@ export default function ServiceForm({
             serviceEndDate: code.serviceEndDate
               ? new Date(code.serviceEndDate).toISOString()
               : null,
+            serviceLocation: code.serviceLocation,
+            locationOfService: code.locationOfService,
           });
         });
 
@@ -851,17 +863,6 @@ export default function ServiceForm({
   const isType57Code = (code: BillingCode) => {
     return code.billing_record_type === 57;
   };
-
-  const isWorXWithoutSpecialCircumstances = formData.billingCodes.some(
-    (code) => {
-      const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
-      return (
-        selectedCode &&
-        isWorXSection(selectedCode) &&
-        !code.specialCircumstances
-      );
-    }
-  );
 
   if (status === "loading") {
     return (
@@ -1270,62 +1271,6 @@ export default function ServiceForm({
           </div>
 
           <div className="space-y-2">
-            <label className="block text-sm font-medium">
-              Service Location
-            </label>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant={
-                  formData.serviceLocation === "R" ? "default" : "outline"
-                }
-                onClick={() =>
-                  setFormData({
-                    ...formData,
-                    serviceLocation:
-                      formData.serviceLocation === "R" ? null : "R",
-                  })
-                }
-                className="flex-1"
-              >
-                Regina
-              </Button>
-              <Button
-                type="button"
-                variant={
-                  formData.serviceLocation === "S" ? "default" : "outline"
-                }
-                onClick={() =>
-                  setFormData({
-                    ...formData,
-                    serviceLocation:
-                      formData.serviceLocation === "S" ? null : "S",
-                  })
-                }
-                className="flex-1"
-              >
-                Saskatoon
-              </Button>
-              <Button
-                type="button"
-                variant={
-                  formData.serviceLocation === "X" ? "default" : "outline"
-                }
-                onClick={() =>
-                  setFormData({
-                    ...formData,
-                    serviceLocation:
-                      formData.serviceLocation === "X" ? null : "X",
-                  })
-                }
-                className="flex-1"
-              >
-                Rural/Northern Premium
-              </Button>
-            </div>
-          </div>
-
-          <div className="space-y-2">
             <label className="block text-sm font-medium">ICD Code</label>
             <div className="relative">
               <Input
@@ -1576,6 +1521,136 @@ export default function ServiceForm({
                           />
                         </div>
                       )}
+
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium">
+                          Service Location
+                        </label>
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            variant={
+                              formData.billingCodes[index].serviceLocation ===
+                              "R"
+                                ? "default"
+                                : "outline"
+                            }
+                            onClick={() =>
+                              handleUpdateBillingCode(index, {
+                                serviceLocation:
+                                  formData.billingCodes[index]
+                                    .serviceLocation === "R"
+                                    ? null
+                                    : "R",
+                              })
+                            }
+                            className="flex-1"
+                          >
+                            <span className="hidden sm:inline">Regina</span>
+                            <span className="sm:hidden">R</span>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={
+                              formData.billingCodes[index].serviceLocation ===
+                              "S"
+                                ? "default"
+                                : "outline"
+                            }
+                            onClick={() =>
+                              handleUpdateBillingCode(index, {
+                                serviceLocation:
+                                  formData.billingCodes[index]
+                                    .serviceLocation === "S"
+                                    ? null
+                                    : "S",
+                              })
+                            }
+                            className="flex-1"
+                          >
+                            <span className="hidden sm:inline">Saskatoon</span>
+                            <span className="sm:hidden">S</span>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={
+                              formData.billingCodes[index].serviceLocation ===
+                              "X"
+                                ? "default"
+                                : "outline"
+                            }
+                            onClick={() =>
+                              handleUpdateBillingCode(index, {
+                                serviceLocation:
+                                  formData.billingCodes[index]
+                                    .serviceLocation === "X"
+                                    ? null
+                                    : "X",
+                              })
+                            }
+                            className="flex-1"
+                          >
+                            <span className="hidden sm:inline">
+                              Rural/Northern Premium
+                            </span>
+                            <span className="sm:hidden">R/N</span>
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium">
+                          Location of Service
+                        </label>
+                        <Select
+                          value={
+                            formData.billingCodes[index].locationOfService || ""
+                          }
+                          onValueChange={(value) =>
+                            handleUpdateBillingCode(index, {
+                              locationOfService: value || null,
+                            })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select location of service" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="1">Office</SelectItem>
+                            <SelectItem value="2">
+                              Hospital In-Patient
+                            </SelectItem>
+                            <SelectItem value="3">
+                              Hospital Out-Patient
+                            </SelectItem>
+                            <SelectItem value="4">Patient's Home</SelectItem>
+                            <SelectItem value="5">Other</SelectItem>
+                            <SelectItem value="7">Premium</SelectItem>
+                            <SelectItem value="9">Emergency Room</SelectItem>
+                            <SelectItem value="B">
+                              Hospital In-Patient (Premium)
+                            </SelectItem>
+                            <SelectItem value="C">
+                              Hospital Out-Patient (Premium)
+                            </SelectItem>
+                            <SelectItem value="D">
+                              Patient's Home (Premium)
+                            </SelectItem>
+                            <SelectItem value="E">Other (Premium)</SelectItem>
+                            <SelectItem value="F">
+                              After-Hours-Clinic (Premium)
+                            </SelectItem>
+                            <SelectItem value="K">
+                              In Hospital (Premium)
+                            </SelectItem>
+                            <SelectItem value="M">
+                              Out Patient (Premium)
+                            </SelectItem>
+                            <SelectItem value="P">Home (Premium)</SelectItem>
+                            <SelectItem value="T">Other (Premium)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
 
                       {code.title.includes("Bilateral") && (
                         <div className="space-y-2">

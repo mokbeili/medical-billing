@@ -253,7 +253,6 @@ model Service {
   healthInstitutionId  Int?                @map("health_institution_id")
   serviceDate          DateTime            @default(now()) @map("service_date")
   summary              String              @default("")
-  serviceLocation      String              @map("service_location")
   physicianId          String              @map("physician_id")
   serviceCodes         ServiceCodes[]
   claim                BillingClaim?       @relation(fields: [claimId], references: [id], onDelete: SetNull)
@@ -283,6 +282,8 @@ model ServiceCodes {
   numberOfUnits        Int         @map("number_of_units")
   serviceId            Int         @map("service_id")
   specialCircumstances String?     @map("special_circumstances")
+  serviceLocation      String      @map("service_location")
+  locationOfService    String      @map("location_of_service")
   billingCode          BillingCode @relation(fields: [codeId], references: [id])
   service              Service     @relation(fields: [serviceId], references: [id])
 

@@ -181,9 +181,12 @@ export async function POST(request: Request) {
     const allServiceRecords = services.flatMap((service) => {
       const hsn = service.patient?.billingNumber || "";
       const dob = service.patient?.dateOfBirth
-        ? new Date(service.patient.dateOfBirth)
-            .toLocaleDateString("en-CA", { month: "2-digit", year: "2-digit" })
-            .replace(/\//g, "")
+        ? (() => {
+            const date = new Date(service.patient.dateOfBirth);
+            const month = String(date.getMonth() + 1).padStart(2, "0");
+            const year = String(date.getFullYear()).slice(-2);
+            return month + year;
+          })()
         : "";
       const sex = (service.patient?.sex || "M") as "M" | "F";
       const name = `${service.patient?.lastName || ""},${
@@ -198,9 +201,8 @@ export async function POST(request: Request) {
           year: "2-digit",
         })
         .replace(/\//g, "");
-      const location = service.serviceLocation || "0";
+      const location = "0"; // Default location since it's now in serviceCodes
       const facilityNumber = "00000";
-      const serviceLocation = service.serviceLocation;
 
       return service.serviceCodes
         .sort(
@@ -219,14 +221,25 @@ export async function POST(request: Request) {
           diagnosticCode,
           refPractitioner,
           dateOfService,
+          lastServiceDate: serviceCode.serviceEndDate
+            ? new Date(serviceCode.serviceEndDate)
+                .toLocaleDateString("en-CA", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "2-digit",
+                })
+                .replace(/\//g, "")
+            : undefined,
           units: String(
             serviceCode.numberOfUnits === undefined
               ? serviceCode.numberOfUnits
               : ""
           ),
-          location,
+          locationOfService: serviceCode.locationOfService || "0",
           feeCode: serviceCode.billingCode.code,
-          feeCents: Math.round(determinePrice(service, serviceCode) * 100),
+          feeCents:
+            Math.round(determinePrice(service, serviceCode) * 100) *
+            (serviceCode.numberOfUnits || 1),
           mode: "1", // TODO: Add mode to service code model
           formType: "8" as const,
           specialCircumstances: serviceCode.specialCircumstances || undefined,
@@ -253,9 +266,9 @@ export async function POST(request: Request) {
                 })
                 .replace(/:/g, "")
             : undefined,
-          facilityNumber,
+          facilityNumber: facilityNumber,
           claimType: serviceCode.billingCode.billing_record_type.toString(),
-          serviceLocation,
+          serviceLocation: serviceCode.serviceLocation,
           billingRecordType: String(
             serviceCode.billingCode.billing_record_type
           ) as "50" | "57",
@@ -307,8 +320,9 @@ export async function POST(request: Request) {
         diagnosticCode: record.diagnosticCode,
         refPractitioner: record.refPractitioner,
         dateOfService: record.dateOfService,
+        lastServiceDate: record.lastServiceDate,
         units: record.units,
-        location: record.location,
+        location: record.serviceLocation,
         feeCode: record.feeCode,
         feeCents: record.feeCents,
         mode: record.mode,
@@ -321,6 +335,7 @@ export async function POST(request: Request) {
         claimType: record.claimType,
         serviceLocation: record.serviceLocation,
         billingRecordType: record.billingRecordType,
+        locationOfService: record.locationOfService,
       });
 
       // Update counters

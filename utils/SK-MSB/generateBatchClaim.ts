@@ -19,6 +19,7 @@ type ServiceRecord = {
   diagnosticCode: string;
   refPractitioner?: string;
   dateOfService: string; // DDMMYY
+  lastServiceDate?: string; // DDMMYY
   units: string;
   location: string;
   feeCode: string;
@@ -92,6 +93,33 @@ function formatService50(practitionerNumber: string, s: ServiceRecord): string {
   );
 }
 
+function formatService57(practitionerNumber: string, s: ServiceRecord): string {
+  return (
+    s.billingRecordType +
+    pad(practitionerNumber, 4) +
+    pad(s.claimNumber, 5) +
+    s.sequence.toString() +
+    pad(s.hsn, 9) +
+    s.dob +
+    s.sex +
+    pad(s.name.toUpperCase(), 25, "left") +
+    pad(s.diagnosticCode, 3) +
+    pad(s.refPractitioner || "", 4) +
+    s.dateOfService +
+    s.lastServiceDate +
+    pad(s.units, 2) +
+    pad(s.feeCode, 4) +
+    pad(s.feeCents, 6) +
+    s.mode +
+    s.formType +
+    pad(s.specialCircumstances || "", 2) +
+    pad(s.facilityNumber || "", 5) +
+    (s.claimType || " ") +
+    (s.serviceLocation || " ") +
+    " "
+  );
+}
+
 function formatTrailer(
   practitionerNumber: string,
   totalRecords: number,
@@ -116,7 +144,9 @@ export function generateClaimBatch(
   const header = formatHeader(practitioner);
 
   const serviceLines = serviceRecords.map((s) =>
-    formatService50(practitioner.practitionerNumber, s)
+    s.billingRecordType === "50"
+      ? formatService50(practitioner.practitionerNumber, s)
+      : formatService57(practitioner.practitionerNumber, s)
   );
 
   const trailer = formatTrailer(

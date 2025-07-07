@@ -29,7 +29,6 @@ interface BillingClaim {
     status: "PENDING" | "SENT" | "APPROVED" | "REJECTED";
     serviceDate: string;
     summary: string;
-    serviceLocation: string;
     serviceCodes: {
       id: number;
       billingCode: {
