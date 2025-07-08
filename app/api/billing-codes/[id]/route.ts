@@ -42,6 +42,8 @@ export async function PUT(
         stop_time_required: data.stop_time_required,
         technical_fee: data.technical_fee,
         billing_record_type: data.billingRecordType,
+        max_units: data.max_units,
+        day_range: data.day_range,
       },
     });
 
@@ -66,6 +68,8 @@ export async function PUT(
         stop_time_required: currentBillingCode.stop_time_required,
         technical_fee: currentBillingCode.technical_fee,
         billing_record_type: currentBillingCode.billing_record_type,
+        max_units: currentBillingCode.max_units,
+        day_range: currentBillingCode.day_range,
       },
     });
 

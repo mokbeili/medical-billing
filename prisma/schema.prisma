@@ -73,6 +73,8 @@ model BillingCode {
   start_time_required             String?                  @db.VarChar(50)
   stop_time_required              String?                  @db.VarChar(50)
   technical_fee                   Float?
+  max_units                       Int?
+  day_range                       Int?
   embedding_vector                Unsupported("tsvector")? @map("embedding_vector")
   changeLogs                      BillingCodeChangeLog[]
   billing_code_embeddings         billing_code_embeddings?
@@ -105,6 +107,8 @@ model BillingCodeChangeLog {
   start_time_required             String?     @db.VarChar(50)
   stop_time_required              String?     @db.VarChar(50)
   technical_fee                   Float?
+  max_units                       Int?
+  day_range                       Int?
   billing_code                    BillingCode @relation(fields: [billing_code_id], references: [id])
 
   @@index([billing_code_id])

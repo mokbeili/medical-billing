@@ -47,6 +47,8 @@ interface BillingCode {
   start_time_required: string | null;
   stop_time_required: string | null;
   technical_fee: number | null;
+  max_units: number | null;
+  day_range: number | null;
   billing_record_type: number;
   section: {
     id: number;
@@ -64,9 +66,12 @@ interface BillingCode {
 
 interface BillingCodeChangeLog {
   id: number;
+  billing_code_id: number;
   code: string;
   title: string;
   description: string | null;
+  changed_at: string;
+  billing_record_type: number;
   low_fee: number;
   high_fee: number;
   service_class: string | null;
@@ -79,7 +84,8 @@ interface BillingCodeChangeLog {
   start_time_required: string | null;
   stop_time_required: string | null;
   technical_fee: number | null;
-  changed_at: string;
+  max_units: number | null;
+  day_range: number | null;
 }
 
 interface PaginationInfo {
@@ -121,6 +127,8 @@ interface BillingCodeFormProps {
     start_time_required: string;
     stop_time_required: string;
     technical_fee: number;
+    max_units: number | null;
+    day_range: number | null;
     billingRecordType: number;
   };
   onSubmit: (data: any) => Promise<void>;
@@ -153,6 +161,8 @@ function BillingCodeForm({
     start_time_required: initialData?.start_time_required || "",
     stop_time_required: initialData?.stop_time_required || "",
     technical_fee: initialData?.technical_fee || 0,
+    max_units: initialData?.max_units || null,
+    day_range: initialData?.day_range || null,
     billingRecordType: initialData?.billingRecordType || 50,
   });
   const [sectionSearchQuery, setSectionSearchQuery] = useState("");
@@ -537,6 +547,36 @@ function BillingCodeForm({
       </div>
 
       <div className="space-y-2">
+        <Label htmlFor="max_units">Max Units</Label>
+        <Input
+          id="max_units"
+          type="number"
+          value={formData.max_units || ""}
+          onChange={(e) =>
+            setFormData({
+              ...formData,
+              max_units: e.target.value ? parseInt(e.target.value) : null,
+            })
+          }
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="day_range">Day Range</Label>
+        <Input
+          id="day_range"
+          type="number"
+          value={formData.day_range || ""}
+          onChange={(e) =>
+            setFormData({
+              ...formData,
+              day_range: e.target.value ? parseInt(e.target.value) : null,
+            })
+          }
+        />
+      </div>
+
+      <div className="space-y-2">
         <Label htmlFor="billingRecordType">Billing Record Type</Label>
         <Select
           value={formData.billingRecordType.toString()}
@@ -669,6 +709,8 @@ export function BillingCodesTable() {
           start_time_required: formData.start_time_required || null,
           stop_time_required: formData.stop_time_required || null,
           technical_fee: formData.technical_fee || null,
+          max_units: formData.max_units || null,
+          day_range: formData.day_range || null,
         }),
       });
 
@@ -722,6 +764,8 @@ export function BillingCodesTable() {
           start_time_required: formData.start_time_required || null,
           stop_time_required: formData.stop_time_required || null,
           technical_fee: formData.technical_fee || null,
+          max_units: formData.max_units || null,
+          day_range: formData.day_range || null,
         }),
       });
 
@@ -863,6 +907,12 @@ export function BillingCodesTable() {
                         technical_fee:
                           billingCodes.find((code) => code.id === editingId)!
                             .technical_fee || 0,
+                        max_units:
+                          billingCodes.find((code) => code.id === editingId)!
+                            .max_units || null,
+                        day_range:
+                          billingCodes.find((code) => code.id === editingId)!
+                            .day_range || null,
                         billingRecordType:
                           billingCodes.find((code) => code.id === editingId)!
                             .billing_record_type || 50,
@@ -1046,6 +1096,8 @@ export function BillingCodesTable() {
                         {log.technical_fee && (
                           <div>Technical Fee: {log.technical_fee}</div>
                         )}
+                        {log.max_units && <div>Max Units: {log.max_units}</div>}
+                        {log.day_range && <div>Day Range: {log.day_range}</div>}
                       </div>
                     </TableCell>
                   </TableRow>

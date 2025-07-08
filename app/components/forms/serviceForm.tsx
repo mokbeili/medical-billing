@@ -53,6 +53,8 @@ interface BillingCode {
   start_time_required: string | null;
   stop_time_required: string | null;
   technical_fee: number | null;
+  max_units: number | null;
+  day_range: number | null;
   billing_record_type: number;
   section: {
     code: string;

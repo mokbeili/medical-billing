@@ -153,6 +153,8 @@ export async function POST(request: Request) {
       technicalAndInterpretationComponentPrice,
       technicalComponentPrice,
       billingRecordType,
+      maxUnits,
+      dayRange,
     } = await request.json();
 
     // Create the billing code
@@ -175,6 +177,8 @@ export async function POST(request: Request) {
         stop_time_required: stopTimeRequired,
         technical_fee: technicalFee,
         billing_record_type: billingRecordType,
+        max_units: maxUnits,
+        day_range: dayRange,
         openai_embedding: "", // This will be updated by the background job
         ...(interpretationComponentPrice !== undefined && {
           interpretation_component_price: String(interpretationComponentPrice),
