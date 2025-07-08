@@ -330,7 +330,6 @@ export async function POST(request: Request) {
         dateOfService: record.dateOfService,
         lastServiceDate: record.lastServiceDate,
         units: record.units,
-        location: record.serviceLocation,
         feeCode: record.feeCode,
         feeCents: record.feeCents,
         mode: record.mode,

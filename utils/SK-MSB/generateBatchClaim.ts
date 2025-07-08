@@ -21,7 +21,7 @@ type ServiceRecord = {
   dateOfService: string; // DDMMYY
   lastServiceDate?: string; // DDMMYY
   units: string;
-  location: string;
+  locationOfService: string;
   feeCode: string;
   feeCents: number;
   mode: string;
@@ -77,7 +77,7 @@ function formatService50(practitionerNumber: string, s: ServiceRecord): string {
     pad(s.refPractitioner || "", 4) +
     s.dateOfService +
     pad(s.units, 2) +
-    s.location +
+    s.locationOfService +
     pad(s.feeCode, 4) +
     pad(s.feeCents, 6) +
     s.mode +

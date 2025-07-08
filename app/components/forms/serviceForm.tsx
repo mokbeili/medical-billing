@@ -644,16 +644,6 @@ export default function ServiceForm({
     try {
       // Use the user's selected service date as the primary service date
       const primaryServiceDate = new Date(formData.serviceDate);
-
-      // Calculate the floored service date (earliest date among all billing codes) for validation only
-      const allServiceDates = formData.billingCodes
-        .map((code) => code.serviceDate || formData.serviceDate)
-        .map((dateStr) => new Date(dateStr));
-
-      const flooredServiceDate = new Date(
-        Math.min(...allServiceDates.map((date) => date.getTime()))
-      );
-
       // Helper function to combine date and time
       const combineDateTime = (date: Date, timeStr: string) => {
         if (!timeStr) return null;
@@ -695,7 +685,6 @@ export default function ServiceForm({
         const serviceCodesData: any[] = [];
 
         formData.billingCodes.forEach((code) => {
-          const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
           serviceCodesData.push({
             serviceId: createdService.id,
             codeId: code.codeId,
