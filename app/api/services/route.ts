@@ -1,5 +1,6 @@
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { decryptPatientFields } from "@/utils/patientEncryption";
 import { ClaimStatus } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
@@ -123,7 +124,27 @@ export async function GET(request: Request) {
       },
     });
 
-    return NextResponse.json(services);
+    // Decrypt patient data for each service
+    const decryptedServices = services.map((service) => ({
+      ...service,
+      patient: service.patient
+        ? {
+            ...service.patient,
+            ...decryptPatientFields(
+              {
+                firstName: service.patient.firstName || "",
+                lastName: service.patient.lastName || "",
+                middleInitial: service.patient.middleInitial || "",
+                billingNumber: service.patient.billingNumber || "",
+                dateOfBirth: service.patient.dateOfBirth || "",
+              },
+              service.patient.physicianId || ""
+            ),
+          }
+        : null,
+    }));
+
+    return NextResponse.json(decryptedServices);
   } catch (error) {
     console.error("Error fetching services:", error);
     return NextResponse.json(

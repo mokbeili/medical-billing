@@ -1,6 +1,8 @@
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateClaimBatch } from "@/utils/SK-MSB/generateBatchClaim";
+import { decryptBillingClaimData } from "@/utils/billingClaimEncryption";
+import { decryptPatientFields } from "@/utils/patientEncryption";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
@@ -38,7 +40,16 @@ export async function GET() {
       },
     });
 
-    return NextResponse.json(claims);
+    // Decrypt batchClaimText for each claim
+    const decryptedClaims = claims.map((claim) => ({
+      ...claim,
+      batchClaimText: decryptBillingClaimData(
+        claim.batchClaimText,
+        claim.physicianId
+      ),
+    }));
+
+    return NextResponse.json(decryptedClaims);
   } catch (error) {
     console.error("Error fetching billing claims:", error);
     return new NextResponse("Internal Server Error", { status: 500 });
@@ -179,18 +190,30 @@ export async function POST(request: Request) {
 
     // First, collect all service records and sort them by service start time
     const allServiceRecords = services.flatMap((service) => {
-      const hsn = service.patient?.billingNumber || "";
-      const dob = service.patient?.dateOfBirth
+      // Decrypt patient data before using it
+      const decryptedPatient = decryptPatientFields(
+        {
+          firstName: service.patient?.firstName || "",
+          lastName: service.patient?.lastName || "",
+          middleInitial: service.patient?.middleInitial || "",
+          billingNumber: service.patient?.billingNumber || "",
+          dateOfBirth: service.patient?.dateOfBirth || "",
+        },
+        service.patient?.physicianId || ""
+      );
+
+      const hsn = decryptedPatient.billingNumber || "";
+      const dob = decryptedPatient.dateOfBirth
         ? (() => {
-            const date = new Date(service.patient.dateOfBirth);
+            const date = new Date(decryptedPatient.dateOfBirth);
             const month = String(date.getMonth() + 1).padStart(2, "0");
             const year = String(date.getFullYear()).slice(-2);
             return month + year;
           })()
         : "";
       const sex = (service.patient?.sex || "M") as "M" | "F";
-      const name = `${service.patient?.lastName || ""},${
-        service.patient?.firstName || ""
+      const name = `${decryptedPatient.lastName || ""},${
+        decryptedPatient.firstName || ""
       }`;
       const diagnosticCode = service.icdCode?.code?.substring(0, 3) || "";
       const refPractitioner = service.referringPhysician?.code;
@@ -356,7 +379,8 @@ export async function POST(request: Request) {
 
     const batchClaimText = generateClaimBatch(
       practitionerHeader,
-      serviceRecords
+      serviceRecords,
+      firstServiceCode.patient.physician.id
     );
 
     // Update physician's most recent claim number

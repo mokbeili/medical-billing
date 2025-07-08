@@ -1,3 +1,5 @@
+import { encryptBillingClaimData } from "@/utils/billingClaimEncryption";
+
 type PractitionerHeader = {
   practitionerNumber: string;
   groupNumber: string;
@@ -139,7 +141,8 @@ function formatTrailer(
 
 export function generateClaimBatch(
   practitioner: PractitionerHeader,
-  serviceRecords: ServiceRecord[]
+  serviceRecords: ServiceRecord[],
+  physicianId: string
 ): string {
   const header = formatHeader(practitioner);
 
@@ -159,5 +162,10 @@ export function generateClaimBatch(
   const allLines = [header, ...serviceLines, trailer].map(
     (line) => line + "\r\n"
   );
-  return allLines.join("");
+  const batchText = allLines.join("");
+
+  // Encrypt the batch text with physician-specific encryption
+  const encryptedBatchText = encryptBillingClaimData(batchText, physicianId);
+
+  return encryptedBatchText || "";
 }

@@ -1,5 +1,6 @@
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { decryptPatientFields } from "@/utils/patientEncryption";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
@@ -44,7 +45,27 @@ export async function GET(
       return NextResponse.json({ error: "Service not found" }, { status: 404 });
     }
 
-    return NextResponse.json(service);
+    // Decrypt patient data
+    const decryptedService = {
+      ...service,
+      patient: service.patient
+        ? {
+            ...service.patient,
+            ...decryptPatientFields(
+              {
+                firstName: service.patient.firstName || "",
+                lastName: service.patient.lastName || "",
+                middleInitial: service.patient.middleInitial || "",
+                billingNumber: service.patient.billingNumber || "",
+                dateOfBirth: service.patient.dateOfBirth || "",
+              },
+              service.patient.physicianId || ""
+            ),
+          }
+        : null,
+    };
+
+    return NextResponse.json(decryptedService);
   } catch (error) {
     console.error("Error fetching service:", error);
     return NextResponse.json(
