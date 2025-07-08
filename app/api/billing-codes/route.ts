@@ -98,6 +98,40 @@ export async function GET(request: Request) {
               },
             },
           },
+          previousCodes: {
+            include: {
+              previous_code: {
+                select: {
+                  id: true,
+                  code: true,
+                  title: true,
+                  section: {
+                    select: {
+                      code: true,
+                      title: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+          nextCodes: {
+            include: {
+              next_code: {
+                select: {
+                  id: true,
+                  code: true,
+                  title: true,
+                  section: {
+                    select: {
+                      code: true,
+                      title: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
         orderBy: [
           {
@@ -155,6 +189,8 @@ export async function POST(request: Request) {
       billingRecordType,
       maxUnits,
       dayRange,
+      previousCodes,
+      nextCodes,
     } = await request.json();
 
     // Create the billing code
@@ -191,6 +227,24 @@ export async function POST(request: Request) {
         ...(technicalComponentPrice !== undefined && {
           technical_component_price: String(technicalComponentPrice),
         }),
+        // Create relationships with previous codes
+        ...(previousCodes &&
+          previousCodes.length > 0 && {
+            previousCodes: {
+              create: previousCodes.map((codeId: number) => ({
+                previous_code_id: codeId,
+              })),
+            },
+          }),
+        // Create relationships with next codes
+        ...(nextCodes &&
+          nextCodes.length > 0 && {
+            nextCodes: {
+              create: nextCodes.map((codeId: number) => ({
+                next_code_id: codeId,
+              })),
+            },
+          }),
       },
       include: {
         section: {
@@ -198,6 +252,40 @@ export async function POST(request: Request) {
             jurisdiction: {
               include: {
                 provider: true,
+              },
+            },
+          },
+        },
+        previousCodes: {
+          include: {
+            previous_code: {
+              select: {
+                id: true,
+                code: true,
+                title: true,
+                section: {
+                  select: {
+                    code: true,
+                    title: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        nextCodes: {
+          include: {
+            next_code: {
+              select: {
+                id: true,
+                code: true,
+                title: true,
+                section: {
+                  select: {
+                    code: true,
+                    title: true,
+                  },
+                },
               },
             },
           },

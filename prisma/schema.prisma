@@ -81,10 +81,30 @@ model BillingCode {
   section                         Section                  @relation(fields: [section_id], references: [id])
   serviceCodes                    ServiceCodes[]
 
+  // Many-to-many relationship for previous/next codes
+  previousCodes BillingCodeRelation[] @relation("BillingCodePrevious")
+  nextCodes     BillingCodeRelation[] @relation("BillingCodeNext")
+
   @@index([section_id])
   @@index([code])
   @@index([title])
   @@map("billing_codes")
+}
+
+// Junction table for billing code relationships
+model BillingCodeRelation {
+  id               Int      @id @default(autoincrement())
+  previous_code_id Int      @map("previous_code_id")
+  next_code_id     Int      @map("next_code_id")
+  created_at       DateTime @default(now()) @map("created_at")
+
+  previous_code BillingCode @relation("BillingCodePrevious", fields: [previous_code_id], references: [id], onDelete: Cascade)
+  next_code     BillingCode @relation("BillingCodeNext", fields: [next_code_id], references: [id], onDelete: Cascade)
+
+  @@unique([previous_code_id, next_code_id])
+  @@index([previous_code_id])
+  @@index([next_code_id])
+  @@map("billing_code_relations")
 }
 
 model BillingCodeChangeLog {

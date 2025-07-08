@@ -62,6 +62,28 @@ interface BillingCode {
       };
     };
   };
+  previousCodes: Array<{
+    previous_code: {
+      id: number;
+      code: string;
+      title: string;
+      section: {
+        code: string;
+        title: string;
+      };
+    };
+  }>;
+  nextCodes: Array<{
+    next_code: {
+      id: number;
+      code: string;
+      title: string;
+      section: {
+        code: string;
+        title: string;
+      };
+    };
+  }>;
 }
 
 interface BillingCodeChangeLog {
@@ -130,6 +152,8 @@ interface BillingCodeFormProps {
     max_units: number | null;
     day_range: number | null;
     billingRecordType: number;
+    previousCodes: number[];
+    nextCodes: number[];
   };
   onSubmit: (data: any) => Promise<void>;
   onCancel: () => void;
@@ -164,12 +188,41 @@ function BillingCodeForm({
     max_units: initialData?.max_units || null,
     day_range: initialData?.day_range || null,
     billingRecordType: initialData?.billingRecordType || 50,
+    previousCodes: initialData?.previousCodes || [],
+    nextCodes: initialData?.nextCodes || [],
   });
   const [sectionSearchQuery, setSectionSearchQuery] = useState("");
   const [sectionSearchResults, setSectionSearchResults] = useState<Section[]>(
     []
   );
   const [isSearchingSection, setIsSearchingSection] = useState(false);
+
+  // State for billing code search
+  const [billingCodeSearchQuery, setBillingCodeSearchQuery] = useState("");
+  const [billingCodeSearchResults, setBillingCodeSearchResults] = useState<
+    BillingCode[]
+  >([]);
+  const [isSearchingBillingCodes, setIsSearchingBillingCodes] = useState(false);
+  const [searchType, setSearchType] = useState<"previous" | "next" | null>(
+    null
+  );
+
+  // Separate search states for previous and next codes
+  const [previousCodeSearchQuery, setPreviousCodeSearchQuery] = useState("");
+  const [previousCodeSearchResults, setPreviousCodeSearchResults] = useState<
+    BillingCode[]
+  >([]);
+  const [isSearchingPreviousCodes, setIsSearchingPreviousCodes] =
+    useState(false);
+
+  const [nextCodeSearchQuery, setNextCodeSearchQuery] = useState("");
+  const [nextCodeSearchResults, setNextCodeSearchResults] = useState<
+    BillingCode[]
+  >([]);
+  const [isSearchingNextCodes, setIsSearchingNextCodes] = useState(false);
+
+  // Store all billing codes for display purposes
+  const [allBillingCodes, setAllBillingCodes] = useState<BillingCode[]>([]);
 
   useEffect(() => {
     const searchSections = async () => {
@@ -200,6 +253,113 @@ function BillingCodeForm({
     return () => clearTimeout(debounceTimer);
   }, [sectionSearchQuery]);
 
+  // Search billing codes for previous/next selection
+  useEffect(() => {
+    const searchBillingCodes = async () => {
+      if (billingCodeSearchQuery.length < 2) {
+        setBillingCodeSearchResults([]);
+        return;
+      }
+      setIsSearchingBillingCodes(true);
+      try {
+        const response = await fetch(
+          `/api/billing-codes/search?q=${encodeURIComponent(
+            billingCodeSearchQuery
+          )}&jurisdictionId=1`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setBillingCodeSearchResults(data);
+        }
+      } catch (error) {
+        console.error("Error searching billing codes:", error);
+      } finally {
+        setIsSearchingBillingCodes(false);
+      }
+    };
+
+    setBillingCodeSearchResults([]);
+    const debounceTimer = setTimeout(searchBillingCodes, 300);
+    return () => clearTimeout(debounceTimer);
+  }, [billingCodeSearchQuery]);
+
+  // Search for previous codes
+  useEffect(() => {
+    const searchPreviousCodes = async () => {
+      if (previousCodeSearchQuery.length < 2) {
+        setPreviousCodeSearchResults([]);
+        return;
+      }
+      setIsSearchingPreviousCodes(true);
+      try {
+        const response = await fetch(
+          `/api/billing-codes/search?q=${encodeURIComponent(
+            previousCodeSearchQuery
+          )}&jurisdictionId=1`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setPreviousCodeSearchResults(data);
+        }
+      } catch (error) {
+        console.error("Error searching previous codes:", error);
+      } finally {
+        setIsSearchingPreviousCodes(false);
+      }
+    };
+
+    setPreviousCodeSearchResults([]);
+    const debounceTimer = setTimeout(searchPreviousCodes, 300);
+    return () => clearTimeout(debounceTimer);
+  }, [previousCodeSearchQuery]);
+
+  // Search for next codes
+  useEffect(() => {
+    const searchNextCodes = async () => {
+      if (nextCodeSearchQuery.length < 2) {
+        setNextCodeSearchResults([]);
+        return;
+      }
+      setIsSearchingNextCodes(true);
+      try {
+        const response = await fetch(
+          `/api/billing-codes/search?q=${encodeURIComponent(
+            nextCodeSearchQuery
+          )}&jurisdictionId=1`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setNextCodeSearchResults(data);
+        }
+      } catch (error) {
+        console.error("Error searching next codes:", error);
+      } finally {
+        setIsSearchingNextCodes(false);
+      }
+    };
+
+    setNextCodeSearchResults([]);
+    const debounceTimer = setTimeout(searchNextCodes, 300);
+    return () => clearTimeout(debounceTimer);
+  }, [nextCodeSearchQuery]);
+
+  // Fetch all billing codes for display purposes
+  useEffect(() => {
+    const fetchAllBillingCodes = async () => {
+      try {
+        const response = await fetch("/api/billing-codes?limit=1000");
+        if (response.ok) {
+          const data = await response.json();
+          setAllBillingCodes(data.data);
+        }
+      } catch (error) {
+        console.error("Error fetching all billing codes:", error);
+      }
+    };
+
+    fetchAllBillingCodes();
+  }, []);
+
   const handleFormChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
@@ -222,6 +382,42 @@ function BillingCodeForm({
       ...prev,
       section: null,
       sectionId: "",
+    }));
+  };
+
+  const handleAddPreviousCode = (code: BillingCode) => {
+    if (!formData.previousCodes.includes(code.id)) {
+      setFormData((prev) => ({
+        ...prev,
+        previousCodes: [...prev.previousCodes, code.id],
+      }));
+    }
+    setPreviousCodeSearchQuery("");
+    setPreviousCodeSearchResults([]);
+  };
+
+  const handleAddNextCode = (code: BillingCode) => {
+    if (!formData.nextCodes.includes(code.id)) {
+      setFormData((prev) => ({
+        ...prev,
+        nextCodes: [...prev.nextCodes, code.id],
+      }));
+    }
+    setNextCodeSearchQuery("");
+    setNextCodeSearchResults([]);
+  };
+
+  const handleRemovePreviousCode = (codeId: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      previousCodes: prev.previousCodes.filter((id) => id !== codeId),
+    }));
+  };
+
+  const handleRemoveNextCode = (codeId: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      nextCodes: prev.nextCodes.filter((id) => id !== codeId),
     }));
   };
 
@@ -595,6 +791,182 @@ function BillingCodeForm({
         </Select>
       </div>
 
+      {/* Previous Codes Section */}
+      <div className="space-y-4">
+        <Label>Previous Codes</Label>
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <Input
+              placeholder="Search for previous codes..."
+              value={previousCodeSearchQuery}
+              onChange={(e) => setPreviousCodeSearchQuery(e.target.value)}
+              className="flex-1"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPreviousCodeSearchQuery("")}
+            >
+              Clear
+            </Button>
+          </div>
+
+          {previousCodeSearchResults.length > 0 && (
+            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
+              {previousCodeSearchResults.map((code) => (
+                <div
+                  key={code.id}
+                  className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                  onClick={() => handleAddPreviousCode(code)}
+                >
+                  <div className="font-medium">
+                    {code.code} ({code.section.title})
+                  </div>
+                  <div className="text-sm text-gray-600">{code.title}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {formData.previousCodes.length > 0 && (
+            <div className="space-y-2">
+              {formData.previousCodes.map((codeId) => {
+                const code =
+                  allBillingCodes.find((c) => c.id === codeId) ||
+                  previousCodeSearchResults.find((c) => c.id === codeId);
+                return code ? (
+                  <div
+                    key={codeId}
+                    className="flex items-center justify-between p-2 bg-gray-50 rounded-md"
+                  >
+                    <div>
+                      <span className="font-medium">{code.code}</span> -{" "}
+                      {code.title}
+                      <div className="text-sm text-gray-500">
+                        {code.section.title}
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRemovePreviousCode(codeId)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ) : (
+                  <div
+                    key={codeId}
+                    className="flex items-center justify-between p-2 bg-gray-50 rounded-md"
+                  >
+                    <div>
+                      <span className="font-medium">Code ID: {codeId}</span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRemovePreviousCode(codeId)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Next Codes Section */}
+      <div className="space-y-4">
+        <Label>Next Codes</Label>
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <Input
+              placeholder="Search for next codes..."
+              value={nextCodeSearchQuery}
+              onChange={(e) => setNextCodeSearchQuery(e.target.value)}
+              className="flex-1"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setNextCodeSearchQuery("")}
+            >
+              Clear
+            </Button>
+          </div>
+
+          {nextCodeSearchResults.length > 0 && (
+            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
+              {nextCodeSearchResults.map((code) => (
+                <div
+                  key={code.id}
+                  className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                  onClick={() => handleAddNextCode(code)}
+                >
+                  <div className="font-medium">
+                    {code.code} ({code.section.title})
+                  </div>
+                  <div className="text-sm text-gray-600">{code.title}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {formData.nextCodes.length > 0 && (
+            <div className="space-y-2">
+              {formData.nextCodes.map((codeId) => {
+                const code =
+                  allBillingCodes.find((c) => c.id === codeId) ||
+                  nextCodeSearchResults.find((c) => c.id === codeId);
+                return code ? (
+                  <div
+                    key={codeId}
+                    className="flex items-center justify-between p-2 bg-gray-50 rounded-md"
+                  >
+                    <div>
+                      <span className="font-medium">{code.code}</span> -{" "}
+                      {code.title}
+                      <div className="text-sm text-gray-500">
+                        {code.section.title}
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRemoveNextCode(codeId)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ) : (
+                  <div
+                    key={codeId}
+                    className="flex items-center justify-between p-2 bg-gray-50 rounded-md"
+                  >
+                    <div>
+                      <span className="font-medium">Code ID: {codeId}</span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRemoveNextCode(codeId)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
       {error && <div className="text-red-500 text-sm">{error}</div>}
       <div className="flex gap-2">
         <Button onClick={handleSubmit}>
@@ -711,6 +1083,8 @@ export function BillingCodesTable() {
           technical_fee: formData.technical_fee || null,
           max_units: formData.max_units || null,
           day_range: formData.day_range || null,
+          previousCodes: formData.previousCodes || [],
+          nextCodes: formData.nextCodes || [],
         }),
       });
 
@@ -766,6 +1140,8 @@ export function BillingCodesTable() {
           technical_fee: formData.technical_fee || null,
           max_units: formData.max_units || null,
           day_range: formData.day_range || null,
+          previousCodes: formData.previousCodes || [],
+          nextCodes: formData.nextCodes || [],
         }),
       });
 
@@ -916,6 +1292,15 @@ export function BillingCodesTable() {
                         billingRecordType:
                           billingCodes.find((code) => code.id === editingId)!
                             .billing_record_type || 50,
+                        previousCodes:
+                          billingCodes
+                            .find((code) => code.id === editingId)!
+                            .previousCodes.map((rel) => rel.previous_code.id) ||
+                          [],
+                        nextCodes:
+                          billingCodes
+                            .find((code) => code.id === editingId)!
+                            .nextCodes.map((rel) => rel.next_code.id) || [],
                       }
                     : undefined
                   : undefined
@@ -938,19 +1323,21 @@ export function BillingCodesTable() {
               <TableHead>Provider</TableHead>
               <TableHead>Jurisdiction</TableHead>
               <TableHead>Section</TableHead>
+              <TableHead>Previous Codes</TableHead>
+              <TableHead>Next Codes</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center">
+                <TableCell colSpan={9} className="text-center">
                   Loading...
                 </TableCell>
               </TableRow>
             ) : billingCodes.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center">
+                <TableCell colSpan={9} className="text-center">
                   No billing codes found
                 </TableCell>
               </TableRow>
@@ -969,6 +1356,32 @@ export function BillingCodesTable() {
                   </TableCell>
                   <TableCell>
                     {code.section.code} - {code.section.title}
+                  </TableCell>
+                  <TableCell>
+                    {code.previousCodes.length > 0 ? (
+                      <div className="space-y-1">
+                        {code.previousCodes.map((rel) => (
+                          <div key={rel.previous_code.id} className="text-sm">
+                            {rel.previous_code.code} - {rel.previous_code.title}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      "-"
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {code.nextCodes.length > 0 ? (
+                      <div className="space-y-1">
+                        {code.nextCodes.map((rel) => (
+                          <div key={rel.next_code.id} className="text-sm">
+                            {rel.next_code.code} - {rel.next_code.title}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      "-"
+                    )}
                   </TableCell>
                   <TableCell>
                     <div className="flex space-x-2">

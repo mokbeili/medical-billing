@@ -22,6 +22,16 @@ export async function PUT(
       return new NextResponse("Billing code not found", { status: 404 });
     }
 
+    // First, delete existing relationships
+    await prisma.billingCodeRelation.deleteMany({
+      where: {
+        OR: [
+          { previous_code_id: parseInt(params.id) },
+          { next_code_id: parseInt(params.id) },
+        ],
+      },
+    });
+
     const updatedBillingCode = await prisma.billingCode.update({
       where: { id: parseInt(params.id) },
       data: {
@@ -44,6 +54,69 @@ export async function PUT(
         billing_record_type: data.billingRecordType,
         max_units: data.max_units,
         day_range: data.day_range,
+        // Create new relationships with previous codes
+        ...(data.previousCodes &&
+          data.previousCodes.length > 0 && {
+            previousCodes: {
+              create: data.previousCodes.map((codeId: number) => ({
+                previous_code_id: codeId,
+              })),
+            },
+          }),
+        // Create new relationships with next codes
+        ...(data.nextCodes &&
+          data.nextCodes.length > 0 && {
+            nextCodes: {
+              create: data.nextCodes.map((codeId: number) => ({
+                next_code_id: codeId,
+              })),
+            },
+          }),
+      },
+      include: {
+        section: {
+          include: {
+            jurisdiction: {
+              include: {
+                provider: true,
+              },
+            },
+          },
+        },
+        previousCodes: {
+          include: {
+            previous_code: {
+              select: {
+                id: true,
+                code: true,
+                title: true,
+                section: {
+                  select: {
+                    code: true,
+                    title: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        nextCodes: {
+          include: {
+            next_code: {
+              select: {
+                id: true,
+                code: true,
+                title: true,
+                section: {
+                  select: {
+                    code: true,
+                    title: true,
+                  },
+                },
+              },
+            },
+          },
+        },
       },
     });
 
