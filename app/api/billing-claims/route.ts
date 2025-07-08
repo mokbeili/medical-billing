@@ -192,7 +192,7 @@ export async function POST(request: Request) {
       const name = `${service.patient?.lastName || ""},${
         service.patient?.firstName || ""
       }`;
-      const diagnosticCode = service.icdCode?.code || "";
+      const diagnosticCode = service.icdCode?.code?.substring(0, 3) || "";
       const refPractitioner = service.referringPhysician?.code;
       const dateOfService = (() => {
         const date = new Date(service.serviceDate);

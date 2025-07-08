@@ -1,5 +1,9 @@
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  decryptPatientFields,
+  encryptPatientFields,
+} from "@/utils/patientEncryption";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
@@ -28,7 +32,30 @@ export async function GET() {
       },
     });
 
-    return NextResponse.json(patients);
+    // Decrypt patient data for each patient
+    const decryptedPatients = patients.map((patient) => {
+      const decryptedData = decryptPatientFields(
+        {
+          firstName: patient.firstName,
+          lastName: patient.lastName,
+          middleInitial: patient.middleInitial,
+          billingNumber: patient.billingNumber,
+          dateOfBirth: patient.dateOfBirth,
+        },
+        patient.physicianId
+      );
+
+      return {
+        ...patient,
+        firstName: decryptedData.firstName,
+        lastName: decryptedData.lastName,
+        middleInitial: decryptedData.middleInitial,
+        billingNumber: decryptedData.billingNumber,
+        dateOfBirth: decryptedData.dateOfBirth,
+      };
+    });
+
+    return NextResponse.json(decryptedPatients);
   } catch (error) {
     console.error("Error fetching patients:", error);
     return new NextResponse("Internal Server Error", { status: 500 });
@@ -89,16 +116,28 @@ export async function POST(request: Request) {
     // Generate unique ID
     const id = uuidv4();
 
-    // Create the patient
-    const patient = await prisma.patient.create({
-      data: {
-        id,
+    // Encrypt patient data
+    const encryptedData = encryptPatientFields(
+      {
         firstName,
         lastName,
         middleInitial,
         billingNumber,
+        dateOfBirth: dateOfBirthValue,
+      },
+      physicianId
+    );
+
+    // Create the patient with encrypted data
+    const patient = await prisma.patient.create({
+      data: {
+        id,
+        firstName: encryptedData.firstName || "",
+        lastName: encryptedData.lastName || "",
+        middleInitial: encryptedData.middleInitial,
+        billingNumber: encryptedData.billingNumber || "",
         physicianId,
-        dateOfBirth: new Date(dateOfBirthValue),
+        dateOfBirth: encryptedData.dateOfBirth || "",
         sex,
         jurisdictionId: physician.jurisdictionId,
       },
@@ -108,7 +147,28 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json(patient);
+    // Return decrypted data for the response
+    const decryptedData = decryptPatientFields(
+      {
+        firstName: patient.firstName,
+        lastName: patient.lastName,
+        middleInitial: patient.middleInitial,
+        billingNumber: patient.billingNumber,
+        dateOfBirth: patient.dateOfBirth,
+      },
+      patient.physicianId
+    );
+
+    const responsePatient = {
+      ...patient,
+      firstName: decryptedData.firstName,
+      lastName: decryptedData.lastName,
+      middleInitial: decryptedData.middleInitial,
+      billingNumber: decryptedData.billingNumber,
+      dateOfBirth: decryptedData.dateOfBirth,
+    };
+
+    return NextResponse.json(responsePatient);
   } catch (error) {
     console.log(error);
     console.error("Error creating patient:", error);

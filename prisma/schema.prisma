@@ -154,7 +154,7 @@ model Patient {
   physicianId    String       @map("physician_id")
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
-  dateOfBirth    DateTime     @map("date_of_birth")
+  dateOfBirth    String       @map("date_of_birth")
   sex            String       @map("sex")
   jurisdiction   Jurisdiction @relation(fields: [jurisdictionId], references: [id])
   physician      Physician    @relation(fields: [physicianId], references: [id])
