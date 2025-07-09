@@ -16,6 +16,8 @@ interface BaseSearchResult {
   multiple_unit_indicator: string | null;
   start_time_required: string | null;
   stop_time_required: string | null;
+  max_units: number | null;
+  day_range: number | null;
   section: {
     code: string;
     title: string;
@@ -53,6 +55,8 @@ interface PrismaSearchResult {
   multiple_unit_indicator: string | null;
   start_time_required: string | null;
   stop_time_required: string | null;
+  max_units: number | null;
+  day_range: number | null;
   section: {
     code: string;
     title: string;
@@ -220,6 +224,8 @@ export async function GET(request: Request) {
         bc.multiple_unit_indicator,
         bc.start_time_required,
         bc.stop_time_required,
+        bc.max_units,
+        bc.day_range,
         bc.billing_record_type,
         json_build_object(
           'code', s.code,
@@ -270,7 +276,7 @@ export async function GET(request: Request) {
         LTRIM(bc.code, '0') ILIKE ${query.trim()}
       GROUP BY bc.id, bc.code, bc.title, bc.description, bc.referring_practitioner_required, 
                bc.multiple_unit_indicator, bc.start_time_required, bc.stop_time_required, 
-               bc.billing_record_type, s.code, s.title
+               bc.max_units, bc.day_range, bc.billing_record_type, s.code, s.title
       LIMIT 1
     `;
 
@@ -300,6 +306,8 @@ export async function GET(request: Request) {
           multiple_unit_indicator: true,
           start_time_required: true,
           stop_time_required: true,
+          max_units: true,
+          day_range: true,
           section: {
             select: {
               code: true,
@@ -367,6 +375,8 @@ export async function GET(request: Request) {
           multiple_unit_indicator: true,
           start_time_required: true,
           stop_time_required: true,
+          max_units: true,
+          day_range: true,
           section: {
             select: {
               code: true,
@@ -434,6 +444,8 @@ export async function GET(request: Request) {
         bc.multiple_unit_indicator,
         bc.start_time_required,
         bc.stop_time_required,
+        bc.max_units,
+        bc.day_range,
         json_build_object(
           'code', s.code,
           'title', s.title
@@ -480,7 +492,7 @@ export async function GET(request: Request) {
       plainto_tsquery('english', ${query})
       GROUP BY bc.id, bc.code, bc.title, bc.description, bc.billing_record_type,
                bc.referring_practitioner_required, bc.multiple_unit_indicator, 
-               bc.start_time_required, bc.stop_time_required, s.code, s.title
+               bc.start_time_required, bc.stop_time_required, bc.max_units, bc.day_range, s.code, s.title
     `;
       addUniqueResults(partialMatches, [], "synonym");
     }
@@ -564,6 +576,8 @@ export async function GET(request: Request) {
           bc.multiple_unit_indicator,
           bc.start_time_required,
           bc.stop_time_required,
+          bc.max_units,
+          bc.day_range,
           json_build_object(
             'code', s.code,
             'title', s.title
@@ -613,7 +627,7 @@ export async function GET(request: Request) {
           AND 1 - (bce.vector_embeddings <=> ${embeddingString}::vector) > 0.70
         GROUP BY bc.id, bc.code, bc.title, bc.description, bc.billing_record_type,
                  bc.referring_practitioner_required, bc.multiple_unit_indicator, 
-                 bc.start_time_required, bc.stop_time_required, s.code, s.title,
+                 bc.start_time_required, bc.stop_time_required, bc.max_units, bc.day_range, s.code, s.title,
                  bce.vector_embeddings
         ORDER BY similarity DESC
         LIMIT ${limit - allResults.length}

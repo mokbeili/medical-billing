@@ -512,7 +512,6 @@ export default function ServiceForm({
   };
 
   const handleAddCode = (code: BillingCode) => {
-    console.log(code);
     if (!selectedCodes.find((c) => c.id === code.id)) {
       setSelectedCodes([...selectedCodes, code]);
 
@@ -522,55 +521,53 @@ export default function ServiceForm({
       const defaultServiceLocation = previousCode?.serviceLocation || null;
       const defaultLocationOfService = previousCode?.locationOfService || null;
 
-      // Calculate service start date for type 57 codes with previous codes
+      // Calculate service start date for type 57 codes
       let serviceStartDate = formData.serviceDate;
 
-      // Check if this code has previous codes defined and if any of them are already selected
-      if (
-        code.billing_record_type === 57 &&
-        !!code.previousCodes &&
-        code.previousCodes.length > 0
-      ) {
-        // Find if any of the previous codes are already in the form
-        const selectedPreviousCodes = selectedCodes.filter((selectedCode) =>
-          code.previousCodes?.some(
-            (prevCode) => prevCode.previous_code.id === selectedCode.id
-          )
-        );
-
-        if (selectedPreviousCodes.length > 0) {
-          // Find the most recent end date from the selected previous codes
-          const previousEndDates = selectedPreviousCodes
-            .map((prevCode) => {
-              const prevCodeIndex = formData.billingCodes.findIndex(
-                (bc) => bc.codeId === prevCode.id
-              );
-              return prevCodeIndex >= 0
-                ? formData.billingCodes[prevCodeIndex].serviceEndDate
-                : null;
-            })
-            .filter((date) => date !== null);
-
-          if (previousEndDates.length > 0) {
-            // Get the latest end date
-            const latestEndDate = new Date(
-              Math.max(
-                ...previousEndDates.map((date) => new Date(date!).getTime())
+      if (code.billing_record_type === 57) {
+        // Check if this code has previous codes defined and if any of them are already selected
+        if (code.previousCodes && code.previousCodes.length > 0) {
+          const existingFormCodes = formData.billingCodes;
+          // Find if any of the previous codes are already in the form
+          const selectedPreviousCodes = existingFormCodes.filter(
+            (selectedCode) =>
+              code.previousCodes?.some(
+                (prevCode) => prevCode.previous_code.id === selectedCode.codeId
               )
-            );
-            latestEndDate.setDate(latestEndDate.getDate() + 1);
-            serviceStartDate = latestEndDate.toISOString().split("T")[0];
+          );
+
+          if (selectedPreviousCodes.length > 0) {
+            // Find the most recent end date from the selected previous codes
+            const previousEndDates = selectedPreviousCodes
+              .map((prevCode) => {
+                const prevCodeIndex = formData.billingCodes.findIndex(
+                  (bc) => bc.codeId === prevCode.codeId
+                );
+                return prevCodeIndex >= 0
+                  ? formData.billingCodes[prevCodeIndex].serviceEndDate
+                  : null;
+              })
+              .filter((date) => date !== null);
+
+            if (previousEndDates.length > 0) {
+              // Get the latest end date and add 1 day
+              const latestEndDate = new Date(
+                Math.max(
+                  ...previousEndDates.map((date) => new Date(date!).getTime())
+                )
+              );
+              latestEndDate.setDate(latestEndDate.getDate() + 1);
+              serviceStartDate = latestEndDate.toISOString().split("T")[0];
+            }
           }
-        } else if (previousCode?.serviceEndDate) {
-          // Fallback to the previous code in the form
-          const previousEndDate = new Date(previousCode.serviceEndDate);
-          previousEndDate.setDate(previousEndDate.getDate() + 1);
-          serviceStartDate = previousEndDate.toISOString().split("T")[0];
+          // If no previous codes are selected, keep the default service start date
         }
+        // If no previous codes defined, use the service start date (already set)
       }
 
       // Calculate service end date based on day range
       let serviceEndDate = null;
+      console.log(code);
       if (code.day_range && code.day_range > 0) {
         const startDate = new Date(serviceStartDate);
         startDate.setDate(startDate.getDate() + code.day_range - 1); // -1 because it's inclusive
