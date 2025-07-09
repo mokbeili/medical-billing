@@ -84,8 +84,8 @@ export async function PUT(
           },
         },
         previousCodes: {
-          include: {
-            previous_code: {
+          select: {
+            previousCode: {
               select: {
                 id: true,
                 code: true,
@@ -101,8 +101,8 @@ export async function PUT(
           },
         },
         nextCodes: {
-          include: {
-            next_code: {
+          select: {
+            nextCode: {
               select: {
                 id: true,
                 code: true,

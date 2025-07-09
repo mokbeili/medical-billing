@@ -20,6 +20,65 @@ interface BaseSearchResult {
     code: string;
     title: string;
   };
+  previousCodes: Array<{
+    previous_code: {
+      id: number;
+      code: string;
+      title: string;
+      section: {
+        code: string;
+        title: string;
+      };
+    };
+  }>;
+  nextCodes: Array<{
+    next_code: {
+      id: number;
+      code: string;
+      title: string;
+      section: {
+        code: string;
+        title: string;
+      };
+    };
+  }>;
+}
+
+interface PrismaSearchResult {
+  id: number;
+  code: string;
+  title: string;
+  description: string | null;
+  referring_practitioner_required: string | null;
+  multiple_unit_indicator: string | null;
+  start_time_required: string | null;
+  stop_time_required: string | null;
+  section: {
+    code: string;
+    title: string;
+  };
+  previousCodes: Array<{
+    previousCode: {
+      id: number;
+      code: string;
+      title: string;
+      section: {
+        code: string;
+        title: string;
+      };
+    };
+  }>;
+  nextCodes: Array<{
+    nextCode: {
+      id: number;
+      code: string;
+      title: string;
+      section: {
+        code: string;
+        title: string;
+      };
+    };
+  }>;
 }
 
 interface RawSearchResult extends BaseSearchResult {
@@ -100,13 +159,29 @@ export async function GET(request: Request) {
 
     // Helper function to add unique results
     const addUniqueResults = (
-      results: BaseSearchResult[],
+      results: (BaseSearchResult | PrismaSearchResult)[],
       cacheResults: SearchResult[],
       searchType: string
     ) => {
+      const transformedResults = results.map((result) => {
+        // Transform Prisma results to match BaseSearchResult interface
+        if ("previousCode" in (result.previousCodes[0] || {})) {
+          return {
+            ...result,
+            previousCodes: result.previousCodes.map((rel: any) => ({
+              previous_code: rel.previousCode,
+            })),
+            nextCodes: result.nextCodes.map((rel: any) => ({
+              next_code: rel.nextCode,
+            })),
+          } as BaseSearchResult;
+        }
+        return result as BaseSearchResult;
+      });
+
       const uniqueResults = [
         ...cacheResults,
-        ...results
+        ...transformedResults
           .filter((result) => {
             if (usedCodes.has(result.code)) {
               return false;
@@ -149,14 +224,53 @@ export async function GET(request: Request) {
         json_build_object(
           'code', s.code,
           'title', s.title
-        ) as section
+        ) as section,
+        COALESCE(
+          json_agg(
+            DISTINCT jsonb_build_object(
+              'previous_code', jsonb_build_object(
+                'id', prev_bc.id,
+                'code', prev_bc.code,
+                'title', prev_bc.title,
+                'section', jsonb_build_object(
+                  'code', prev_s.code,
+                  'title', prev_s.title
+                )
+              )
+            )
+          ) FILTER (WHERE prev_bc.id IS NOT NULL), '[]'::json
+        ) as "previousCodes",
+        COALESCE(
+          json_agg(
+            DISTINCT jsonb_build_object(
+              'next_code', jsonb_build_object(
+                'id', next_bc.id,
+                'code', next_bc.code,
+                'title', next_bc.title,
+                'section', jsonb_build_object(
+                  'code', next_s.code,
+                  'title', next_s.title
+                )
+              )
+            )
+          ) FILTER (WHERE next_bc.id IS NOT NULL), '[]'::json
+        ) as "nextCodes"
       FROM billing_codes bc
       JOIN sections s ON bc.section_id = s.id
+      LEFT JOIN billing_code_relations bcr_prev ON bc.id = bcr_prev.next_code_id
+      LEFT JOIN billing_codes prev_bc ON bcr_prev.previous_code_id = prev_bc.id
+      LEFT JOIN sections prev_s ON prev_bc.section_id = prev_s.id
+      LEFT JOIN billing_code_relations bcr_next ON bc.id = bcr_next.previous_code_id
+      LEFT JOIN billing_codes next_bc ON bcr_next.next_code_id = next_bc.id
+      LEFT JOIN sections next_s ON next_bc.section_id = next_s.id
       WHERE 
         bc.code ILIKE ${query.trim()} OR
         bc.code ILIKE ${cleanedQuery} OR
         LTRIM(bc.code, '0') ILIKE ${cleanedQuery} OR
         LTRIM(bc.code, '0') ILIKE ${query.trim()}
+      GROUP BY bc.id, bc.code, bc.title, bc.description, bc.referring_practitioner_required, 
+               bc.multiple_unit_indicator, bc.start_time_required, bc.stop_time_required, 
+               bc.billing_record_type, s.code, s.title
       LIMIT 1
     `;
 
@@ -192,14 +306,52 @@ export async function GET(request: Request) {
               title: true,
             },
           },
+          previousCodes: {
+            select: {
+              previousCode: {
+                select: {
+                  id: true,
+                  code: true,
+                  title: true,
+                  section: {
+                    select: {
+                      code: true,
+                      title: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+          nextCodes: {
+            select: {
+              nextCode: {
+                select: {
+                  id: true,
+                  code: true,
+                  title: true,
+                  section: {
+                    select: {
+                      code: true,
+                      title: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
         take: limit - allResults.length,
       });
-      addUniqueResults(partialCodeMatches, [], "partial_code");
+      addUniqueResults(
+        partialCodeMatches as PrismaSearchResult[],
+        [],
+        "partial_code"
+      );
     }
 
     // 3. Try exact title match if we need more results
-    let exactTitleMatches: BaseSearchResult[] = [];
+    let exactTitleMatches: PrismaSearchResult[] = [];
     if (needsMoreResults(allResults, limit, !!exactCodeMatch, false)) {
       exactTitleMatches = await prisma.billingCode.findMany({
         where: {
@@ -219,6 +371,40 @@ export async function GET(request: Request) {
             select: {
               code: true,
               title: true,
+            },
+          },
+          previousCodes: {
+            select: {
+              previousCode: {
+                select: {
+                  id: true,
+                  code: true,
+                  title: true,
+                  section: {
+                    select: {
+                      code: true,
+                      title: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+          nextCodes: {
+            select: {
+              nextCode: {
+                select: {
+                  id: true,
+                  code: true,
+                  title: true,
+                  section: {
+                    select: {
+                      code: true,
+                      title: true,
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -251,11 +437,50 @@ export async function GET(request: Request) {
         json_build_object(
           'code', s.code,
           'title', s.title
-        ) as section
+        ) as section,
+        COALESCE(
+          json_agg(
+            DISTINCT jsonb_build_object(
+              'previous_code', jsonb_build_object(
+                'id', prev_bc.id,
+                'code', prev_bc.code,
+                'title', prev_bc.title,
+                'section', jsonb_build_object(
+                  'code', prev_s.code,
+                  'title', prev_s.title
+                )
+              )
+            )
+          ) FILTER (WHERE prev_bc.id IS NOT NULL), '[]'::json
+        ) as "previousCodes",
+        COALESCE(
+          json_agg(
+            DISTINCT jsonb_build_object(
+              'next_code', jsonb_build_object(
+                'id', next_bc.id,
+                'code', next_bc.code,
+                'title', next_bc.title,
+                'section', jsonb_build_object(
+                  'code', next_s.code,
+                  'title', next_s.title
+                )
+              )
+            )
+          ) FILTER (WHERE next_bc.id IS NOT NULL), '[]'::json
+        ) as "nextCodes"
       FROM billing_codes bc
       JOIN sections s ON bc.section_id = s.id
+      LEFT JOIN billing_code_relations bcr_prev ON bc.id = bcr_prev.next_code_id
+      LEFT JOIN billing_codes prev_bc ON bcr_prev.previous_code_id = prev_bc.id
+      LEFT JOIN sections prev_s ON prev_bc.section_id = prev_s.id
+      LEFT JOIN billing_code_relations bcr_next ON bc.id = bcr_next.previous_code_id
+      LEFT JOIN billing_codes next_bc ON bcr_next.next_code_id = next_bc.id
+      LEFT JOIN sections next_s ON next_bc.section_id = next_s.id
       where to_tsvector('english', s.code || ' ' || s.title || ' ' || bc.code || ' ' || bc.title || '' || bc.description) @@ 
       plainto_tsquery('english', ${query})
+      GROUP BY bc.id, bc.code, bc.title, bc.description, bc.billing_record_type,
+               bc.referring_practitioner_required, bc.multiple_unit_indicator, 
+               bc.start_time_required, bc.stop_time_required, s.code, s.title
     `;
       addUniqueResults(partialMatches, [], "synonym");
     }
@@ -343,13 +568,53 @@ export async function GET(request: Request) {
             'code', s.code,
             'title', s.title
           ) as section,
-          1 - (bce.vector_embeddings <=> ${embeddingString}::vector) as similarity
+          1 - (bce.vector_embeddings <=> ${embeddingString}::vector) as similarity,
+          COALESCE(
+            json_agg(
+              DISTINCT jsonb_build_object(
+                'previous_code', jsonb_build_object(
+                  'id', prev_bc.id,
+                  'code', prev_bc.code,
+                  'title', prev_bc.title,
+                  'section', jsonb_build_object(
+                    'code', prev_s.code,
+                    'title', prev_s.title
+                  )
+                )
+              )
+            ) FILTER (WHERE prev_bc.id IS NOT NULL), '[]'::json
+          ) as "previousCodes",
+          COALESCE(
+            json_agg(
+              DISTINCT jsonb_build_object(
+                'next_code', jsonb_build_object(
+                  'id', next_bc.id,
+                  'code', next_bc.code,
+                  'title', next_bc.title,
+                  'section', jsonb_build_object(
+                    'code', next_s.code,
+                    'title', next_s.title
+                  )
+                )
+              )
+            ) FILTER (WHERE next_bc.id IS NOT NULL), '[]'::json
+          ) as "nextCodes"
         FROM billing_codes bc
         join billing_code_embeddings bce on bc.id = bce.billing_code_id
         JOIN sections s ON bc.section_id = s.id
+        LEFT JOIN billing_code_relations bcr_prev ON bc.id = bcr_prev.next_code_id
+        LEFT JOIN billing_codes prev_bc ON bcr_prev.previous_code_id = prev_bc.id
+        LEFT JOIN sections prev_s ON prev_bc.section_id = prev_s.id
+        LEFT JOIN billing_code_relations bcr_next ON bc.id = bcr_next.previous_code_id
+        LEFT JOIN billing_codes next_bc ON bcr_next.next_code_id = next_bc.id
+        LEFT JOIN sections next_s ON next_bc.section_id = next_s.id
         WHERE bc.openai_embedding::vector IS NOT NULL 
           AND bc.code NOT IN (${existingCodes.length > 0 ? existingCodes : ""})
           AND 1 - (bce.vector_embeddings <=> ${embeddingString}::vector) > 0.70
+        GROUP BY bc.id, bc.code, bc.title, bc.description, bc.billing_record_type,
+                 bc.referring_practitioner_required, bc.multiple_unit_indicator, 
+                 bc.start_time_required, bc.stop_time_required, s.code, s.title,
+                 bce.vector_embeddings
         ORDER BY similarity DESC
         LIMIT ${limit - allResults.length}
       `;

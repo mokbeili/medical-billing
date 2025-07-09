@@ -82,8 +82,8 @@ model BillingCode {
   serviceCodes                    ServiceCodes[]
 
   // Many-to-many relationship for previous/next codes
-  previousCodes BillingCodeRelation[] @relation("BillingCodePrevious")
-  nextCodes     BillingCodeRelation[] @relation("BillingCodeNext")
+  previousCodes BillingCodeRelation[] @relation("BillingCodeNext")
+  nextCodes     BillingCodeRelation[] @relation("BillingCodePrevious")
 
   @@index([section_id])
   @@index([code])
@@ -98,8 +98,8 @@ model BillingCodeRelation {
   next_code_id     Int      @map("next_code_id")
   created_at       DateTime @default(now()) @map("created_at")
 
-  previous_code BillingCode @relation("BillingCodePrevious", fields: [previous_code_id], references: [id], onDelete: Cascade)
-  next_code     BillingCode @relation("BillingCodeNext", fields: [next_code_id], references: [id], onDelete: Cascade)
+  previousCode BillingCode @relation("BillingCodePrevious", fields: [previous_code_id], references: [id], onDelete: Cascade)
+  nextCode     BillingCode @relation("BillingCodeNext", fields: [next_code_id], references: [id], onDelete: Cascade)
 
   @@unique([previous_code_id, next_code_id])
   @@index([previous_code_id])

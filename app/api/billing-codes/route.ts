@@ -99,8 +99,8 @@ export async function GET(request: Request) {
             },
           },
           previousCodes: {
-            include: {
-              previous_code: {
+            select: {
+              previousCode: {
                 select: {
                   id: true,
                   code: true,
@@ -116,8 +116,8 @@ export async function GET(request: Request) {
             },
           },
           nextCodes: {
-            include: {
-              next_code: {
+            select: {
+              nextCode: {
                 select: {
                   id: true,
                   code: true,
@@ -257,8 +257,8 @@ export async function POST(request: Request) {
           },
         },
         previousCodes: {
-          include: {
-            previous_code: {
+          select: {
+            previousCode: {
               select: {
                 id: true,
                 code: true,
@@ -274,8 +274,8 @@ export async function POST(request: Request) {
           },
         },
         nextCodes: {
-          include: {
-            next_code: {
+          select: {
+            nextCode: {
               select: {
                 id: true,
                 code: true,

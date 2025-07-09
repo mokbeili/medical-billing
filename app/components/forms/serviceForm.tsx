@@ -60,6 +60,28 @@ interface BillingCode {
     code: string;
     title: string;
   };
+  previousCodes?: Array<{
+    previous_code: {
+      id: number;
+      code: string;
+      title: string;
+      section: {
+        code: string;
+        title: string;
+      };
+    };
+  }>;
+  nextCodes?: Array<{
+    next_code: {
+      id: number;
+      code: string;
+      title: string;
+      section: {
+        code: string;
+        title: string;
+      };
+    };
+  }>;
 }
 
 interface ICDCode {
@@ -490,6 +512,7 @@ export default function ServiceForm({
   };
 
   const handleAddCode = (code: BillingCode) => {
+    console.log(code);
     if (!selectedCodes.find((c) => c.id === code.id)) {
       setSelectedCodes([...selectedCodes, code]);
 
@@ -498,6 +521,61 @@ export default function ServiceForm({
         formData.billingCodes[formData.billingCodes.length - 1];
       const defaultServiceLocation = previousCode?.serviceLocation || null;
       const defaultLocationOfService = previousCode?.locationOfService || null;
+
+      // Calculate service start date for type 57 codes with previous codes
+      let serviceStartDate = formData.serviceDate;
+
+      // Check if this code has previous codes defined and if any of them are already selected
+      if (
+        code.billing_record_type === 57 &&
+        !!code.previousCodes &&
+        code.previousCodes.length > 0
+      ) {
+        // Find if any of the previous codes are already in the form
+        const selectedPreviousCodes = selectedCodes.filter((selectedCode) =>
+          code.previousCodes?.some(
+            (prevCode) => prevCode.previous_code.id === selectedCode.id
+          )
+        );
+
+        if (selectedPreviousCodes.length > 0) {
+          // Find the most recent end date from the selected previous codes
+          const previousEndDates = selectedPreviousCodes
+            .map((prevCode) => {
+              const prevCodeIndex = formData.billingCodes.findIndex(
+                (bc) => bc.codeId === prevCode.id
+              );
+              return prevCodeIndex >= 0
+                ? formData.billingCodes[prevCodeIndex].serviceEndDate
+                : null;
+            })
+            .filter((date) => date !== null);
+
+          if (previousEndDates.length > 0) {
+            // Get the latest end date
+            const latestEndDate = new Date(
+              Math.max(
+                ...previousEndDates.map((date) => new Date(date!).getTime())
+              )
+            );
+            latestEndDate.setDate(latestEndDate.getDate() + 1);
+            serviceStartDate = latestEndDate.toISOString().split("T")[0];
+          }
+        } else if (previousCode?.serviceEndDate) {
+          // Fallback to the previous code in the form
+          const previousEndDate = new Date(previousCode.serviceEndDate);
+          previousEndDate.setDate(previousEndDate.getDate() + 1);
+          serviceStartDate = previousEndDate.toISOString().split("T")[0];
+        }
+      }
+
+      // Calculate service end date based on day range
+      let serviceEndDate = null;
+      if (code.day_range && code.day_range > 0) {
+        const startDate = new Date(serviceStartDate);
+        startDate.setDate(startDate.getDate() + code.day_range - 1); // -1 because it's inclusive
+        serviceEndDate = startDate.toISOString().split("T")[0];
+      }
 
       setFormData({
         ...formData,
@@ -512,8 +590,8 @@ export default function ServiceForm({
             numberOfUnits: code.multiple_unit_indicator === "U" ? 1 : null,
             bilateralIndicator: null,
             specialCircumstances: null,
-            serviceDate: formData.serviceDate,
-            serviceEndDate: null,
+            serviceDate: serviceStartDate,
+            serviceEndDate: serviceEndDate,
             serviceLocation: defaultServiceLocation,
             locationOfService: defaultLocationOfService,
           },
@@ -530,6 +608,40 @@ export default function ServiceForm({
   ) => {
     const updatedBillingCodes = [...formData.billingCodes];
     const currentCode = updatedBillingCodes[index];
+    const selectedCode = selectedCodes.find((c) => c.id === currentCode.codeId);
+
+    // Handle day range logic when service date is updated
+    if (
+      updates.serviceDate &&
+      selectedCode?.day_range &&
+      selectedCode.day_range > 0
+    ) {
+      const startDate = new Date(updates.serviceDate);
+      startDate.setDate(startDate.getDate() + selectedCode.day_range - 1); // -1 because it's inclusive
+      updates.serviceEndDate = startDate.toISOString().split("T")[0];
+    }
+
+    // Handle day range logic when service end date is updated
+    if (
+      updates.serviceEndDate &&
+      selectedCode?.day_range &&
+      selectedCode.day_range > 0
+    ) {
+      const endDate = new Date(updates.serviceEndDate);
+      endDate.setDate(endDate.getDate() - selectedCode.day_range + 1); // +1 to get back to start date
+      updates.serviceDate = endDate.toISOString().split("T")[0];
+    }
+
+    // Validate max units
+    if (
+      updates.numberOfUnits !== undefined &&
+      updates.numberOfUnits !== null &&
+      selectedCode?.max_units
+    ) {
+      if (updates.numberOfUnits > selectedCode.max_units) {
+        updates.numberOfUnits = selectedCode.max_units;
+      }
+    }
 
     // If serviceDate is being updated, check if it's greater than serviceEndDate
     if (updates.serviceDate && currentCode.serviceEndDate) {
@@ -1359,6 +1471,13 @@ export default function ServiceForm({
                       <div>
                         <span className="font-medium">{code.code}</span> -{" "}
                         {code.title}
+                        {isType57Code(code) &&
+                          code.previousCodes &&
+                          code.previousCodes.length > 0 && (
+                            <span className="text-xs text-blue-600 ml-2">
+                              (Uses previous codes)
+                            </span>
+                          )}
                       </div>
                       <Button
                         type="button"
@@ -1415,6 +1534,11 @@ export default function ServiceForm({
                         <div className="space-y-2">
                           <label className="block text-sm font-medium">
                             Number of Units
+                            {code.max_units && (
+                              <span className="text-xs text-gray-500 ml-2">
+                                (Max: {code.max_units})
+                              </span>
+                            )}
                           </label>
                           <div className="flex items-center gap-2">
                             <Button
@@ -1441,16 +1565,19 @@ export default function ServiceForm({
                             <Input
                               type="number"
                               min="1"
+                              max={code.max_units || undefined}
                               value={
                                 formData.billingCodes[index].numberOfUnits || ""
                               }
-                              onChange={(e) =>
+                              onChange={(e) => {
+                                const value = e.target.value
+                                  ? parseInt(e.target.value)
+                                  : 1;
+                                const maxUnits = code.max_units || value;
                                 handleUpdateBillingCode(index, {
-                                  numberOfUnits: e.target.value
-                                    ? parseInt(e.target.value)
-                                    : 1,
-                                })
-                              }
+                                  numberOfUnits: Math.min(value, maxUnits),
+                                });
+                              }}
                               className="w-16 text-center text-lg font-semibold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                             />
                             <Button
@@ -1461,13 +1588,50 @@ export default function ServiceForm({
                                 const currentValue =
                                   formData.billingCodes[index].numberOfUnits ||
                                   0;
+                                const maxUnits =
+                                  code.max_units || currentValue + 1;
                                 handleUpdateBillingCode(index, {
-                                  numberOfUnits: currentValue + 1,
+                                  numberOfUnits: Math.min(
+                                    currentValue + 1,
+                                    maxUnits
+                                  ),
                                 });
                               }}
+                              disabled={
+                                !!(
+                                  code.max_units &&
+                                  (formData.billingCodes[index].numberOfUnits ||
+                                    0) >= code.max_units
+                                )
+                              }
                             >
                               +
                             </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {code.day_range && code.day_range > 0 && (
+                        <div className="space-y-2">
+                          <label className="block text-sm font-medium">
+                            Day Range: {code.day_range} days
+                            <span className="text-xs text-blue-600 ml-2">
+                              (Auto-calculated)
+                            </span>
+                          </label>
+                          <div className="text-xs text-gray-500">
+                            Service period:{" "}
+                            {formData.billingCodes[index].serviceDate ||
+                              "Not set"}{" "}
+                            to{" "}
+                            {formData.billingCodes[index].serviceEndDate ||
+                              "Not set"}
+                            {formData.billingCodes[index].serviceDate &&
+                              formData.billingCodes[index].serviceEndDate && (
+                                <span className="text-green-600 ml-2">
+                                  ✓ {code.day_range} days inclusive
+                                </span>
+                              )}
                           </div>
                         </div>
                       )}
