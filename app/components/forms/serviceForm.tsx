@@ -1530,7 +1530,7 @@ export default function ServiceForm({
                       {code.multiple_unit_indicator === "U" && (
                         <div className="space-y-2">
                           <label className="block text-sm font-medium">
-                            Number of Units
+                            # Units
                             {code.max_units && (
                               <span className="text-xs text-gray-500 ml-2">
                                 (Max: {code.max_units})

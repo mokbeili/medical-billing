@@ -1,10 +1,8 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import { useSession } from "next-auth/react";
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import Layout from "../components/layout/Layout";
 
@@ -233,7 +231,7 @@ export default function SearchPage() {
               </div>
             )}
 
-            <div className="mt-8 p-4 bg-blue-50 rounded-lg">
+            {/* <div className="mt-8 p-4 bg-blue-50 rounded-lg">
               <p className="text-sm text-blue-700 mb-4">
                 Sign up for full access to create and manage billing claims,
                 track submissions, and more.
@@ -241,7 +239,7 @@ export default function SearchPage() {
               <Link href="/signup">
                 <Button>Sign Up Now</Button>
               </Link>
-            </div>
+            </div> */}
           </div>
         </main>
       </div>
