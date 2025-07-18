@@ -661,7 +661,195 @@ export default function ServiceForm({
     }
 
     updatedBillingCodes[index] = { ...currentCode, ...updates };
-    setFormData({ ...formData, billingCodes: updatedBillingCodes });
+
+    // If we're updating a service date, recalculate all related dates
+    if (updates.serviceDate) {
+      const recalculatedCodes = recalculateAllDates(updatedBillingCodes, index);
+      setFormData({ ...formData, billingCodes: recalculatedCodes });
+    } else {
+      setFormData({ ...formData, billingCodes: updatedBillingCodes });
+    }
+  };
+
+  // Function to recalculate all billing code dates when any start date changes
+  const recalculateAllDates = (
+    billingCodes: typeof formData.billingCodes,
+    changedIndex: number
+  ) => {
+    const updatedCodes = [...billingCodes];
+    const changedCode = updatedCodes[changedIndex];
+    const changedSelectedCode = selectedCodes.find(
+      (c) => c.id === changedCode.codeId
+    );
+
+    if (!changedSelectedCode) return updatedCodes;
+
+    // Step 1: Update the changed code's end date if it has a day range
+    if (changedSelectedCode.day_range && changedSelectedCode.day_range > 0) {
+      const startDate = new Date(
+        changedCode.serviceDate || formData.serviceDate
+      );
+      startDate.setDate(
+        startDate.getDate() + changedSelectedCode.day_range - 1
+      );
+      updatedCodes[changedIndex] = {
+        ...changedCode,
+        serviceEndDate: startDate.toISOString().split("T")[0],
+      };
+    }
+
+    // Step 2: Find all codes that depend on the changed code (next codes)
+    const dependentCodes = updatedCodes.filter((code, index) => {
+      if (index === changedIndex) return false;
+      const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
+      return selectedCode?.previousCodes?.some(
+        (prevCode) => prevCode.previous_code.id === changedSelectedCode.id
+      );
+    });
+
+    // Step 3: Update dependent codes' start dates
+    dependentCodes.forEach((dependentCode) => {
+      const dependentIndex = updatedCodes.findIndex(
+        (c) => c.codeId === dependentCode.codeId
+      );
+      const dependentSelectedCode = selectedCodes.find(
+        (c) => c.id === dependentCode.codeId
+      );
+
+      if (!dependentSelectedCode) return;
+
+      // Calculate new start date based on the changed code's end date
+      const changedEndDate = updatedCodes[changedIndex].serviceEndDate;
+      if (changedEndDate) {
+        const newStartDate = new Date(changedEndDate);
+        newStartDate.setDate(newStartDate.getDate() + 1); // Start the next day
+
+        let newServiceDate = newStartDate.toISOString().split("T")[0];
+        let newServiceEndDate = null;
+
+        // Calculate end date if this code has a day range
+        if (
+          dependentSelectedCode.day_range &&
+          dependentSelectedCode.day_range > 0
+        ) {
+          const endDate = new Date(newStartDate);
+          endDate.setDate(
+            endDate.getDate() + dependentSelectedCode.day_range - 1
+          );
+          newServiceEndDate = endDate.toISOString().split("T")[0];
+        }
+
+        updatedCodes[dependentIndex] = {
+          ...dependentCode,
+          serviceDate: newServiceDate,
+          serviceEndDate: newServiceEndDate,
+        };
+
+        // Recursively update codes that depend on this dependent code
+        const nextDependentCodes = updatedCodes.filter((code, index) => {
+          if (index === dependentIndex) return false;
+          const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
+          return selectedCode?.previousCodes?.some(
+            (prevCode) => prevCode.previous_code.id === dependentSelectedCode.id
+          );
+        });
+
+        nextDependentCodes.forEach((nextCode) => {
+          const nextIndex = updatedCodes.findIndex(
+            (c) => c.codeId === nextCode.codeId
+          );
+          const nextSelectedCode = selectedCodes.find(
+            (c) => c.id === nextCode.codeId
+          );
+
+          if (!nextSelectedCode) return;
+
+          const dependentEndDate = updatedCodes[dependentIndex].serviceEndDate;
+          const dependentStartDate = updatedCodes[dependentIndex].serviceDate;
+          const nextStartDate = new Date(
+            dependentEndDate || dependentStartDate || formData.serviceDate
+          );
+          nextStartDate.setDate(nextStartDate.getDate() + 1);
+
+          let nextServiceDate = nextStartDate.toISOString().split("T")[0];
+          let nextServiceEndDate = null;
+
+          if (nextSelectedCode.day_range && nextSelectedCode.day_range > 0) {
+            const endDate = new Date(nextStartDate);
+            endDate.setDate(endDate.getDate() + nextSelectedCode.day_range - 1);
+            nextServiceEndDate = endDate.toISOString().split("T")[0];
+          }
+
+          updatedCodes[nextIndex] = {
+            ...nextCode,
+            serviceDate: nextServiceDate,
+            serviceEndDate: nextServiceEndDate,
+          };
+        });
+      }
+    });
+
+    return updatedCodes;
+  };
+
+  // Function to handle main service date changes and update all billing codes
+  const handleMainServiceDateChange = (newServiceDate: string) => {
+    const updatedBillingCodes = formData.billingCodes.map((code, index) => {
+      const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
+      if (!selectedCode) return code;
+
+      // For type 57 codes, we need to check if they have previous codes
+      if (
+        selectedCode.billing_record_type === 57 &&
+        selectedCode.previousCodes &&
+        selectedCode.previousCodes.length > 0
+      ) {
+        // Check if any previous codes are already selected
+        const selectedPreviousCodes = formData.billingCodes.filter(
+          (billingCode) =>
+            selectedCode.previousCodes?.some(
+              (prevCode) => prevCode.previous_code.id === billingCode.codeId
+            )
+        );
+
+        if (selectedPreviousCodes.length > 0) {
+          // This code depends on previous codes, so don't change its date
+          return code;
+        }
+      }
+
+      // For codes without dependencies or the first code in a chain, update the start date
+      let newServiceStartDate = newServiceDate;
+      let newServiceEndDate = null;
+
+      // Calculate end date if this code has a day range
+      if (selectedCode.day_range && selectedCode.day_range > 0) {
+        const startDate = new Date(newServiceStartDate);
+        startDate.setDate(startDate.getDate() + selectedCode.day_range - 1);
+        newServiceEndDate = startDate.toISOString().split("T")[0];
+      }
+
+      return {
+        ...code,
+        serviceDate: newServiceStartDate,
+        serviceEndDate: newServiceEndDate,
+      };
+    });
+
+    // Now recalculate all dependent codes
+    let finalBillingCodes = [...updatedBillingCodes];
+    updatedBillingCodes.forEach((code, index) => {
+      const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
+      if (selectedCode && selectedCode.billing_record_type === 57) {
+        finalBillingCodes = recalculateAllDates(finalBillingCodes, index);
+      }
+    });
+
+    setFormData({
+      ...formData,
+      serviceDate: newServiceDate,
+      billingCodes: finalBillingCodes,
+    });
   };
 
   const handleRemoveCode = (codeId: number) => {
@@ -1083,10 +1271,7 @@ export default function ServiceForm({
                 type="date"
                 value={formData.serviceDate}
                 onChange={(e) => {
-                  setFormData({
-                    ...formData,
-                    serviceDate: e.target.value,
-                  });
+                  handleMainServiceDateChange(e.target.value);
                 }}
                 className={serviceErrors.serviceDate ? "border-red-500" : ""}
               />
@@ -1096,10 +1281,9 @@ export default function ServiceForm({
                 onClick={() => {
                   const currentDate = new Date(formData.serviceDate);
                   currentDate.setDate(currentDate.getDate() + 1);
-                  setFormData({
-                    ...formData,
-                    serviceDate: currentDate.toISOString().split("T")[0],
-                  });
+                  handleMainServiceDateChange(
+                    currentDate.toISOString().split("T")[0]
+                  );
                 }}
               >
                 ↑
@@ -1110,10 +1294,9 @@ export default function ServiceForm({
                 onClick={() => {
                   const currentDate = new Date(formData.serviceDate);
                   currentDate.setDate(currentDate.getDate() - 1);
-                  setFormData({
-                    ...formData,
-                    serviceDate: currentDate.toISOString().split("T")[0],
-                  });
+                  handleMainServiceDateChange(
+                    currentDate.toISOString().split("T")[0]
+                  );
                 }}
               >
                 ↓
@@ -1334,8 +1517,13 @@ export default function ServiceForm({
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <span className="font-medium">{code.code}</span> -{" "}
-                        {code.title}
+                        <span className="font-medium">
+                          <span className="sm:hidden">
+                            {code.code.replace(/^0+/, "")}
+                          </span>
+                          <span className="hidden sm:inline">{code.code}</span>
+                        </span>{" "}
+                        - {code.title}
                         {isType57Code(code) &&
                           code.previousCodes &&
                           code.previousCodes.length > 0 && (
