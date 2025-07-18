@@ -13,18 +13,39 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const search = url.searchParams.get("search") || "";
 
-    const icdCodes = await prisma.iCDCode.findMany({
-      where: {
-        OR: [
-          { code: { contains: search, mode: "insensitive" } },
-          { description: { contains: search, mode: "insensitive" } },
-        ],
-      },
-      orderBy: {
-        code: "asc",
-      },
-      take: 50,
-    });
+    let icdCodes;
+
+    if (search.length >= 2) {
+      // Use full-text search for better performance and relevance
+      icdCodes = await prisma.$queryRaw`
+        SELECT 
+          id,
+          version,
+          code,
+          description,
+          created_at,
+          updated_at,
+          ts_rank(to_tsvector('english', code || ' ' || description), plainto_tsquery('english', ${search})) as rank
+        FROM icd_codes 
+        WHERE to_tsvector('english', code || ' ' || description) @@ plainto_tsquery('english', ${search})
+        ORDER BY rank DESC, code ASC
+        LIMIT 50
+      `;
+    } else {
+      // Fallback to simple contains search for short queries
+      icdCodes = await prisma.iCDCode.findMany({
+        where: {
+          OR: [
+            { code: { contains: search, mode: "insensitive" } },
+            { description: { contains: search, mode: "insensitive" } },
+          ],
+        },
+        orderBy: {
+          code: "asc",
+        },
+        take: 50,
+      });
+    }
 
     return NextResponse.json(icdCodes);
   } catch (error) {

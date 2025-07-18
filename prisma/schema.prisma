@@ -226,6 +226,9 @@ model ICDCode {
   services    Service[]
 
   @@index([code])
+  @@index([description])
+  @@index([version])
+  @@index([code, version])
   @@map("icd_codes")
 }
 
