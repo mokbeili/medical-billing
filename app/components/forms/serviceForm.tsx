@@ -11,7 +11,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useSearchThrottle } from "@/lib/hooks/useSearchThrottle";
+import { useQuery } from "@tanstack/react-query";
+import axios from "axios";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -355,29 +356,35 @@ export default function ServiceForm({
     fetchReferringPhysicians();
   }, []);
 
-  const searchBillingCodes = async (query: string) => {
-    const response = await fetch(
-      `/api/search?query=${encodeURIComponent(
-        query
-      )}&jurisdictionId=${1}&userId=${session?.user?.id}`
-    );
-    if (response.ok) {
-      const data = await response.json();
-      return data.results as BillingCode[];
-    }
-    return [];
-  };
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
 
-  const {
-    query: searchQuery,
-    setQuery: setSearchQuery,
-    results: searchResults,
-    isSearching,
-  } = useSearchThrottle<BillingCode>(searchBillingCodes, {
-    minLength: 2,
-    debounceMs: 300,
-    throttleMs: 1000,
+  // Debounce the search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const { data: searchResponse, isLoading: isSearching } = useQuery({
+    queryKey: ["search", debouncedQuery],
+    queryFn: async () => {
+      if (!debouncedQuery || debouncedQuery.length < 2) {
+        return { results: [] };
+      }
+      const response = await axios.get(
+        `/api/search?query=${encodeURIComponent(
+          debouncedQuery
+        )}&jurisdictionId=${1}&userId=${session?.user?.id}`
+      );
+      return response.data;
+    },
+    enabled: !!debouncedQuery && debouncedQuery.length >= 2,
   });
+
+  const searchResults = searchResponse?.results || [];
 
   useEffect(() => {
     const searchIcdCodes = async () => {
@@ -1487,7 +1494,7 @@ export default function ServiceForm({
               )}
               {searchResults.length > 0 && (
                 <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
-                  {searchResults.map((code) => (
+                  {searchResults.map((code: BillingCode) => (
                     <div
                       key={code.id}
                       className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
