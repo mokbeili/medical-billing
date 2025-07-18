@@ -320,17 +320,18 @@ model ServiceCodes {
 }
 
 model ReferringPhysician {
-  id             Int          @id @default(autoincrement())
-  jurisdictionId Int          @map("jurisdiction_id")
+  id             Int                      @id @default(autoincrement())
+  jurisdictionId Int                      @map("jurisdiction_id")
   code           String
   name           String
   location       String
   specialty      String
-  physicianId    String?      @map("physician_id")
-  createdAt      DateTime     @default(now()) @map("created_at")
-  updatedAt      DateTime     @updatedAt @map("updated_at")
-  jurisdiction   Jurisdiction @relation(fields: [jurisdictionId], references: [id])
-  physician      Physician?   @relation(fields: [physicianId], references: [id])
+  physicianId    String?                  @map("physician_id")
+  createdAt      DateTime                 @default(now()) @map("created_at")
+  updatedAt      DateTime                 @updatedAt @map("updated_at")
+  searchVector   Unsupported("tsvector")? @map("search_vector")
+  jurisdiction   Jurisdiction             @relation(fields: [jurisdictionId], references: [id])
+  physician      Physician?               @relation(fields: [physicianId], references: [id])
   Services       Service[]
 
   @@map("referring_physicians")

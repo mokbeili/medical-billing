@@ -8,22 +8,38 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search");
 
-    const referringPhysicians = await prisma.referringPhysician.findMany({
-      where: search
-        ? {
-            OR: [
-              { name: { contains: search, mode: "insensitive" } },
-              { code: { contains: search, mode: "insensitive" } },
-              { specialty: { contains: search, mode: "insensitive" } },
-            ],
-          }
-        : undefined,
-      orderBy: {
-        name: "asc",
-      },
-    });
+    if (!search || search.length < 2) {
+      const referringPhysicians = await prisma.referringPhysician.findMany({
+        orderBy: {
+          name: "asc",
+        },
+        take: 50, // Limit results when no search query
+      });
+      return NextResponse.json(referringPhysicians);
+    }
 
-    return NextResponse.json(referringPhysicians);
+    // Use full-text search for better performance and relevance
+    const searchQuery = `
+      SELECT 
+        id,
+        jurisdiction_id,
+        code,
+        name,
+        location,
+        specialty,
+        physician_id,
+        created_at,
+        updated_at,
+        ts_rank(to_tsvector('english', code || ' ' || name || ' ' || specialty || ' ' || location), plainto_tsquery('english', $1)) as rank
+      FROM referring_physicians 
+      WHERE to_tsvector('english', code || ' ' || name || ' ' || specialty || ' ' || location) @@ plainto_tsquery('english', $1)
+      ORDER BY rank DESC, name ASC
+      LIMIT 50
+    `;
+
+    const results = await prisma.$queryRawUnsafe(searchQuery, search);
+
+    return NextResponse.json(results);
   } catch (error) {
     console.error("Error fetching referring physicians:", error);
     return NextResponse.json(
