@@ -11,7 +11,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { useSearchThrottle } from "@/lib/hooks/useSearchThrottle";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -24,6 +23,9 @@ interface Physician {
   middleInitial: string | null;
   billingNumber: string;
   jurisdictionId: number;
+  healthInstitution?: {
+    city: string;
+  } | null;
 }
 
 interface Patient {
@@ -196,6 +198,8 @@ export default function ServiceForm({
     healthInstitutionId: null as number | null,
     summary: "",
     serviceDate: new Date().toISOString().split("T")[0],
+    serviceLocation: null as string | null,
+    locationOfService: null as string | null,
     billingCodes: [] as Array<{
       codeId: number;
       status: string;
@@ -207,8 +211,6 @@ export default function ServiceForm({
       specialCircumstances: string | null;
       serviceDate: string | null;
       serviceEndDate: string | null;
-      serviceLocation: string | null;
-      locationOfService: string | null;
     }>,
   });
 
@@ -246,6 +248,9 @@ export default function ServiceForm({
               serviceDate: new Date(service.serviceDate)
                 .toISOString()
                 .split("T")[0],
+              serviceLocation: service.serviceCodes[0]?.serviceLocation || null,
+              locationOfService:
+                service.serviceCodes[0]?.locationOfService || null,
               billingCodes: service.serviceCodes.map((sc: any) => ({
                 codeId: sc.codeId,
                 status: sc.status,
@@ -265,8 +270,6 @@ export default function ServiceForm({
                 serviceEndDate: sc.serviceEndDate
                   ? new Date(sc.serviceEndDate).toISOString().split("T")[0]
                   : null,
-                serviceLocation: sc.serviceLocation,
-                locationOfService: sc.locationOfService,
               })),
             });
 
@@ -301,9 +304,19 @@ export default function ServiceForm({
         if (response.ok) {
           const data = await response.json();
           if (data.length === 1 && type === "new") {
+            let newServiceLocation = formData.serviceLocation;
+
+            // Auto-set service location if not already set and physician has health institution
+            if (!formData.serviceLocation && data[0].healthInstitution?.city) {
+              newServiceLocation = getServiceLocationFromCity(
+                data[0].healthInstitution.city
+              );
+            }
+
             setFormData({
               ...formData,
               physicianId: data[0].id,
+              serviceLocation: newServiceLocation,
             });
           }
           setPhysicians(data);
@@ -518,8 +531,6 @@ export default function ServiceForm({
       // Get the previous code's values for defaults
       const previousCode =
         formData.billingCodes[formData.billingCodes.length - 1];
-      const defaultServiceLocation = previousCode?.serviceLocation || null;
-      const defaultLocationOfService = previousCode?.locationOfService || null;
 
       // Calculate service start date for type 57 codes
       let serviceStartDate = formData.serviceDate;
@@ -589,8 +600,6 @@ export default function ServiceForm({
             specialCircumstances: null,
             serviceDate: serviceStartDate,
             serviceEndDate: serviceEndDate,
-            serviceLocation: defaultServiceLocation,
-            locationOfService: defaultLocationOfService,
           },
         ],
       });
@@ -703,6 +712,11 @@ export default function ServiceForm({
       serviceDate: !formData.serviceDate,
     };
     setServiceErrors(newServiceErrors);
+
+    // Check if service location and location of service are selected
+    if (!formData.serviceLocation || !formData.locationOfService) {
+      return false;
+    }
 
     // Check if any W/X codes are missing special circumstances
     const hasWorXWithoutSpecialCircumstances = formData.billingCodes.some(
@@ -821,8 +835,8 @@ export default function ServiceForm({
             serviceEndDate: code.serviceEndDate
               ? new Date(code.serviceEndDate).toISOString()
               : null,
-            serviceLocation: code.serviceLocation,
-            locationOfService: code.locationOfService,
+            serviceLocation: formData.serviceLocation,
+            locationOfService: formData.locationOfService,
           });
         });
 
@@ -924,8 +938,8 @@ export default function ServiceForm({
             serviceEndDate: code.serviceEndDate
               ? new Date(code.serviceEndDate).toISOString()
               : null,
-            serviceLocation: code.serviceLocation,
-            locationOfService: code.locationOfService,
+            serviceLocation: formData.serviceLocation,
+            locationOfService: formData.locationOfService,
           });
         });
 
@@ -964,6 +978,17 @@ export default function ServiceForm({
     return code.billing_record_type === 57;
   };
 
+  const getServiceLocationFromCity = (city: string): string | null => {
+    const cityLower = city.toLowerCase();
+    if (cityLower.includes("saskatoon")) {
+      return "S";
+    } else if (cityLower.includes("regina")) {
+      return "R";
+    } else {
+      return "X"; // Rural/Northern Premium for other cities
+    }
+  };
+
   if (status === "loading") {
     return (
       <Layout>
@@ -993,9 +1018,28 @@ export default function ServiceForm({
                 <label className="block text-sm font-medium">Physician</label>
                 <Select
                   value={formData.physicianId}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, physicianId: value })
-                  }
+                  onValueChange={(value) => {
+                    const selectedPhysician = physicians.find(
+                      (p) => p.id === value
+                    );
+                    let newServiceLocation = formData.serviceLocation;
+
+                    // Auto-set service location if not already set and physician has health institution
+                    if (
+                      !formData.serviceLocation &&
+                      selectedPhysician?.healthInstitution?.city
+                    ) {
+                      newServiceLocation = getServiceLocationFromCity(
+                        selectedPhysician.healthInstitution.city
+                      );
+                    }
+
+                    setFormData({
+                      ...formData,
+                      physicianId: value,
+                      serviceLocation: newServiceLocation,
+                    });
+                  }}
                 >
                   <SelectTrigger
                     className={serviceErrors.physician ? "border-red-500" : ""}
@@ -1017,6 +1061,762 @@ export default function ServiceForm({
               <p className="text-sm text-red-500">Please select a physician</p>
             )}
           </div>
+
+          {/* <div className="space-y-2">
+            <label className="block text-sm font-medium">Description</label>
+            <Textarea
+              placeholder="Enter a detailed description of the claim"
+              value={formData.summary}
+              onChange={(e) =>
+                setFormData({ ...formData, summary: e.target.value })
+              }
+              rows={4}
+            />
+          </div> */}
+
+          <div className="space-y-2">
+            <label className="block text-sm font-medium">
+              Service / Admission Date
+            </label>
+            <div className="flex gap-2 items-center">
+              <Input
+                type="date"
+                value={formData.serviceDate}
+                onChange={(e) => {
+                  setFormData({
+                    ...formData,
+                    serviceDate: e.target.value,
+                  });
+                }}
+                className={serviceErrors.serviceDate ? "border-red-500" : ""}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  const currentDate = new Date(formData.serviceDate);
+                  currentDate.setDate(currentDate.getDate() + 1);
+                  setFormData({
+                    ...formData,
+                    serviceDate: currentDate.toISOString().split("T")[0],
+                  });
+                }}
+              >
+                ↑
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  const currentDate = new Date(formData.serviceDate);
+                  currentDate.setDate(currentDate.getDate() - 1);
+                  setFormData({
+                    ...formData,
+                    serviceDate: currentDate.toISOString().split("T")[0],
+                  });
+                }}
+              >
+                ↓
+              </Button>
+            </div>
+            {serviceErrors.serviceDate && (
+              <p className="text-sm text-red-500">
+                Please select a service date
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-sm font-medium">
+              Service Location <span className="text-red-500">*</span>
+            </label>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant={
+                  formData.serviceLocation === "R" ? "default" : "outline"
+                }
+                onClick={() =>
+                  setFormData({
+                    ...formData,
+                    serviceLocation:
+                      formData.serviceLocation === "R" ? null : "R",
+                  })
+                }
+                className="flex-1"
+              >
+                <span className="hidden sm:inline">Regina</span>
+                <span className="sm:hidden">R</span>
+              </Button>
+              <Button
+                type="button"
+                variant={
+                  formData.serviceLocation === "S" ? "default" : "outline"
+                }
+                onClick={() =>
+                  setFormData({
+                    ...formData,
+                    serviceLocation:
+                      formData.serviceLocation === "S" ? null : "S",
+                  })
+                }
+                className="flex-1"
+              >
+                <span className="hidden sm:inline">Saskatoon</span>
+                <span className="sm:hidden">S</span>
+              </Button>
+              <Button
+                type="button"
+                variant={
+                  formData.serviceLocation === "X" ? "default" : "outline"
+                }
+                onClick={() =>
+                  setFormData({
+                    ...formData,
+                    serviceLocation:
+                      formData.serviceLocation === "X" ? null : "X",
+                  })
+                }
+                className="flex-1"
+              >
+                <span className="hidden sm:inline">Rural/Northern Premium</span>
+                <span className="sm:hidden">R/N</span>
+              </Button>
+            </div>
+            {!formData.serviceLocation && (
+              <p className="text-sm text-red-500">
+                Please select a service location
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-sm font-medium">
+              Location of Service <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.locationOfService || ""}
+              onValueChange={(value) =>
+                setFormData({
+                  ...formData,
+                  locationOfService: value || null,
+                })
+              }
+            >
+              <SelectTrigger
+                className={!formData.locationOfService ? "border-red-500" : ""}
+              >
+                <SelectValue placeholder="Select location of service" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">Office</SelectItem>
+                <SelectItem value="2">Hospital In-Patient</SelectItem>
+                <SelectItem value="3">Hospital Out-Patient</SelectItem>
+                <SelectItem value="4">Patient's Home</SelectItem>
+                <SelectItem value="5">Other</SelectItem>
+                <SelectItem value="7">Premium</SelectItem>
+                <SelectItem value="9">Emergency Room</SelectItem>
+                <SelectItem value="B">Hospital In-Patient (Premium)</SelectItem>
+                <SelectItem value="C">
+                  Hospital Out-Patient (Premium)
+                </SelectItem>
+                <SelectItem value="D">Patient's Home (Premium)</SelectItem>
+                <SelectItem value="E">Other (Premium)</SelectItem>
+                <SelectItem value="F">After-Hours-Clinic (Premium)</SelectItem>
+                <SelectItem value="K">In Hospital (Premium)</SelectItem>
+                <SelectItem value="M">Out Patient (Premium)</SelectItem>
+                <SelectItem value="P">Home (Premium)</SelectItem>
+                <SelectItem value="T">Other (Premium)</SelectItem>
+              </SelectContent>
+            </Select>
+            {!formData.locationOfService && (
+              <p className="text-sm text-red-500">
+                Please select a location of service
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-sm font-medium">ICD Code</label>
+            <div className="relative">
+              <Input
+                placeholder="Search ICD codes..."
+                value={icdSearchQuery}
+                onChange={(e) => setIcdSearchQuery(e.target.value)}
+              />
+              {isSearchingIcd && (
+                <div className="absolute right-2 top-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
+                </div>
+              )}
+              {icdSearchResults.length > 0 && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
+                  {icdSearchResults.map((code) => (
+                    <div
+                      key={code.id}
+                      className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                      onClick={() => handleSelectIcdCode(code)}
+                    >
+                      <div className="font-medium">
+                        {code.code} - {code.description}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {selectedIcdCode && (
+              <div className="mt-4 space-y-2">
+                <div className="flex items-center justify-between p-2 bg-gray-50 rounded-md">
+                  <div>
+                    <span className="font-medium">{selectedIcdCode.code}</span>{" "}
+                    - {selectedIcdCode.description}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleRemoveIcdCode}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    <span className="sm:hidden">✕</span>
+                    <span className="hidden sm:inline">Remove</span>
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-sm font-medium">Billing Codes</label>
+            <div className="relative">
+              <Input
+                placeholder="Search billing codes..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className={serviceErrors.billingCodes ? "border-red-500" : ""}
+              />
+              {isSearching && (
+                <div className="absolute right-2 top-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
+                </div>
+              )}
+              {searchResults.length > 0 && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
+                  {searchResults.map((code) => (
+                    <div
+                      key={code.id}
+                      className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                      onClick={() => handleAddCode(code)}
+                    >
+                      <div className="font-medium">
+                        {code.code} ({code.section.title})
+                      </div>
+                      <div className="text-sm text-gray-600">{code.title}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {serviceErrors.billingCodes && (
+              <p className="text-sm text-red-500">
+                Please add at least one billing code
+              </p>
+            )}
+
+            {selectedCodes.length > 0 && (
+              <div className="mt-4 space-y-1">
+                {selectedCodes.map((code, index) => (
+                  <div
+                    key={code.id}
+                    className="p-4 bg-gray-50 rounded-md space-y-4"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="font-medium">{code.code}</span> -{" "}
+                        {code.title}
+                        {isType57Code(code) &&
+                          code.previousCodes &&
+                          code.previousCodes.length > 0 && (
+                            <span className="text-xs text-blue-600 ml-2">
+                              (Uses previous codes)
+                            </span>
+                          )}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRemoveCode(code.id)}
+                        className="text-red-500 hover:text-red-700"
+                      >
+                        <span className="sm:hidden">✕</span>
+                        <span className="hidden sm:inline">Remove</span>
+                      </Button>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-4 items-center sm:items-start justify-center sm:justify-around">
+                      {isType57Code(code) && (
+                        <>
+                          <div className="space-y-2 w-full sm:w-auto flex flex-col items-center sm:items-start">
+                            <label className="block text-sm font-medium">
+                              Service Start Date
+                            </label>
+                            <Input
+                              type="date"
+                              defaultValue={formData.serviceDate}
+                              value={
+                                formData.billingCodes[index].serviceDate ||
+                                formData.serviceDate
+                              }
+                              onChange={(e) =>
+                                handleUpdateBillingCode(index, {
+                                  serviceDate: e.target.value,
+                                })
+                              }
+                              className="w-auto min-w-[140px]"
+                            />
+                          </div>
+                          <div className="space-y-2 w-full sm:w-auto flex flex-col items-center sm:items-start">
+                            <label className="block text-sm font-medium">
+                              Service End Date
+                            </label>
+                            <Input
+                              type="date"
+                              value={
+                                formData.billingCodes[index].serviceEndDate ||
+                                ""
+                              }
+                              onChange={(e) =>
+                                handleUpdateBillingCode(index, {
+                                  serviceEndDate: e.target.value || null,
+                                })
+                              }
+                              className="w-auto min-w-[140px]"
+                            />
+                          </div>
+                        </>
+                      )}
+
+                      {code.multiple_unit_indicator === "U" && (
+                        <div className="space-y-2 w-full sm:w-auto flex flex-col items-center sm:items-start">
+                          <label className="block text-sm font-medium">
+                            # Units
+                            {code.max_units && (
+                              <span className="text-xs text-gray-500 ml-2">
+                                (Max: {code.max_units})
+                              </span>
+                            )}
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                const currentValue =
+                                  formData.billingCodes[index].numberOfUnits ||
+                                  0;
+                                if (currentValue > 1) {
+                                  handleUpdateBillingCode(index, {
+                                    numberOfUnits: currentValue - 1,
+                                  });
+                                }
+                              }}
+                              disabled={
+                                (formData.billingCodes[index].numberOfUnits ||
+                                  0) <= 1
+                              }
+                            >
+                              -
+                            </Button>
+                            <Input
+                              type="number"
+                              min="1"
+                              max={code.max_units || undefined}
+                              value={
+                                formData.billingCodes[index].numberOfUnits || ""
+                              }
+                              onChange={(e) => {
+                                const value = e.target.value
+                                  ? parseInt(e.target.value)
+                                  : 1;
+                                const maxUnits = code.max_units || value;
+                                handleUpdateBillingCode(index, {
+                                  numberOfUnits: Math.min(value, maxUnits),
+                                });
+                              }}
+                              className="w-16 text-center text-lg font-semibold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                const currentValue =
+                                  formData.billingCodes[index].numberOfUnits ||
+                                  0;
+                                const maxUnits =
+                                  code.max_units || currentValue + 1;
+                                handleUpdateBillingCode(index, {
+                                  numberOfUnits: Math.min(
+                                    currentValue + 1,
+                                    maxUnits
+                                  ),
+                                });
+                              }}
+                              disabled={
+                                !!(
+                                  code.max_units &&
+                                  (formData.billingCodes[index].numberOfUnits ||
+                                    0) >= code.max_units
+                                )
+                              }
+                            >
+                              +
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {code.day_range && code.day_range > 0 && (
+                        <div className="hidden sm:block space-y-2 w-full sm:w-auto">
+                          <label className="block text-sm font-medium">
+                            Day Range: {code.day_range} days
+                            <span className="text-xs text-blue-600 ml-2">
+                              (Auto-calculated)
+                            </span>
+                          </label>
+                          <div className="text-xs text-gray-500">
+                            Service period:{" "}
+                            {formData.billingCodes[index].serviceDate ||
+                              "Not set"}{" "}
+                            to{" "}
+                            {formData.billingCodes[index].serviceEndDate ||
+                              "Not set"}
+                            {formData.billingCodes[index].serviceDate &&
+                              formData.billingCodes[index].serviceEndDate && (
+                                <span className="text-green-600 ml-2">
+                                  ✓ {code.day_range} days inclusive
+                                </span>
+                              )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {code.start_time_required === "Y" && (
+                        <div className="space-y-2">
+                          <label className="block text-sm font-medium">
+                            Service Start Time
+                          </label>
+                          <Input
+                            type="time"
+                            value={
+                              formData.billingCodes[index].serviceStartTime ||
+                              ""
+                            }
+                            onChange={(e) =>
+                              handleUpdateBillingCode(index, {
+                                serviceStartTime: e.target.value || null,
+                              })
+                            }
+                          />
+                        </div>
+                      )}
+
+                      {code.stop_time_required === "Y" && (
+                        <div className="space-y-2">
+                          <label className="block text-sm font-medium">
+                            Service End Time
+                          </label>
+                          <Input
+                            type="time"
+                            value={
+                              formData.billingCodes[index].serviceEndTime || ""
+                            }
+                            onChange={(e) =>
+                              handleUpdateBillingCode(index, {
+                                serviceEndTime: e.target.value || null,
+                              })
+                            }
+                          />
+                        </div>
+                      )}
+
+                      {code.title.includes("Bilateral") && (
+                        <div className="space-y-2">
+                          <label className="block text-sm font-medium text-center sm:text-left">
+                            Bilateral Indicator
+                          </label>
+                          <div className="flex gap-2 justify-center sm:justify-start">
+                            <Button
+                              type="button"
+                              variant={
+                                formData.billingCodes[index]
+                                  .bilateralIndicator === "L"
+                                  ? "default"
+                                  : "outline"
+                              }
+                              onClick={() =>
+                                handleUpdateBillingCode(index, {
+                                  bilateralIndicator:
+                                    formData.billingCodes[index]
+                                      .bilateralIndicator === "L"
+                                      ? null
+                                      : "L",
+                                })
+                              }
+                              className="flex-1"
+                            >
+                              Left
+                            </Button>
+                            <Button
+                              type="button"
+                              variant={
+                                formData.billingCodes[index]
+                                  .bilateralIndicator === "R"
+                                  ? "default"
+                                  : "outline"
+                              }
+                              onClick={() =>
+                                handleUpdateBillingCode(index, {
+                                  bilateralIndicator:
+                                    formData.billingCodes[index]
+                                      .bilateralIndicator === "R"
+                                      ? null
+                                      : "R",
+                                })
+                              }
+                              className="flex-1"
+                            >
+                              Right
+                            </Button>
+                            <Button
+                              type="button"
+                              variant={
+                                formData.billingCodes[index]
+                                  .bilateralIndicator === "B"
+                                  ? "default"
+                                  : "outline"
+                              }
+                              onClick={() =>
+                                handleUpdateBillingCode(index, {
+                                  bilateralIndicator:
+                                    formData.billingCodes[index]
+                                      .bilateralIndicator === "B"
+                                      ? null
+                                      : "B",
+                                })
+                              }
+                              className="flex-1"
+                            >
+                              Both
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {isWorXSection(code) && (
+                        <div className="col-span-2 space-y-2 justify-center sm:justify-start">
+                          <label className="block text-sm font-medium text-center sm:text-left">
+                            Special Circumstances{" "}
+                            <span className="text-red-500">*</span>
+                          </label>
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              variant={
+                                formData.billingCodes[index]
+                                  .specialCircumstances === "TF"
+                                  ? "default"
+                                  : "outline"
+                              }
+                              onClick={() =>
+                                handleUpdateBillingCode(index, {
+                                  specialCircumstances: "TF",
+                                })
+                              }
+                              className="flex-1"
+                            >
+                              <span className="sm:hidden">T</span>
+                              <span className="hidden sm:inline">
+                                Technical
+                              </span>
+                            </Button>
+                            <Button
+                              type="button"
+                              variant={
+                                formData.billingCodes[index]
+                                  .specialCircumstances === "PF"
+                                  ? "default"
+                                  : "outline"
+                              }
+                              onClick={() =>
+                                handleUpdateBillingCode(index, {
+                                  specialCircumstances: "PF",
+                                })
+                              }
+                              className="flex-1"
+                            >
+                              <span className="sm:hidden">I</span>
+                              <span className="hidden sm:inline">
+                                Interpretation
+                              </span>
+                            </Button>
+                            <Button
+                              type="button"
+                              variant={
+                                formData.billingCodes[index]
+                                  .specialCircumstances === "CF"
+                                  ? "default"
+                                  : "outline"
+                              }
+                              onClick={() =>
+                                handleUpdateBillingCode(index, {
+                                  specialCircumstances: "CF",
+                                })
+                              }
+                              className="flex-1"
+                            >
+                              <span className="sm:hidden">T&I</span>
+                              <span className="hidden sm:inline">Both</span>
+                            </Button>
+                          </div>
+                          {serviceErrors.billingCodes &&
+                            !formData.billingCodes[index]
+                              .specialCircumstances && (
+                              <p className="text-sm text-red-500">
+                                Please select a special circumstance
+                              </p>
+                            )}
+                        </div>
+                      )}
+
+                      {isHSection(code) && (
+                        <div className="col-span-2 space-y-2">
+                          <label className="block text-sm font-medium text-center sm:text-left">
+                            Special Circumstances
+                          </label>
+                          <div className="flex gap-2 justify-center sm:justify-start">
+                            <Button
+                              type="button"
+                              variant={
+                                formData.billingCodes[index]
+                                  .specialCircumstances === "TA"
+                                  ? "default"
+                                  : "outline"
+                              }
+                              onClick={() =>
+                                handleUpdateBillingCode(index, {
+                                  specialCircumstances:
+                                    formData.billingCodes[index]
+                                      .specialCircumstances === "TA"
+                                      ? null
+                                      : "TA",
+                                })
+                              }
+                              className="flex-1"
+                            >
+                              Takeover
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {formData.billingCodes.some((code) => {
+            const selectedCode = selectedCodes.find(
+              (c) => c.id === code.codeId
+            );
+            return (
+              selectedCode &&
+              selectedCode.referring_practitioner_required === "Y"
+            );
+          }) && (
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">
+                Referring Physician
+                <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <Input
+                  placeholder="Search referring physicians..."
+                  value={referringPhysicianSearchQuery}
+                  onChange={(e) =>
+                    setReferringPhysicianSearchQuery(e.target.value)
+                  }
+                  className={
+                    !formData.referringPhysicianId ? "border-red-500" : ""
+                  }
+                />
+                {isSearchingReferringPhysician && (
+                  <div className="absolute right-2 top-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
+                  </div>
+                )}
+                {referringPhysicianSearchResults.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
+                    {referringPhysicianSearchResults.map((physician) => (
+                      <div
+                        key={physician.id}
+                        className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                        onClick={() =>
+                          handleSelectReferringPhysician(physician)
+                        }
+                      >
+                        <div className="font-medium">
+                          {physician.name} - {physician.specialty} (
+                          {physician.code})
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          {physician.location}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {!formData.referringPhysicianId && (
+                <p className="text-sm text-red-500">
+                  A referring physician is required for one or more selected
+                  billing codes
+                </p>
+              )}
+
+              {selectedReferringPhysician && (
+                <div className="mt-4 space-y-2">
+                  <div className="flex items-center justify-between p-2 bg-gray-50 rounded-md">
+                    <div>
+                      <span className="font-medium">
+                        {selectedReferringPhysician.name}
+                      </span>{" "}
+                      - {selectedReferringPhysician.specialty} (
+                      {selectedReferringPhysician.code})
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleRemoveReferringPhysician}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      <span className="sm:hidden">✕</span>
+                      <span className="hidden sm:inline">Remove</span>
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="space-y-2">
             <label className="block text-sm font-medium">Patient</label>
@@ -1203,782 +2003,6 @@ export default function ServiceForm({
                     Create Patient
                   </Button>
                 </div>
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium">
-              Referring Physician
-              {formData.billingCodes.some((code) => {
-                const selectedCode = selectedCodes.find(
-                  (c) => c.id === code.codeId
-                );
-                return (
-                  selectedCode &&
-                  selectedCode.referring_practitioner_required === "Y"
-                );
-              }) && <span className="text-red-500">*</span>}
-            </label>
-            <div className="relative">
-              <Input
-                placeholder="Search referring physicians..."
-                value={referringPhysicianSearchQuery}
-                onChange={(e) =>
-                  setReferringPhysicianSearchQuery(e.target.value)
-                }
-                className={
-                  formData.billingCodes.some((code) => {
-                    const selectedCode = selectedCodes.find(
-                      (c) => c.id === code.codeId
-                    );
-                    return (
-                      selectedCode &&
-                      selectedCode.referring_practitioner_required === "Y"
-                    );
-                  }) && !formData.referringPhysicianId
-                    ? "border-red-500"
-                    : ""
-                }
-              />
-              {isSearchingReferringPhysician && (
-                <div className="absolute right-2 top-2">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
-                </div>
-              )}
-              {referringPhysicianSearchResults.length > 0 && (
-                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
-                  {referringPhysicianSearchResults.map((physician) => (
-                    <div
-                      key={physician.id}
-                      className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                      onClick={() => handleSelectReferringPhysician(physician)}
-                    >
-                      <div className="font-medium">
-                        {physician.name} - {physician.specialty} (
-                        {physician.code})
-                      </div>
-                      <div className="text-sm text-gray-600">
-                        {physician.location}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {formData.billingCodes.some((code) => {
-              const selectedCode = selectedCodes.find(
-                (c) => c.id === code.codeId
-              );
-              return (
-                selectedCode &&
-                selectedCode.referring_practitioner_required === "Y"
-              );
-            }) &&
-              !formData.referringPhysicianId && (
-                <p className="text-sm text-red-500">
-                  A referring physician is required for one or more selected
-                  billing codes
-                </p>
-              )}
-
-            {selectedReferringPhysician && (
-              <div className="mt-4 space-y-2">
-                <div className="flex items-center justify-between p-2 bg-gray-50 rounded-md">
-                  <div>
-                    <span className="font-medium">
-                      {selectedReferringPhysician.name}
-                    </span>{" "}
-                    - {selectedReferringPhysician.specialty} (
-                    {selectedReferringPhysician.code})
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleRemoveReferringPhysician}
-                  >
-                    Remove
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium">Description</label>
-            <Textarea
-              placeholder="Enter a detailed description of the claim"
-              value={formData.summary}
-              onChange={(e) =>
-                setFormData({ ...formData, summary: e.target.value })
-              }
-              rows={4}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium">
-              Service Start Date
-            </label>
-            <div className="flex gap-2 items-center">
-              <Input
-                type="date"
-                value={formData.serviceDate}
-                onChange={(e) => {
-                  setFormData({
-                    ...formData,
-                    serviceDate: e.target.value,
-                  });
-                }}
-                className={serviceErrors.serviceDate ? "border-red-500" : ""}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  const currentDate = new Date(formData.serviceDate);
-                  currentDate.setDate(currentDate.getDate() + 1);
-                  setFormData({
-                    ...formData,
-                    serviceDate: currentDate.toISOString().split("T")[0],
-                  });
-                }}
-              >
-                ↑
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  const currentDate = new Date(formData.serviceDate);
-                  currentDate.setDate(currentDate.getDate() - 1);
-                  setFormData({
-                    ...formData,
-                    serviceDate: currentDate.toISOString().split("T")[0],
-                  });
-                }}
-              >
-                ↓
-              </Button>
-            </div>
-            {serviceErrors.serviceDate && (
-              <p className="text-sm text-red-500">
-                Please select a service date
-              </p>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium">ICD Code</label>
-            <div className="relative">
-              <Input
-                placeholder="Search ICD codes..."
-                value={icdSearchQuery}
-                onChange={(e) => setIcdSearchQuery(e.target.value)}
-              />
-              {isSearchingIcd && (
-                <div className="absolute right-2 top-2">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
-                </div>
-              )}
-              {icdSearchResults.length > 0 && (
-                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
-                  {icdSearchResults.map((code) => (
-                    <div
-                      key={code.id}
-                      className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                      onClick={() => handleSelectIcdCode(code)}
-                    >
-                      <div className="font-medium">
-                        {code.code} - {code.description}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {selectedIcdCode && (
-              <div className="mt-4 space-y-2">
-                <div className="flex items-center justify-between p-2 bg-gray-50 rounded-md">
-                  <div>
-                    <span className="font-medium">{selectedIcdCode.code}</span>{" "}
-                    - {selectedIcdCode.description}
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleRemoveIcdCode}
-                  >
-                    Remove
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium">Billing Codes</label>
-            <div className="relative">
-              <Input
-                placeholder="Search billing codes..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className={serviceErrors.billingCodes ? "border-red-500" : ""}
-              />
-              {isSearching && (
-                <div className="absolute right-2 top-2">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
-                </div>
-              )}
-              {searchResults.length > 0 && (
-                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
-                  {searchResults.map((code) => (
-                    <div
-                      key={code.id}
-                      className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                      onClick={() => handleAddCode(code)}
-                    >
-                      <div className="font-medium">
-                        {code.code} ({code.section.title})
-                      </div>
-                      <div className="text-sm text-gray-600">{code.title}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            {serviceErrors.billingCodes && (
-              <p className="text-sm text-red-500">
-                Please add at least one billing code
-              </p>
-            )}
-
-            {selectedCodes.length > 0 && (
-              <div className="mt-4 space-y-4">
-                {selectedCodes.map((code, index) => (
-                  <div
-                    key={code.id}
-                    className="p-4 bg-gray-50 rounded-md space-y-4"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="font-medium">{code.code}</span> -{" "}
-                        {code.title}
-                        {isType57Code(code) &&
-                          code.previousCodes &&
-                          code.previousCodes.length > 0 && (
-                            <span className="text-xs text-blue-600 ml-2">
-                              (Uses previous codes)
-                            </span>
-                          )}
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleRemoveCode(code.id)}
-                      >
-                        Remove
-                      </Button>
-                    </div>
-
-                    <div className="flex gap-4 items-start justify-around">
-                      {isType57Code(code) && (
-                        <>
-                          <div className="space-y-2">
-                            <label className="block text-sm font-medium">
-                              Service Start Date
-                            </label>
-                            <Input
-                              type="date"
-                              defaultValue={formData.serviceDate}
-                              value={
-                                formData.billingCodes[index].serviceDate ||
-                                formData.serviceDate
-                              }
-                              onChange={(e) =>
-                                handleUpdateBillingCode(index, {
-                                  serviceDate: e.target.value,
-                                })
-                              }
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <label className="block text-sm font-medium">
-                              Service End Date
-                            </label>
-                            <Input
-                              type="date"
-                              value={
-                                formData.billingCodes[index].serviceEndDate ||
-                                ""
-                              }
-                              onChange={(e) =>
-                                handleUpdateBillingCode(index, {
-                                  serviceEndDate: e.target.value || null,
-                                })
-                              }
-                            />
-                          </div>
-                        </>
-                      )}
-
-                      {code.multiple_unit_indicator === "U" && (
-                        <div className="space-y-2">
-                          <label className="block text-sm font-medium">
-                            # Units
-                            {code.max_units && (
-                              <span className="text-xs text-gray-500 ml-2">
-                                (Max: {code.max_units})
-                              </span>
-                            )}
-                          </label>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                const currentValue =
-                                  formData.billingCodes[index].numberOfUnits ||
-                                  0;
-                                if (currentValue > 1) {
-                                  handleUpdateBillingCode(index, {
-                                    numberOfUnits: currentValue - 1,
-                                  });
-                                }
-                              }}
-                              disabled={
-                                (formData.billingCodes[index].numberOfUnits ||
-                                  0) <= 1
-                              }
-                            >
-                              -
-                            </Button>
-                            <Input
-                              type="number"
-                              min="1"
-                              max={code.max_units || undefined}
-                              value={
-                                formData.billingCodes[index].numberOfUnits || ""
-                              }
-                              onChange={(e) => {
-                                const value = e.target.value
-                                  ? parseInt(e.target.value)
-                                  : 1;
-                                const maxUnits = code.max_units || value;
-                                handleUpdateBillingCode(index, {
-                                  numberOfUnits: Math.min(value, maxUnits),
-                                });
-                              }}
-                              className="w-16 text-center text-lg font-semibold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                            />
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                const currentValue =
-                                  formData.billingCodes[index].numberOfUnits ||
-                                  0;
-                                const maxUnits =
-                                  code.max_units || currentValue + 1;
-                                handleUpdateBillingCode(index, {
-                                  numberOfUnits: Math.min(
-                                    currentValue + 1,
-                                    maxUnits
-                                  ),
-                                });
-                              }}
-                              disabled={
-                                !!(
-                                  code.max_units &&
-                                  (formData.billingCodes[index].numberOfUnits ||
-                                    0) >= code.max_units
-                                )
-                              }
-                            >
-                              +
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-
-                      {code.day_range && code.day_range > 0 && (
-                        <div className="space-y-2">
-                          <label className="block text-sm font-medium">
-                            Day Range: {code.day_range} days
-                            <span className="text-xs text-blue-600 ml-2">
-                              (Auto-calculated)
-                            </span>
-                          </label>
-                          <div className="text-xs text-gray-500">
-                            Service period:{" "}
-                            {formData.billingCodes[index].serviceDate ||
-                              "Not set"}{" "}
-                            to{" "}
-                            {formData.billingCodes[index].serviceEndDate ||
-                              "Not set"}
-                            {formData.billingCodes[index].serviceDate &&
-                              formData.billingCodes[index].serviceEndDate && (
-                                <span className="text-green-600 ml-2">
-                                  ✓ {code.day_range} days inclusive
-                                </span>
-                              )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      {code.start_time_required === "Y" && (
-                        <div className="space-y-2">
-                          <label className="block text-sm font-medium">
-                            Service Start Time
-                          </label>
-                          <Input
-                            type="time"
-                            value={
-                              formData.billingCodes[index].serviceStartTime ||
-                              ""
-                            }
-                            onChange={(e) =>
-                              handleUpdateBillingCode(index, {
-                                serviceStartTime: e.target.value || null,
-                              })
-                            }
-                          />
-                        </div>
-                      )}
-
-                      {code.stop_time_required === "Y" && (
-                        <div className="space-y-2">
-                          <label className="block text-sm font-medium">
-                            Service End Time
-                          </label>
-                          <Input
-                            type="time"
-                            value={
-                              formData.billingCodes[index].serviceEndTime || ""
-                            }
-                            onChange={(e) =>
-                              handleUpdateBillingCode(index, {
-                                serviceEndTime: e.target.value || null,
-                              })
-                            }
-                          />
-                        </div>
-                      )}
-
-                      <div className="space-y-2">
-                        <label className="block text-sm font-medium">
-                          Service Location
-                        </label>
-                        <div className="flex gap-2">
-                          <Button
-                            type="button"
-                            variant={
-                              formData.billingCodes[index].serviceLocation ===
-                              "R"
-                                ? "default"
-                                : "outline"
-                            }
-                            onClick={() =>
-                              handleUpdateBillingCode(index, {
-                                serviceLocation:
-                                  formData.billingCodes[index]
-                                    .serviceLocation === "R"
-                                    ? null
-                                    : "R",
-                              })
-                            }
-                            className="flex-1"
-                          >
-                            <span className="hidden sm:inline">Regina</span>
-                            <span className="sm:hidden">R</span>
-                          </Button>
-                          <Button
-                            type="button"
-                            variant={
-                              formData.billingCodes[index].serviceLocation ===
-                              "S"
-                                ? "default"
-                                : "outline"
-                            }
-                            onClick={() =>
-                              handleUpdateBillingCode(index, {
-                                serviceLocation:
-                                  formData.billingCodes[index]
-                                    .serviceLocation === "S"
-                                    ? null
-                                    : "S",
-                              })
-                            }
-                            className="flex-1"
-                          >
-                            <span className="hidden sm:inline">Saskatoon</span>
-                            <span className="sm:hidden">S</span>
-                          </Button>
-                          <Button
-                            type="button"
-                            variant={
-                              formData.billingCodes[index].serviceLocation ===
-                              "X"
-                                ? "default"
-                                : "outline"
-                            }
-                            onClick={() =>
-                              handleUpdateBillingCode(index, {
-                                serviceLocation:
-                                  formData.billingCodes[index]
-                                    .serviceLocation === "X"
-                                    ? null
-                                    : "X",
-                              })
-                            }
-                            className="flex-1"
-                          >
-                            <span className="hidden sm:inline">
-                              Rural/Northern Premium
-                            </span>
-                            <span className="sm:hidden">R/N</span>
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="block text-sm font-medium">
-                          Location of Service
-                        </label>
-                        <Select
-                          value={
-                            formData.billingCodes[index].locationOfService || ""
-                          }
-                          onValueChange={(value) =>
-                            handleUpdateBillingCode(index, {
-                              locationOfService: value || null,
-                            })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select location of service" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="1">Office</SelectItem>
-                            <SelectItem value="2">
-                              Hospital In-Patient
-                            </SelectItem>
-                            <SelectItem value="3">
-                              Hospital Out-Patient
-                            </SelectItem>
-                            <SelectItem value="4">Patient's Home</SelectItem>
-                            <SelectItem value="5">Other</SelectItem>
-                            <SelectItem value="7">Premium</SelectItem>
-                            <SelectItem value="9">Emergency Room</SelectItem>
-                            <SelectItem value="B">
-                              Hospital In-Patient (Premium)
-                            </SelectItem>
-                            <SelectItem value="C">
-                              Hospital Out-Patient (Premium)
-                            </SelectItem>
-                            <SelectItem value="D">
-                              Patient's Home (Premium)
-                            </SelectItem>
-                            <SelectItem value="E">Other (Premium)</SelectItem>
-                            <SelectItem value="F">
-                              After-Hours-Clinic (Premium)
-                            </SelectItem>
-                            <SelectItem value="K">
-                              In Hospital (Premium)
-                            </SelectItem>
-                            <SelectItem value="M">
-                              Out Patient (Premium)
-                            </SelectItem>
-                            <SelectItem value="P">Home (Premium)</SelectItem>
-                            <SelectItem value="T">Other (Premium)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {code.title.includes("Bilateral") && (
-                        <div className="space-y-2">
-                          <label className="block text-sm font-medium">
-                            Bilateral Indicator
-                          </label>
-                          <div className="flex gap-2">
-                            <Button
-                              type="button"
-                              variant={
-                                formData.billingCodes[index]
-                                  .bilateralIndicator === "L"
-                                  ? "default"
-                                  : "outline"
-                              }
-                              onClick={() =>
-                                handleUpdateBillingCode(index, {
-                                  bilateralIndicator:
-                                    formData.billingCodes[index]
-                                      .bilateralIndicator === "L"
-                                      ? null
-                                      : "L",
-                                })
-                              }
-                              className="flex-1"
-                            >
-                              Left
-                            </Button>
-                            <Button
-                              type="button"
-                              variant={
-                                formData.billingCodes[index]
-                                  .bilateralIndicator === "R"
-                                  ? "default"
-                                  : "outline"
-                              }
-                              onClick={() =>
-                                handleUpdateBillingCode(index, {
-                                  bilateralIndicator:
-                                    formData.billingCodes[index]
-                                      .bilateralIndicator === "R"
-                                      ? null
-                                      : "R",
-                                })
-                              }
-                              className="flex-1"
-                            >
-                              Right
-                            </Button>
-                            <Button
-                              type="button"
-                              variant={
-                                formData.billingCodes[index]
-                                  .bilateralIndicator === "B"
-                                  ? "default"
-                                  : "outline"
-                              }
-                              onClick={() =>
-                                handleUpdateBillingCode(index, {
-                                  bilateralIndicator:
-                                    formData.billingCodes[index]
-                                      .bilateralIndicator === "B"
-                                      ? null
-                                      : "B",
-                                })
-                              }
-                              className="flex-1"
-                            >
-                              Both
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-
-                      {isWorXSection(code) && (
-                        <div className="col-span-2 space-y-2">
-                          <label className="block text-sm font-medium">
-                            Special Circumstances{" "}
-                            <span className="text-red-500">*</span>
-                          </label>
-                          <div className="flex gap-2">
-                            <Button
-                              type="button"
-                              variant={
-                                formData.billingCodes[index]
-                                  .specialCircumstances === "TF"
-                                  ? "default"
-                                  : "outline"
-                              }
-                              onClick={() =>
-                                handleUpdateBillingCode(index, {
-                                  specialCircumstances: "TF",
-                                })
-                              }
-                              className="flex-1"
-                            >
-                              Technical
-                            </Button>
-                            <Button
-                              type="button"
-                              variant={
-                                formData.billingCodes[index]
-                                  .specialCircumstances === "PF"
-                                  ? "default"
-                                  : "outline"
-                              }
-                              onClick={() =>
-                                handleUpdateBillingCode(index, {
-                                  specialCircumstances: "PF",
-                                })
-                              }
-                              className="flex-1"
-                            >
-                              Interpretation
-                            </Button>
-                            <Button
-                              type="button"
-                              variant={
-                                formData.billingCodes[index]
-                                  .specialCircumstances === "CF"
-                                  ? "default"
-                                  : "outline"
-                              }
-                              onClick={() =>
-                                handleUpdateBillingCode(index, {
-                                  specialCircumstances: "CF",
-                                })
-                              }
-                              className="flex-1"
-                            >
-                              Both
-                            </Button>
-                          </div>
-                          {serviceErrors.billingCodes &&
-                            !formData.billingCodes[index]
-                              .specialCircumstances && (
-                              <p className="text-sm text-red-500">
-                                Please select a special circumstance
-                              </p>
-                            )}
-                        </div>
-                      )}
-
-                      {isHSection(code) && (
-                        <div className="col-span-2 space-y-2">
-                          <label className="block text-sm font-medium">
-                            Special Circumstances
-                          </label>
-                          <div className="flex gap-2">
-                            <Button
-                              type="button"
-                              variant={
-                                formData.billingCodes[index]
-                                  .specialCircumstances === "TA"
-                                  ? "default"
-                                  : "outline"
-                              }
-                              onClick={() =>
-                                handleUpdateBillingCode(index, {
-                                  specialCircumstances:
-                                    formData.billingCodes[index]
-                                      .specialCircumstances === "TA"
-                                      ? null
-                                      : "TA",
-                                })
-                              }
-                              className="flex-1"
-                            >
-                              Takeover
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
               </div>
             )}
           </div>

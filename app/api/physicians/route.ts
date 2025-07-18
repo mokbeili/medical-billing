@@ -24,6 +24,11 @@ export async function GET() {
         lastName: true,
         middleInitial: true,
         billingNumber: true,
+        healthInstitution: {
+          select: {
+            city: true,
+          },
+        },
       },
       orderBy: {
         lastName: "asc",
