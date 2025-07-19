@@ -9,13 +9,29 @@ import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // Check for mobile app authentication first
+    const userHeader = request.headers.get("x-user");
+    let user = null;
+
+    if (userHeader) {
+      try {
+        user = JSON.parse(userHeader);
+      } catch (error) {
+        console.error("Error parsing user header:", error);
+      }
+    }
+
+    // If no mobile user, try NextAuth session
+    if (!user) {
+      const session = await getServerSession(authOptions);
+      if (!session?.user) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      user = session.user;
     }
 
     const { searchParams } = new URL(request.url);
-    const query = searchParams.get("q") || "";
+    const query = searchParams.get("query") || searchParams.get("q") || "";
     const searchField = searchParams.get("field") || "name"; // name, billingNumber
 
     if (!query.trim()) {
@@ -26,7 +42,7 @@ export async function GET(request: Request) {
     const physician = await prisma.physician.findFirst({
       where: {
         user: {
-          id: parseInt(session.user.id),
+          id: parseInt(user.id),
         },
       },
     });

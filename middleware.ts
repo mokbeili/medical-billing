@@ -3,59 +3,53 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 export async function middleware(request: NextRequest) {
-  // Paths that don't require authentication
-  const publicPaths = [
-    "/",
-    "/auth/signin",
-    "/register",
-    "/forgot-password",
-    "/reset-password",
-    "/api/auth/register",
-    "/api/auth/signin",
-    "/search",
-  ];
+  const { pathname } = request.nextUrl;
 
-  // If it's a public path, allow access without token verification
-  if (publicPaths.some((path) => request.nextUrl.pathname.startsWith(path))) {
+  // Skip middleware for auth-related paths
+  if (
+    pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/auth") ||
+    pathname.startsWith("/api/mobile-auth")
+  ) {
     return NextResponse.next();
   }
 
-  try {
-    // Get the token from the request
-    const token = await getToken({
-      req: request,
-      secret: process.env.NEXTAUTH_SECRET,
-    });
+  // Handle API routes
+  if (pathname.startsWith("/api/")) {
+    // Check for mobile app headers first
+    const userId = request.headers.get("x-user-id");
+    const userEmail = request.headers.get("x-user-email");
+    const userRoles = request.headers.get("x-user-roles");
 
-    if (!token) {
-      const homeUrl = new URL("/", request.url);
-      return NextResponse.redirect(homeUrl);
-    }
+    if (userId && userEmail && userRoles) {
+      // Mobile app authentication
+      const user = {
+        id: userId,
+        email: userEmail,
+        roles: userRoles.split(","),
+      };
 
-    // Add token to request headers for API routes
-    if (request.nextUrl.pathname.startsWith("/api/")) {
+      // Clone the request and add user info
       const requestHeaders = new Headers(request.headers);
-      requestHeaders.set("x-user-id", token.id as string);
-      requestHeaders.set("x-user-email", token.email as string);
-      requestHeaders.set("x-user-roles", JSON.stringify(token.roles));
+      requestHeaders.set("x-user", JSON.stringify(user));
 
       return NextResponse.next({
         request: {
           headers: requestHeaders,
         },
       });
+    } else {
+      // Try NextAuth session
+      const token = await getToken({ req: request });
+      if (!token) {
+        return new NextResponse("Unauthorized", { status: 401 });
+      }
     }
-
-    return NextResponse.next();
-  } catch (error) {
-    console.error("Middleware error:", error);
-    // In case of error, redirect to home page
-    const homeUrl = new URL("/", request.url);
-    return NextResponse.redirect(homeUrl);
   }
+
+  return NextResponse.next();
 }
 
-// Configure which paths the middleware should run on
 export const config = {
   matcher: [
     /*
@@ -65,6 +59,6 @@ export const config = {
      * - favicon.ico (favicon file)
      * - public folder
      */
-    "/((?!api/auth|_next/static|_next/image|favicon.ico|public/).*)",
+    "/((?!_next/static|_next/image|favicon.ico|public).*)",
   ],
 };

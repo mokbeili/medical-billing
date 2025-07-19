@@ -1,77 +1,23 @@
 import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcrypt";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  // Create sample health institutions
-  const healthInstitutions = [
-    {
-      name: "General Hospital",
-      street: "123 Medical Center Dr",
-      city: "New York",
-      state: "NY",
-      postalCode: "10001",
-      country: "USA",
-      latitude: 40.7128,
-      longitude: -74.006,
-      phoneNumber: "212-555-0123",
-      number: "00001",
-    },
-    {
-      name: "Community Medical Center",
-      street: "456 Health Ave",
-      city: "Los Angeles",
-      state: "CA",
-      postalCode: "90001",
-      country: "USA",
-      latitude: 34.0522,
-      longitude: -118.2437,
-      phoneNumber: "213-555-0124",
-      number: "00002",
-    },
-    {
-      name: "Regional Hospital",
-      street: "789 Care Blvd",
-      city: "Chicago",
-      state: "IL",
-      postalCode: "60601",
-      country: "USA",
-      latitude: 41.8781,
-      longitude: -87.6298,
-      phoneNumber: "312-555-0125",
-      number: "00003",
-    },
-    {
-      name: "Specialty Clinic",
-      street: "321 Wellness St",
-      city: "Houston",
-      state: "TX",
-      postalCode: "77001",
-      country: "USA",
-      latitude: 29.7604,
-      longitude: -95.3698,
-      phoneNumber: "713-555-0126",
-      number: "00004",
-    },
-    {
-      name: "Medical Arts Center",
-      street: "654 Treatment Way",
-      city: "Miami",
-      state: "FL",
-      postalCode: "33101",
-      country: "USA",
-      latitude: 25.7617,
-      longitude: -80.1918,
-      phoneNumber: "305-555-0127",
-      number: "00005",
-    },
-  ];
+  // Create a test user for mobile app
+  const hashedPassword = await bcrypt.hash("password123", 10);
 
-  for (const institution of healthInstitutions) {
-    await prisma.healthInstitution.create({
-      data: institution,
-    });
-  }
+  const testUser = await prisma.user.upsert({
+    where: { email: "test@example.com" },
+    update: {},
+    create: {
+      email: "test@example.com",
+      password_hash: hashedPassword,
+      roles: ["PHYSICIAN"],
+    },
+  });
+
+  console.log("Test user created:", testUser.email);
 
   console.log("Seed data created successfully");
 }

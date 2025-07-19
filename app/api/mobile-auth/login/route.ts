@@ -1,7 +1,5 @@
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcrypt";
-import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
@@ -41,22 +39,15 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create a session using NextAuth.js
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json(
-        { error: "Failed to create session" },
-        { status: 500 }
-      );
-    }
-
+    // Return user data in the format expected by the mobile app
     return NextResponse.json({
       user: {
-        id: user.id,
+        id: user.id.toString(),
         email: user.email,
+        name: user.email.split("@")[0], // Use email prefix as name
         roles: user.roles,
       },
-      redirectUrl: "/search",
+      message: "Login successful",
     });
   } catch (error) {
     console.error("Login error:", error);

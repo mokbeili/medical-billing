@@ -8,18 +8,34 @@ import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // Check for mobile app authentication first
+    const userHeader = request.headers.get("x-user");
+    let user = null;
+
+    if (userHeader) {
+      try {
+        user = JSON.parse(userHeader);
+      } catch (error) {
+        console.error("Error parsing user header:", error);
+      }
+    }
+
+    // If no mobile user, try NextAuth session
+    if (!user) {
+      const session = await getServerSession(authOptions);
+      if (!session?.user) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      user = session.user;
     }
 
     const patients = await prisma.patient.findMany({
       where: {
         physician: {
           user: {
-            id: parseInt(session.user.id),
+            id: parseInt(user.id),
           },
         },
       },
@@ -64,9 +80,25 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // Check for mobile app authentication first
+    const userHeader = request.headers.get("x-user");
+    let user = null;
+
+    if (userHeader) {
+      try {
+        user = JSON.parse(userHeader);
+      } catch (error) {
+        console.error("Error parsing user header:", error);
+      }
+    }
+
+    // If no mobile user, try NextAuth session
+    if (!user) {
+      const session = await getServerSession(authOptions);
+      if (!session?.user) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      user = session.user;
     }
 
     const body = await request.json();

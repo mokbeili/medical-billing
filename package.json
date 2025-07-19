@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -H 0.0.0.0",
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
@@ -11,6 +11,9 @@
     "vercel-build": "prisma generate && next build",
     "populate-vectors": "ts-node scripts/populate-vectors.ts",
     "insert-physician": "ts-node scripts/insert-physician.ts",
+    "seed": "ts-node prisma/seed.ts"
+  },
+  "prisma": {
     "seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {
