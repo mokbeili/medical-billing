@@ -41,7 +41,7 @@ A React Native mobile application that mirrors the Myon Health web application f
    ```typescript
    const API_BASE_URL = __DEV__
      ? "http://localhost:3001"
-     : "https://your-production-domain.com";
+     : "https://www.myonhealth.ca";
    ```
 
 3. **Start the development server**:

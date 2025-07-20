@@ -18,7 +18,7 @@ import {
 // For Android emulator, use 10.0.2.2 to access localhost services
 const API_BASE_URL = __DEV__
   ? "http://10.0.2.2:3000" // Android emulator localhost
-  : "https://your-production-domain.com"; // Update this with your actual domain
+  : "https://www.myonhealth.ca"; // Update this with your actual domain
 
 const api = axios.create({
   baseURL: API_BASE_URL,
