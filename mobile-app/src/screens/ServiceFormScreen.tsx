@@ -347,6 +347,8 @@ const ServiceFormScreen = ({ navigation }: any) => {
           specialCircumstances: code.specialCircumstances,
           serviceDate: code.serviceDate,
           serviceEndDate: code.serviceEndDate,
+          fee_determinant: code.billingCode.fee_determinant,
+          multiple_unit_indicator: code.billingCode.multiple_unit_indicator,
         })),
       });
 
@@ -611,6 +613,8 @@ const ServiceFormScreen = ({ navigation }: any) => {
             specialCircumstances: subSelection?.specialCircumstances || null,
             serviceDate: subSelection?.serviceDate || null,
             serviceEndDate: subSelection?.serviceEndDate || null,
+            fee_determinant: code.fee_determinant,
+            multiple_unit_indicator: code.multiple_unit_indicator,
           };
         }),
       ],
@@ -2169,6 +2173,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
                 navigation.navigate("BillingCodeSearch", {
                   onSelect: handleAddCodes,
                   existingCodes: selectedCodes,
+                  serviceDate: formData.serviceDate,
                 })
               }
             >

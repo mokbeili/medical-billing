@@ -9,12 +9,14 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@auth/prisma-adapter": "^2.10.0",
     "@expo/vector-icons": "^14.1.0",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-navigation/bottom-tabs": "^7.4.2",
     "@react-navigation/drawer": "^7.5.3",
     "@react-navigation/native": "^7.1.14",
     "@react-navigation/stack": "^7.4.2",
+    "@tailwindcss/postcss": "^4.1.11",
     "@tanstack/react-query": "^5.83.0",
     "axios": "^1.10.0",
     "expo": "~53.0.20",

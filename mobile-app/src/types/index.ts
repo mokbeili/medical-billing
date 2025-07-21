@@ -15,6 +15,19 @@ export interface SearchResult {
   multiple_unit_indicator: string;
   start_time_required: boolean;
   stop_time_required: boolean;
+  day_range: number | null;
+  max_units: number | null;
+  previousCodes?: Array<{
+    previousCode: {
+      id: number;
+      code: string;
+      title: string;
+      section: {
+        code: string;
+        title: string;
+      };
+    };
+  }>;
 }
 
 export interface SearchResponse {
@@ -82,6 +95,28 @@ export interface BillingCode {
   start_time_required: string | null;
   stop_time_required: string | null;
   day_range: number | null;
+  previousCodes?: Array<{
+    previousCode: {
+      id: number;
+      code: string;
+      title: string;
+      section: {
+        code: string;
+        title: string;
+      };
+    };
+  }>;
+  nextCodes?: Array<{
+    nextCode: {
+      id: number;
+      code: string;
+      title: string;
+      section: {
+        code: string;
+        title: string;
+      };
+    };
+  }>;
 }
 
 export interface AIPrompt {

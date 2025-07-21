@@ -30,12 +30,17 @@ interface CodeSubSelection {
 
 const BillingCodeSearchScreen = ({ navigation }: any) => {
   const route = useRoute();
-  const { onSelect, existingCodes = [] } = route.params as {
+  const {
+    onSelect,
+    existingCodes = [],
+    serviceDate,
+  } = route.params as {
     onSelect: (
       codes: BillingCode[],
       subSelections?: CodeSubSelection[]
     ) => void;
     existingCodes?: BillingCode[];
+    serviceDate?: string;
   };
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCodes, setSelectedCodes] =
@@ -66,12 +71,13 @@ const BillingCodeSearchScreen = ({ navigation }: any) => {
         (s) => s.codeId === code.id
       );
       if (!existingSubSelection) {
+        const calculatedDates = calculateServiceDates(code);
         setCodeSubSelections((prev) => [
           ...prev,
           {
             codeId: code.id,
-            serviceDate: null,
-            serviceEndDate: null,
+            serviceDate: calculatedDates.serviceDate,
+            serviceEndDate: calculatedDates.serviceEndDate,
             bilateralIndicator: null,
             serviceStartTime: null,
             serviceEndTime: null,
@@ -120,6 +126,54 @@ const BillingCodeSearchScreen = ({ navigation }: any) => {
     return code.section.code === "H";
   };
 
+  // Function to calculate service dates for type 57 codes
+  const calculateServiceDates = (
+    code: BillingCode
+  ): { serviceDate: string | null; serviceEndDate: string | null } => {
+    if (!serviceDate || code.billing_record_type !== 57) {
+      return { serviceDate: null, serviceEndDate: null };
+    }
+
+    // Check if this code has previous codes defined and if any of them are already selected
+    console.log(code.previousCodes);
+    if (code.previousCodes && code.previousCodes.length > 0) {
+      // Find if any of the previous codes are already in the existing codes
+      const selectedPreviousCodes = existingCodes.filter((existingCode) =>
+        code.previousCodes?.some(
+          (prevCode) => prevCode.previousCode.id === existingCode.id
+        )
+      );
+
+      if (selectedPreviousCodes.length > 0) {
+        // For now, we'll use the service date as the start date
+        // In a more complex implementation, we'd track the end dates of previous codes
+        let serviceStartDate = serviceDate;
+
+        // Calculate service end date based on day range
+        let serviceEndDate = null;
+        if (code.day_range && code.day_range > 0) {
+          const startDate = new Date(serviceStartDate);
+          startDate.setDate(startDate.getDate() + code.day_range - 1); // -1 because it's inclusive
+          serviceEndDate = startDate.toISOString().split("T")[0];
+        }
+
+        return { serviceDate: serviceStartDate, serviceEndDate };
+      }
+    }
+
+    // If no previous codes are selected or no previous codes defined, use the service date
+    let serviceStartDate = serviceDate;
+    let serviceEndDate = null;
+
+    if (code.day_range && code.day_range > 0) {
+      const startDate = new Date(serviceStartDate);
+      startDate.setDate(startDate.getDate() + code.day_range - 1); // -1 because it's inclusive
+      serviceEndDate = startDate.toISOString().split("T")[0];
+    }
+
+    return { serviceDate: serviceStartDate, serviceEndDate };
+  };
+
   const renderSubSelectionModal = () => {
     if (!currentCodeForSubSelection) return null;
 
@@ -155,32 +209,26 @@ const BillingCodeSearchScreen = ({ navigation }: any) => {
                     <View style={styles.dateInputContainer}>
                       <Text style={styles.dateLabel}>Start Date</Text>
                       <TextInput
-                        style={styles.dateInput}
+                        style={[styles.dateInput, styles.readOnlyInput]}
                         placeholder="YYYY-MM-DD"
                         value={subSelection.serviceDate || ""}
-                        onChangeText={(text) =>
-                          handleUpdateSubSelection(
-                            currentCodeForSubSelection.id,
-                            { serviceDate: text }
-                          )
-                        }
+                        editable={false}
                       />
                     </View>
                     <View style={styles.dateInputContainer}>
                       <Text style={styles.dateLabel}>End Date</Text>
                       <TextInput
-                        style={styles.dateInput}
+                        style={[styles.dateInput, styles.readOnlyInput]}
                         placeholder="YYYY-MM-DD"
                         value={subSelection.serviceEndDate || ""}
-                        onChangeText={(text) =>
-                          handleUpdateSubSelection(
-                            currentCodeForSubSelection.id,
-                            { serviceEndDate: text }
-                          )
-                        }
+                        editable={false}
                       />
                     </View>
                   </View>
+                  <Text style={styles.calculatedDateNote}>
+                    Dates are automatically calculated based on service date and
+                    previous codes
+                  </Text>
                 </View>
               )}
 
@@ -985,6 +1033,16 @@ const styles = StyleSheet.create({
   },
   modalButton: {
     backgroundColor: "#2563eb",
+  },
+  readOnlyInput: {
+    backgroundColor: "#f3f4f6",
+    color: "#6b7280",
+  },
+  calculatedDateNote: {
+    fontSize: 12,
+    color: "#6b7280",
+    fontStyle: "italic",
+    marginTop: 8,
   },
 });
 

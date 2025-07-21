@@ -164,6 +164,10 @@ export const billingCodesAPI = {
       referring_practitioner_required: result.referring_practitioner_required,
       start_time_required: result.start_time_required,
       end_time_required: result.end_time_required,
+      day_range: result.day_range,
+      max_units: result.max_units,
+      previousCodes: result.previousCodes,
+      nextCodes: result.nextCodes,
       jurisdiction: {
         id: 1, // Default jurisdiction
         name: "Saskatchewan",
