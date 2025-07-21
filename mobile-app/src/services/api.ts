@@ -167,6 +167,7 @@ export const billingCodesAPI = {
         name: "Default Provider",
       },
       billing_record_type: result.billing_record_type,
+      referring_practitioner_required: result.referring_practitioner_required,
     }));
   },
 };

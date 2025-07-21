@@ -473,6 +473,17 @@ const ServiceFormScreen = ({ navigation }: any) => {
       ...prev,
       billingCodes: prev.billingCodes.filter((c) => c.codeId !== codeId),
     }));
+
+    // Check if we still need a referring physician after removing this code
+    const remainingCodes = selectedCodes.filter((c) => c.id !== codeId);
+    const stillRequiresReferringPhysician = remainingCodes.some(
+      (code) => code.referring_practitioner_required === "Y"
+    );
+
+    // If no longer required, clear the referring physician
+    if (!stillRequiresReferringPhysician && selectedReferringPhysician) {
+      handleRemoveReferringPhysician();
+    }
   };
 
   const handleSelectIcdCode = (icdCode: ICDCode) => {
@@ -494,6 +505,11 @@ const ServiceFormScreen = ({ navigation }: any) => {
     setSelectedReferringPhysician(null);
     setFormData((prev) => ({ ...prev, referringPhysicianId: null }));
   };
+
+  // Check if any selected billing codes require a referring practitioner
+  const requiresReferringPhysician = selectedCodes.some(
+    (code) => code.referring_practitioner_required === "Y"
+  );
 
   const handleCloseLocationModal = () => {
     setShowLocationDropdown(false);
@@ -534,6 +550,13 @@ const ServiceFormScreen = ({ navigation }: any) => {
     }
     if (formData.billingCodes.length === 0) {
       Alert.alert("Error", "Please add at least one billing code");
+      return false;
+    }
+    if (requiresReferringPhysician && !formData.referringPhysicianId) {
+      Alert.alert(
+        "Error",
+        "Please select a referring physician (required for selected billing codes)"
+      );
       return false;
     }
     if (!formData.serviceDate) {
@@ -636,158 +659,6 @@ const ServiceFormScreen = ({ navigation }: any) => {
             </Card.Content>
           </Card>
         )}
-
-        {/* Patient Selection */}
-        <Card style={styles.card}>
-          <Card.Content>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Patient</Text>
-              {!isEditing && (
-                <TouchableOpacity
-                  onPress={() => setIsCreatingPatient(!isCreatingPatient)}
-                >
-                  <Ionicons name="add-circle" size={24} color="#2563eb" />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {!isEditing && isCreatingPatient ? (
-              <View style={styles.newPatientForm}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="First Name"
-                  value={newPatient.firstName}
-                  onChangeText={(text) =>
-                    setNewPatient((prev) => ({ ...prev, firstName: text }))
-                  }
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Last Name"
-                  value={newPatient.lastName}
-                  onChangeText={(text) =>
-                    setNewPatient((prev) => ({ ...prev, lastName: text }))
-                  }
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Billing Number"
-                  value={newPatient.billingNumber}
-                  onChangeText={(text) =>
-                    setNewPatient((prev) => ({ ...prev, billingNumber: text }))
-                  }
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Date of Birth (YYYY-MM-DD)"
-                  value={newPatient.dateOfBirth}
-                  onChangeText={(text) =>
-                    setNewPatient((prev) => ({ ...prev, dateOfBirth: text }))
-                  }
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Sex (M/F)"
-                  value={newPatient.sex}
-                  onChangeText={(text) =>
-                    setNewPatient((prev) => ({ ...prev, sex: text }))
-                  }
-                />
-                <Button
-                  mode="contained"
-                  onPress={handleCreatePatient}
-                  loading={createPatientMutation.isPending}
-                  style={styles.createPatientButton}
-                >
-                  Create Patient
-                </Button>
-              </View>
-            ) : (
-              <View style={styles.dropdownContainer}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Search patients by name or billing number..."
-                  value={patientSearchQuery}
-                  onChangeText={(text) => {
-                    setPatientSearchQuery(text);
-                    setShowPatientDropdown(true);
-                  }}
-                  onFocus={() => setShowPatientDropdown(true)}
-                />
-                <Modal
-                  visible={showPatientDropdown}
-                  transparent={true}
-                  animationType="fade"
-                  onRequestClose={handleClosePatientModal}
-                >
-                  <TouchableOpacity
-                    style={styles.modalOverlay}
-                    activeOpacity={1}
-                    onPress={handleClosePatientModal}
-                  >
-                    <TouchableOpacity
-                      style={styles.modalContent}
-                      activeOpacity={1}
-                      onPress={() => {}} // Prevent closing when tapping inside modal
-                    >
-                      <View style={styles.modalHeader}>
-                        <Text style={styles.modalTitle}>Select Patient</Text>
-                        <TouchableOpacity onPress={handleClosePatientModal}>
-                          <Ionicons name="close" size={24} color="#6b7280" />
-                        </TouchableOpacity>
-                      </View>
-                      <TextInput
-                        style={styles.modalSearchInput}
-                        placeholder="Search patients..."
-                        value={patientSearchQuery}
-                        onChangeText={setPatientSearchQuery}
-                        autoFocus={true}
-                      />
-                      <ScrollView style={styles.modalScrollView}>
-                        {patientsLoading ? (
-                          <ActivityIndicator
-                            size="small"
-                            color="#2563eb"
-                            style={styles.modalLoading}
-                          />
-                        ) : (
-                          <>
-                            <Text style={styles.debugText}>
-                              Patients: {patients?.length || 0}, Filtered:{" "}
-                              {filteredPatients.length}, Query: "
-                              {patientSearchQuery}"
-                            </Text>
-                            {filteredPatients.length > 0 ? (
-                              filteredPatients.map((patient) => (
-                                <TouchableOpacity
-                                  key={patient.id}
-                                  style={styles.modalOption}
-                                  onPress={() => {
-                                    handleSelectPatient(patient);
-                                    handleClosePatientModal();
-                                  }}
-                                >
-                                  <Text style={styles.modalOptionText}>
-                                    {patient.firstName} {patient.lastName} (#
-                                    {patient.billingNumber})
-                                  </Text>
-                                </TouchableOpacity>
-                              ))
-                            ) : (
-                              <Text style={styles.noResultsText}>
-                                No patients found. Try a different search term.
-                              </Text>
-                            )}
-                          </>
-                        )}
-                      </ScrollView>
-                    </TouchableOpacity>
-                  </TouchableOpacity>
-                </Modal>
-              </View>
-            )}
-          </Card.Content>
-        </Card>
 
         {/* Service Date */}
         <Card style={styles.card}>
@@ -1004,42 +875,6 @@ const ServiceFormScreen = ({ navigation }: any) => {
               >
                 <Ionicons name="add" size={20} color="#2563eb" />
                 <Text style={styles.addCodeButtonText}>Add ICD Code</Text>
-              </TouchableOpacity>
-            )}
-          </Card.Content>
-        </Card>
-
-        {/* Referring Physician */}
-        <Card style={styles.card}>
-          <Card.Content>
-            <Text style={styles.sectionTitle}>
-              Referring Physician (Optional)
-            </Text>
-            {selectedReferringPhysician ? (
-              <View style={styles.selectedItem}>
-                <View style={styles.selectedItemContent}>
-                  <Text style={styles.selectedItemText}>
-                    {selectedReferringPhysician.name} -{" "}
-                    {selectedReferringPhysician.specialty} (
-                    {selectedReferringPhysician.code})
-                  </Text>
-                  <Text style={styles.selectedItemSubtext}>
-                    {selectedReferringPhysician.location}
-                  </Text>
-                </View>
-                <TouchableOpacity onPress={handleRemoveReferringPhysician}>
-                  <Ionicons name="close-circle" size={20} color="#ef4444" />
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <TouchableOpacity
-                style={styles.addCodeButton}
-                onPress={() => setShowReferringPhysicianModal(true)}
-              >
-                <Ionicons name="add" size={20} color="#2563eb" />
-                <Text style={styles.addCodeButtonText}>
-                  Add Referring Physician
-                </Text>
               </TouchableOpacity>
             )}
           </Card.Content>
@@ -1289,6 +1124,196 @@ const ServiceFormScreen = ({ navigation }: any) => {
             </TouchableOpacity>
           </Card.Content>
         </Card>
+
+        {/* Patient Selection */}
+        <Card style={styles.card}>
+          <Card.Content>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Patient</Text>
+              {!isEditing && (
+                <TouchableOpacity
+                  onPress={() => setIsCreatingPatient(!isCreatingPatient)}
+                >
+                  <Ionicons name="add-circle" size={24} color="#2563eb" />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {!isEditing && isCreatingPatient ? (
+              <View style={styles.newPatientForm}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="First Name"
+                  value={newPatient.firstName}
+                  onChangeText={(text) =>
+                    setNewPatient((prev) => ({ ...prev, firstName: text }))
+                  }
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Last Name"
+                  value={newPatient.lastName}
+                  onChangeText={(text) =>
+                    setNewPatient((prev) => ({ ...prev, lastName: text }))
+                  }
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Billing Number"
+                  value={newPatient.billingNumber}
+                  onChangeText={(text) =>
+                    setNewPatient((prev) => ({ ...prev, billingNumber: text }))
+                  }
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Date of Birth (YYYY-MM-DD)"
+                  value={newPatient.dateOfBirth}
+                  onChangeText={(text) =>
+                    setNewPatient((prev) => ({ ...prev, dateOfBirth: text }))
+                  }
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Sex (M/F)"
+                  value={newPatient.sex}
+                  onChangeText={(text) =>
+                    setNewPatient((prev) => ({ ...prev, sex: text }))
+                  }
+                />
+                <Button
+                  mode="contained"
+                  onPress={handleCreatePatient}
+                  loading={createPatientMutation.isPending}
+                  style={styles.createPatientButton}
+                >
+                  Create Patient
+                </Button>
+              </View>
+            ) : (
+              <View style={styles.dropdownContainer}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Search patients by name or billing number..."
+                  value={patientSearchQuery}
+                  onChangeText={(text) => {
+                    setPatientSearchQuery(text);
+                    setShowPatientDropdown(true);
+                  }}
+                  onFocus={() => setShowPatientDropdown(true)}
+                />
+                <Modal
+                  visible={showPatientDropdown}
+                  transparent={true}
+                  animationType="fade"
+                  onRequestClose={handleClosePatientModal}
+                >
+                  <TouchableOpacity
+                    style={styles.modalOverlay}
+                    activeOpacity={1}
+                    onPress={handleClosePatientModal}
+                  >
+                    <TouchableOpacity
+                      style={styles.modalContent}
+                      activeOpacity={1}
+                      onPress={() => {}} // Prevent closing when tapping inside modal
+                    >
+                      <View style={styles.modalHeader}>
+                        <Text style={styles.modalTitle}>Select Patient</Text>
+                        <TouchableOpacity onPress={handleClosePatientModal}>
+                          <Ionicons name="close" size={24} color="#6b7280" />
+                        </TouchableOpacity>
+                      </View>
+                      <TextInput
+                        style={styles.modalSearchInput}
+                        placeholder="Search patients..."
+                        value={patientSearchQuery}
+                        onChangeText={setPatientSearchQuery}
+                        autoFocus={true}
+                      />
+                      <ScrollView style={styles.modalScrollView}>
+                        {patientsLoading ? (
+                          <ActivityIndicator
+                            size="small"
+                            color="#2563eb"
+                            style={styles.modalLoading}
+                          />
+                        ) : (
+                          <>
+                            <Text style={styles.debugText}>
+                              Patients: {patients?.length || 0}, Filtered:{" "}
+                              {filteredPatients.length}, Query: "
+                              {patientSearchQuery}"
+                            </Text>
+                            {filteredPatients.length > 0 ? (
+                              filteredPatients.map((patient) => (
+                                <TouchableOpacity
+                                  key={patient.id}
+                                  style={styles.modalOption}
+                                  onPress={() => {
+                                    handleSelectPatient(patient);
+                                    handleClosePatientModal();
+                                  }}
+                                >
+                                  <Text style={styles.modalOptionText}>
+                                    {patient.firstName} {patient.lastName} (#
+                                    {patient.billingNumber})
+                                  </Text>
+                                </TouchableOpacity>
+                              ))
+                            ) : (
+                              <Text style={styles.noResultsText}>
+                                No patients found. Try a different search term.
+                              </Text>
+                            )}
+                          </>
+                        )}
+                      </ScrollView>
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                </Modal>
+              </View>
+            )}
+          </Card.Content>
+        </Card>
+
+        {/* Referring Physician - Only show when required by billing codes */}
+        {requiresReferringPhysician && (
+          <Card style={styles.card}>
+            <Card.Content>
+              <Text style={styles.sectionTitle}>
+                Referring Physician (Required)
+              </Text>
+              {selectedReferringPhysician ? (
+                <View style={styles.selectedItem}>
+                  <View style={styles.selectedItemContent}>
+                    <Text style={styles.selectedItemText}>
+                      {selectedReferringPhysician.name} -{" "}
+                      {selectedReferringPhysician.specialty} (
+                      {selectedReferringPhysician.code})
+                    </Text>
+                    <Text style={styles.selectedItemSubtext}>
+                      {selectedReferringPhysician.location}
+                    </Text>
+                  </View>
+                  <TouchableOpacity onPress={handleRemoveReferringPhysician}>
+                    <Ionicons name="close-circle" size={20} color="#ef4444" />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.addCodeButton}
+                  onPress={() => setShowReferringPhysicianModal(true)}
+                >
+                  <Ionicons name="add" size={20} color="#2563eb" />
+                  <Text style={styles.addCodeButtonText}>
+                    Add Referring Physician
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </Card.Content>
+          </Card>
+        )}
 
         {/* Submit Button */}
         <Button

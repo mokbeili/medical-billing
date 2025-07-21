@@ -11,7 +11,7 @@ export interface SearchResult {
   displayCode: string;
   searchType?: string;
   billing_record_type: number;
-  referring_practitioner_required: boolean;
+  referring_practitioner_required: string | null;
   multiple_unit_indicator: string;
   start_time_required: boolean;
   stop_time_required: boolean;
@@ -75,6 +75,7 @@ export interface BillingCode {
     name: string;
   };
   billing_record_type: number;
+  referring_practitioner_required: string | null;
 }
 
 export interface AIPrompt {
