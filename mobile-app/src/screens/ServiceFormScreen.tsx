@@ -111,6 +111,20 @@ const ServiceFormScreen = ({ navigation }: any) => {
   const [selectedYear, setSelectedYear] = useState<number>(0);
   const [selectedMonth, setSelectedMonth] = useState<number>(0);
 
+  // Service date picker state
+  const [showServiceDatePicker, setShowServiceDatePicker] = useState(false);
+  const [selectedServiceCalendarDate, setSelectedServiceCalendarDate] =
+    useState<Date | null>(null);
+  const [currentServiceCalendarMonth, setCurrentServiceCalendarMonth] =
+    useState(new Date());
+  const [showServiceYearPicker, setShowServiceYearPicker] = useState(false);
+  const [serviceDatePickerStep, setServiceDatePickerStep] = useState<
+    "decade" | "year" | "month" | "day"
+  >("decade");
+  const [selectedServiceDecade, setSelectedServiceDecade] = useState<number>(0);
+  const [selectedServiceYear, setSelectedServiceYear] = useState<number>(0);
+  const [selectedServiceMonth, setSelectedServiceMonth] = useState<number>(0);
+
   // Billing number validation function (from web form)
   const checkDigit = (value: string): boolean => {
     if (value.length !== 9) return false;
@@ -701,6 +715,25 @@ const ServiceFormScreen = ({ navigation }: any) => {
     setShowDatePicker(true);
   };
 
+  const handleOpenServiceDatePicker = () => {
+    // Initialize simple calendar picker for service date
+    if (formData.serviceDate) {
+      const [year, month, day] = formData.serviceDate.split("-");
+      const existingDate = new Date(
+        parseInt(year),
+        parseInt(month) - 1,
+        parseInt(day)
+      );
+      setSelectedServiceCalendarDate(existingDate);
+      setCurrentServiceCalendarMonth(existingDate);
+    } else {
+      const today = new Date();
+      setSelectedServiceCalendarDate(today);
+      setCurrentServiceCalendarMonth(today);
+    }
+    setShowServiceDatePicker(true);
+  };
+
   const handleConfirmDate = () => {
     const { year, month, day } = tempDateOfBirth;
     if (year && month && day) {
@@ -758,6 +791,51 @@ const ServiceFormScreen = ({ navigation }: any) => {
     return days;
   };
 
+  const generateServiceCalendarDays = (date: Date) => {
+    const daysInMonth = getDaysInMonth(date);
+    const firstDayOfMonth = getFirstDayOfMonth(date);
+    const days = [];
+    const today = new Date();
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(today.getMonth() - 6);
+
+    // Add empty cells for days before the first day of the month
+    for (let i = 0; i < firstDayOfMonth; i++) {
+      days.push(null);
+    }
+
+    // Add days of the month - for service dates, only allow dates within 6 months and up to today
+    for (let i = 1; i <= daysInMonth; i++) {
+      const dayDate = new Date(date.getFullYear(), date.getMonth(), i);
+
+      // Check if this day is too old (more than 6 months ago) or in the future
+      const isTooOld = dayDate < sixMonthsAgo;
+      const isFuture = dayDate > today;
+
+      days.push({ date: dayDate, isFuture, isTooOld }); // Track if date is too old or future
+    }
+
+    return days;
+  };
+
+  const generateServiceCalendarMonths = () => {
+    const today = new Date();
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(today.getMonth() - 6);
+
+    const months = [];
+    let currentDate = new Date(sixMonthsAgo);
+
+    // Generate all months from 6 months ago to current month (not future months)
+    while (currentDate <= today) {
+      months.push(new Date(currentDate));
+      currentDate.setMonth(currentDate.getMonth() + 1);
+    }
+
+    // Reverse the array so current month appears first
+    return months.reverse();
+  };
+
   const formatDate = (date: Date) => {
     return date.toISOString().split("T")[0];
   };
@@ -770,6 +848,10 @@ const ServiceFormScreen = ({ navigation }: any) => {
     setSelectedCalendarDate(date);
   };
 
+  const handleServiceCalendarDateSelect = (date: Date) => {
+    setSelectedServiceCalendarDate(date);
+  };
+
   const handleCalendarConfirm = () => {
     if (selectedCalendarDate) {
       const formattedDate = formatDate(selectedCalendarDate);
@@ -779,6 +861,14 @@ const ServiceFormScreen = ({ navigation }: any) => {
       }
     }
     setShowDatePicker(false);
+  };
+
+  const handleServiceCalendarConfirm = () => {
+    if (selectedServiceCalendarDate) {
+      const formattedDate = formatDate(selectedServiceCalendarDate);
+      setFormData((prev) => ({ ...prev, serviceDate: formattedDate }));
+    }
+    setShowServiceDatePicker(false);
   };
 
   const handlePreviousMonth = () => {
@@ -816,6 +906,47 @@ const ServiceFormScreen = ({ navigation }: any) => {
       new Date(
         currentCalendarMonth.getFullYear() + 1,
         currentCalendarMonth.getMonth(),
+        1
+      )
+    );
+  };
+
+  // Service date calendar navigation functions
+  const handleServicePreviousMonth = () => {
+    setCurrentServiceCalendarMonth(
+      new Date(
+        currentServiceCalendarMonth.getFullYear(),
+        currentServiceCalendarMonth.getMonth() - 1,
+        1
+      )
+    );
+  };
+
+  const handleServiceNextMonth = () => {
+    setCurrentServiceCalendarMonth(
+      new Date(
+        currentServiceCalendarMonth.getFullYear(),
+        currentServiceCalendarMonth.getMonth() + 1,
+        1
+      )
+    );
+  };
+
+  const handleServicePreviousYear = () => {
+    setCurrentServiceCalendarMonth(
+      new Date(
+        currentServiceCalendarMonth.getFullYear() - 1,
+        currentServiceCalendarMonth.getMonth(),
+        1
+      )
+    );
+  };
+
+  const handleServiceNextYear = () => {
+    setCurrentServiceCalendarMonth(
+      new Date(
+        currentServiceCalendarMonth.getFullYear() + 1,
+        currentServiceCalendarMonth.getMonth(),
         1
       )
     );
@@ -862,6 +993,46 @@ const ServiceFormScreen = ({ navigation }: any) => {
     setDatePickerStep("month");
   };
 
+  // Service date step-by-step picker functions
+  const handleServiceDecadeSelect = (decade: number) => {
+    setSelectedServiceDecade(decade);
+    setServiceDatePickerStep("year");
+  };
+
+  const handleServiceYearSelectStep = (year: number) => {
+    setSelectedServiceYear(year);
+    setServiceDatePickerStep("month");
+  };
+
+  const handleServiceMonthSelect = (month: number) => {
+    setSelectedServiceMonth(month);
+    setServiceDatePickerStep("day");
+    // Set the calendar to the selected year/month
+    setCurrentServiceCalendarMonth(new Date(selectedServiceYear, month - 1, 1));
+  };
+
+  const handleServiceDaySelect = (day: number) => {
+    const selectedDate = new Date(
+      selectedServiceYear,
+      selectedServiceMonth - 1,
+      day
+    );
+    setSelectedServiceCalendarDate(selectedDate);
+    setServiceDatePickerStep("day");
+  };
+
+  const handleServiceBackToDecade = () => {
+    setServiceDatePickerStep("decade");
+  };
+
+  const handleServiceBackToYear = () => {
+    setServiceDatePickerStep("year");
+  };
+
+  const handleServiceBackToMonth = () => {
+    setServiceDatePickerStep("month");
+  };
+
   const generateDecades = () => {
     const currentYear = new Date().getFullYear();
     const decades = [];
@@ -874,12 +1045,52 @@ const ServiceFormScreen = ({ navigation }: any) => {
     return decades;
   };
 
+  const generateServiceDecades = () => {
+    const currentYear = new Date().getFullYear();
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const sixMonthsAgoYear = sixMonthsAgo.getFullYear();
+
+    const decades = [];
+    // Start with the current decade
+    const currentDecade = Math.floor(currentYear / 10) * 10;
+    const sixMonthsAgoDecade = Math.floor(sixMonthsAgoYear / 10) * 10;
+
+    // Only show decades that contain years within the 6-month range
+    for (let i = 0; i < 12; i++) {
+      const decadeStart = currentDecade - i * 10;
+      const decadeEnd = decadeStart + 9;
+
+      // Only include decade if it overlaps with our valid range
+      if (decadeEnd >= sixMonthsAgoYear && decadeStart <= currentYear) {
+        decades.push(decadeStart);
+      }
+    }
+    return decades;
+  };
+
   const generateYearsInDecade = (decade: number) => {
     const currentYear = new Date().getFullYear();
     const years = [];
     for (let i = 0; i < 10; i++) {
       const year = decade + i;
       if (year <= currentYear) {
+        years.push(year);
+      }
+    }
+    return years;
+  };
+
+  const generateServiceYearsInDecade = (decade: number) => {
+    const currentYear = new Date().getFullYear();
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const sixMonthsAgoYear = sixMonthsAgo.getFullYear();
+
+    const years = [];
+    for (let i = 0; i < 10; i++) {
+      const year = decade + i;
+      if (year >= sixMonthsAgoYear && year <= currentYear) {
         years.push(year);
       }
     }
@@ -911,6 +1122,51 @@ const ServiceFormScreen = ({ navigation }: any) => {
     }
 
     return allMonths;
+  };
+
+  const generateServiceMonths = () => {
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth() + 1; // getMonth() returns 0-11
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const sixMonthsAgoYear = sixMonthsAgo.getFullYear();
+    const sixMonthsAgoMonth = sixMonthsAgo.getMonth() + 1;
+
+    const allMonths = [
+      { value: 1, label: "January" },
+      { value: 2, label: "February" },
+      { value: 3, label: "March" },
+      { value: 4, label: "April" },
+      { value: 5, label: "May" },
+      { value: 6, label: "June" },
+      { value: 7, label: "July" },
+      { value: 8, label: "August" },
+      { value: 9, label: "September" },
+      { value: 10, label: "October" },
+      { value: 11, label: "November" },
+      { value: 12, label: "December" },
+    ];
+
+    // Filter months based on 6-month restriction
+    return allMonths.filter((month) => {
+      // If selected year is current year, show all months
+      if (selectedServiceYear === currentYear) {
+        return true;
+      }
+      // If selected year is 6 months ago year, only show months from 6 months ago onwards
+      if (selectedServiceYear === sixMonthsAgoYear) {
+        return month.value >= sixMonthsAgoMonth;
+      }
+      // If selected year is between 6 months ago and current year, show all months
+      if (
+        selectedServiceYear > sixMonthsAgoYear &&
+        selectedServiceYear < currentYear
+      ) {
+        return true;
+      }
+      // Don't show months for years before 6 months ago
+      return false;
+    });
   };
 
   const handleSelectPatient = (patient: any) => {
@@ -1045,15 +1301,22 @@ const ServiceFormScreen = ({ navigation }: any) => {
         {/* Service Date */}
         <Card style={styles.card}>
           <Card.Content>
-            <Text style={styles.sectionTitle}>Service Date</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Service Date (YYYY-MM-DD)"
-              value={formData.serviceDate}
-              onChangeText={(text) =>
-                setFormData((prev) => ({ ...prev, serviceDate: text }))
-              }
-            />
+            <Text style={styles.sectionTitle}>Service / Admit Date</Text>
+            <TouchableOpacity
+              style={[styles.input, styles.dateInput]}
+              onPress={handleOpenServiceDatePicker}
+            >
+              <Text
+                style={
+                  formData.serviceDate
+                    ? styles.dateInputText
+                    : styles.placeholderText
+                }
+              >
+                {formData.serviceDate || "Select Service Date"}
+              </Text>
+              <Ionicons name="calendar" size={20} color="#6b7280" />
+            </TouchableOpacity>
           </Card.Content>
         </Card>
 
@@ -1678,6 +1941,141 @@ const ServiceFormScreen = ({ navigation }: any) => {
                   );
                 })}
               </ScrollView>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
+
+        {/* Service Date Picker Modal */}
+        <Modal
+          visible={showServiceDatePicker}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowServiceDatePicker(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowServiceDatePicker(false)}
+          >
+            <TouchableOpacity
+              style={styles.modalContent}
+              activeOpacity={1}
+              onPress={() => {}} // Prevent closing when tapping inside modal
+            >
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Select Service Date</Text>
+                <TouchableOpacity
+                  onPress={() => setShowServiceDatePicker(false)}
+                >
+                  <Ionicons name="close" size={24} color="#6b7280" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.serviceCalendarScrollView}>
+                {generateServiceCalendarMonths().map(
+                  (monthDate, monthIndex) => (
+                    <View key={monthIndex} style={styles.serviceMonthContainer}>
+                      <Text style={styles.serviceMonthTitle}>
+                        {monthDate.toLocaleDateString("en-US", {
+                          month: "long",
+                          year: "numeric",
+                        })}
+                      </Text>
+
+                      {/* Calendar Days Header */}
+                      <View style={styles.calendarDaysHeader}>
+                        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
+                          (day) => (
+                            <Text key={day} style={styles.calendarDayHeader}>
+                              {day}
+                            </Text>
+                          )
+                        )}
+                      </View>
+
+                      {/* Calendar Grid */}
+                      <View style={styles.calendarGrid}>
+                        {generateServiceCalendarDays(monthDate).map(
+                          (dayData, index) => (
+                            <TouchableOpacity
+                              key={index}
+                              style={[
+                                styles.calendarDay,
+                                dayData &&
+                                  selectedServiceCalendarDate &&
+                                  isSameDate(
+                                    dayData.date,
+                                    selectedServiceCalendarDate
+                                  ) &&
+                                  styles.selectedCalendarDay,
+                                !dayData && styles.emptyCalendarDay,
+                                dayData?.isTooOld && styles.tooOldCalendarDay,
+                                dayData?.isFuture && styles.futureCalendarDay,
+                              ]}
+                              onPress={() =>
+                                dayData &&
+                                !dayData.isTooOld &&
+                                !dayData.isFuture &&
+                                handleServiceCalendarDateSelect(dayData.date)
+                              }
+                              disabled={
+                                !dayData || dayData.isTooOld || dayData.isFuture
+                              }
+                            >
+                              {dayData && (
+                                <Text
+                                  style={[
+                                    styles.calendarDayText,
+                                    selectedServiceCalendarDate &&
+                                      isSameDate(
+                                        dayData.date,
+                                        selectedServiceCalendarDate
+                                      ) &&
+                                      styles.selectedCalendarDayText,
+                                    dayData.isTooOld &&
+                                      styles.tooOldCalendarDayText,
+                                    dayData.isFuture &&
+                                      styles.futureCalendarDayText,
+                                  ]}
+                                >
+                                  {dayData.date.getDate()}
+                                </Text>
+                              )}
+                            </TouchableOpacity>
+                          )
+                        )}
+                      </View>
+                    </View>
+                  )
+                )}
+              </ScrollView>
+
+              {/* Selected Date Display */}
+              {selectedServiceCalendarDate && (
+                <View style={styles.selectedDateContainer}>
+                  <Text style={styles.selectedDateText}>
+                    Selected: {selectedServiceCalendarDate.toLocaleDateString()}
+                  </Text>
+                </View>
+              )}
+
+              <View style={styles.modalButtonContainer}>
+                <Button
+                  mode="outlined"
+                  onPress={() => setShowServiceDatePicker(false)}
+                  style={styles.modalButton}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  mode="contained"
+                  onPress={handleServiceCalendarConfirm}
+                  style={styles.modalButton}
+                  disabled={!selectedServiceCalendarDate}
+                >
+                  Confirm
+                </Button>
+              </View>
             </TouchableOpacity>
           </TouchableOpacity>
         </Modal>
@@ -2595,6 +2993,26 @@ const styles = StyleSheet.create({
   },
   futureCalendarDayText: {
     color: "#9ca3af",
+  },
+  tooOldCalendarDay: {
+    backgroundColor: "#f3f4f6",
+    opacity: 0.5,
+  },
+  tooOldCalendarDayText: {
+    color: "#9ca3af",
+  },
+  serviceCalendarScrollView: {
+    maxHeight: 400,
+  },
+  serviceMonthContainer: {
+    marginBottom: 20,
+  },
+  serviceMonthTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#1e293b",
+    marginBottom: 12,
+    textAlign: "center",
   },
 });
 

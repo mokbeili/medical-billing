@@ -158,6 +158,12 @@ export const billingCodesAPI = {
       title: result.title,
       description: result.description,
       section: result.section,
+      multiple_unit_indicator: result.multiple_unit_indicator,
+      fee_determinant: result.fee_determinant,
+      billing_record_type: result.billing_record_type,
+      referring_practitioner_required: result.referring_practitioner_required,
+      start_time_required: result.start_time_required,
+      end_time_required: result.end_time_required,
       jurisdiction: {
         id: 1, // Default jurisdiction
         name: "Saskatchewan",
@@ -166,8 +172,6 @@ export const billingCodesAPI = {
         id: 1, // Default provider
         name: "Default Provider",
       },
-      billing_record_type: result.billing_record_type,
-      referring_practitioner_required: result.referring_practitioner_required,
     }));
   },
 };

@@ -217,5 +217,7 @@ export interface ServiceFormData {
     specialCircumstances: string | null;
     serviceDate: string | null;
     serviceEndDate: string | null;
+    fee_determinant: string;
+    multiple_unit_indicator: string | null;
   }>;
 }
