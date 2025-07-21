@@ -13,7 +13,7 @@ import {
 import { Card, Chip } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { searchAPI } from "../services/api";
-import { SearchResult } from "../types";
+import { SearchResponse, SearchResult } from "../types";
 
 const SearchScreen = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -37,10 +37,10 @@ const SearchScreen = () => {
     refetch,
   } = useQuery({
     queryKey: ["search", debouncedQuery, currentPage],
-    queryFn: async () => {
+    queryFn: async (): Promise<SearchResponse> => {
       if (!debouncedQuery) {
         return {
-          type: "exact_code",
+          type: "combined",
           results: [],
           search_types_used: [],
           pagination: { page: 1, limit: pageSize, total: 0, totalPages: 0 },

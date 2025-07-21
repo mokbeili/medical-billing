@@ -149,9 +149,25 @@ export const billingCodesAPI = {
 
   search: async (query: string): Promise<BillingCode[]> => {
     const response = await api.get(
-      `/api/billing-codes/search?query=${encodeURIComponent(query)}`
+      `/api/search?query=${encodeURIComponent(query)}&limit=20`
     );
-    return response.data;
+    // Transform the search response to match BillingCode format
+    return response.data.results.map((result: any) => ({
+      id: result.id,
+      code: result.code,
+      title: result.title,
+      description: result.description,
+      section: result.section,
+      jurisdiction: {
+        id: 1, // Default jurisdiction
+        name: "Saskatchewan",
+      },
+      provider: {
+        id: 1, // Default provider
+        name: "Default Provider",
+      },
+      billing_record_type: result.billing_record_type,
+    }));
   },
 };
 

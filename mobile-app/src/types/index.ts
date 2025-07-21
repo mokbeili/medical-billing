@@ -24,7 +24,9 @@ export interface SearchResponse {
     | "exact_title"
     | "partial_code"
     | "synonym"
-    | "ai_strict";
+    | "ai_strict"
+    | "similar_query"
+    | "ai_refined";
   results: SearchResult[];
   search_types_used: (
     | "exact_code"
@@ -32,6 +34,8 @@ export interface SearchResponse {
     | "partial_code"
     | "synonym"
     | "ai_strict"
+    | "similar_query"
+    | "ai_refined"
   )[];
   pagination: {
     page: number;

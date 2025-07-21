@@ -263,13 +263,13 @@ function BillingCodeForm({
       setIsSearchingBillingCodes(true);
       try {
         const response = await fetch(
-          `/api/billing-codes/search?q=${encodeURIComponent(
+          `/api/search?query=${encodeURIComponent(
             billingCodeSearchQuery
-          )}&jurisdictionId=1`
+          )}&jurisdictionId=1&limit=20`
         );
         if (response.ok) {
           const data = await response.json();
-          setBillingCodeSearchResults(data);
+          setBillingCodeSearchResults(data.results);
         }
       } catch (error) {
         console.error("Error searching billing codes:", error);
@@ -293,13 +293,13 @@ function BillingCodeForm({
       setIsSearchingPreviousCodes(true);
       try {
         const response = await fetch(
-          `/api/billing-codes/search?q=${encodeURIComponent(
+          `/api/search?query=${encodeURIComponent(
             previousCodeSearchQuery
-          )}&jurisdictionId=1`
+          )}&jurisdictionId=1&limit=20`
         );
         if (response.ok) {
           const data = await response.json();
-          setPreviousCodeSearchResults(data);
+          setPreviousCodeSearchResults(data.results);
         }
       } catch (error) {
         console.error("Error searching previous codes:", error);
@@ -323,13 +323,13 @@ function BillingCodeForm({
       setIsSearchingNextCodes(true);
       try {
         const response = await fetch(
-          `/api/billing-codes/search?q=${encodeURIComponent(
+          `/api/search?query=${encodeURIComponent(
             nextCodeSearchQuery
-          )}&jurisdictionId=1`
+          )}&jurisdictionId=1&limit=20`
         );
         if (response.ok) {
           const data = await response.json();
-          setNextCodeSearchResults(data);
+          setNextCodeSearchResults(data.results);
         }
       } catch (error) {
         console.error("Error searching next codes:", error);
