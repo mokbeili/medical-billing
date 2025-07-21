@@ -30,15 +30,12 @@ const api = axios.create({
 
 // Request interceptor to add auth token if available
 api.interceptors.request.use(async (config) => {
-  console.log("API Request:", config.method?.toUpperCase(), config.url);
-  console.log("API Request Headers:", config.headers);
-  console.log("API Request Data:", config.data);
-
-  // Add user ID header for authentication
+  // Add user headers for authentication
   try {
     const userStr = await AsyncStorage.getItem("user");
     if (userStr) {
       const user = JSON.parse(userStr);
+      // Set individual headers as expected by the middleware
       config.headers["x-user-id"] = user.id;
       config.headers["x-user-email"] = user.email;
       config.headers["x-user-roles"] = user.roles.join(",");
@@ -53,13 +50,10 @@ api.interceptors.request.use(async (config) => {
 // Response interceptor for error handling
 api.interceptors.response.use(
   (response) => {
-    console.log("API Response:", response.status, response.config.url);
     return response;
   },
   (error) => {
     console.error("API Error:", error);
-    console.error("Error config:", error.config);
-    console.error("Error response:", error.response);
     return Promise.reject(error);
   }
 );
@@ -101,7 +95,6 @@ export const authAPI = {
       email,
       password,
     });
-    console.log("Sign in response:", response.data);
     return response.data;
   },
 
@@ -237,7 +230,7 @@ export const icdCodesAPI = {
     const response = await api.get(
       `/api/icd-search?query=${encodeURIComponent(query)}`
     );
-    return response.data;
+    return response.data.results;
   },
 };
 

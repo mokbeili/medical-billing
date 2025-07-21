@@ -8,6 +8,8 @@ import { useAuth } from "../contexts/AuthContext";
 import BillingCodeSearchScreen from "../screens/BillingCodeSearchScreen";
 import EditServiceScreen from "../screens/EditServiceScreen";
 import HomeScreen from "../screens/HomeScreen";
+import ICDCodeSearchScreen from "../screens/ICDCodeSearchScreen";
+import ICDCodesScreen from "../screens/ICDCodesScreen";
 import NewServiceScreen from "../screens/NewServiceScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 import SearchScreen from "../screens/SearchScreen";
@@ -31,6 +33,7 @@ const ServicesStack = () => {
         name="BillingCodeSearch"
         component={BillingCodeSearchScreen}
       />
+      <Stack.Screen name="ICDCodeSearch" component={ICDCodeSearchScreen} />
     </Stack.Navigator>
   );
 };
@@ -48,6 +51,8 @@ const MainTabs = () => {
             iconName = focused ? "search" : "search-outline";
           } else if (route.name === "Services") {
             iconName = focused ? "medical" : "medical-outline";
+          } else if (route.name === "ICDCodes") {
+            iconName = focused ? "code" : "code-outline";
           } else if (route.name === "Profile") {
             iconName = focused ? "person" : "person-outline";
           } else {
@@ -74,6 +79,11 @@ const MainTabs = () => {
         name="Services"
         component={ServicesStack}
         options={{ title: "Services" }}
+      />
+      <Tab.Screen
+        name="ICDCodes"
+        component={ICDCodesScreen}
+        options={{ title: "ICD Codes" }}
       />
       <Tab.Screen
         name="Profile"

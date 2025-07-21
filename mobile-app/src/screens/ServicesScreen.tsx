@@ -23,8 +23,6 @@ import { servicesAPI } from "../services/api";
 import { Service } from "../types";
 
 const ServicesScreen = ({ navigation }: any) => {
-  console.log("ServicesScreen rendered");
-
   const [filteredServices, setFilteredServices] = useState<Service[]>([]);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [filters, setFilters] = useState({
@@ -57,6 +55,9 @@ const ServicesScreen = ({ navigation }: any) => {
         filtered = filtered.filter((service) => service.claimId === null);
       }
 
+      // Filter out services without patient data
+      filtered = filtered.filter((service) => service.patient != null);
+
       if (filters.status && filters.status !== "ALL") {
         filtered = filtered.filter((service) =>
           service.serviceCodes.some((code) => code.status === filters.status)
@@ -67,15 +68,15 @@ const ServicesScreen = ({ navigation }: any) => {
         const searchTerm = filters.patientName.toLowerCase();
         filtered = filtered.filter(
           (service) =>
-            service.patient.firstName.toLowerCase().includes(searchTerm) ||
-            service.patient.lastName.toLowerCase().includes(searchTerm)
+            service.patient?.firstName?.toLowerCase().includes(searchTerm) ||
+            service.patient?.lastName?.toLowerCase().includes(searchTerm)
         );
       }
 
       if (filters.billingNumber) {
         const searchTerm = filters.billingNumber.toLowerCase();
         filtered = filtered.filter((service) =>
-          service.patient.billingNumber.toLowerCase().includes(searchTerm)
+          service.patient?.billingNumber?.toLowerCase().includes(searchTerm)
         );
       }
 
@@ -115,6 +116,13 @@ const ServicesScreen = ({ navigation }: any) => {
   }, [services, filters]);
 
   const handleServiceSelect = (serviceId: string) => {
+    // Don't allow selection of services without patient data
+    const service = services?.find((s) => s.id === serviceId);
+    if (!service?.patient) {
+      Alert.alert("Error", "Cannot select service with missing patient data");
+      return;
+    }
+
     if (selectedServices.includes(serviceId)) {
       setSelectedServices(selectedServices.filter((id) => id !== serviceId));
     } else {
@@ -137,8 +145,8 @@ const ServicesScreen = ({ navigation }: any) => {
         if (
           firstServiceCode &&
           currentServiceCode &&
-          firstSelected.patient.physician?.id ===
-            currentService.patient.physician?.id &&
+          firstSelected.patient?.physician?.id ===
+            currentService.patient?.physician?.id &&
           firstServiceCode.billingCode.section.code ===
             currentServiceCode.billingCode.section.code
         ) {
@@ -201,7 +209,8 @@ const ServicesScreen = ({ navigation }: any) => {
       return (
         serviceCode &&
         firstServiceCode &&
-        service.patient.physician?.id === firstService.patient.physician?.id &&
+        service.patient?.physician?.id ===
+          firstService.patient?.physician?.id &&
         serviceCode.billingCode.section.code ===
           firstServiceCode.billingCode.section.code
       );
@@ -226,10 +235,11 @@ const ServicesScreen = ({ navigation }: any) => {
             <View style={styles.cardHeader}>
               <View style={styles.cardTitleContainer}>
                 <Text style={styles.cardTitle}>
-                  {service.patient.firstName} {service.patient.lastName}
+                  {service.patient?.firstName || "Unknown"}{" "}
+                  {service.patient?.lastName || "Patient"}
                 </Text>
                 <Text style={styles.billingNumber}>
-                  #{service.patient.billingNumber}
+                  #{service.patient?.billingNumber || "N/A"}
                 </Text>
               </View>
               <Checkbox
@@ -248,8 +258,8 @@ const ServicesScreen = ({ navigation }: any) => {
                 {new Date(service.serviceDate).toLocaleDateString()}
               </Text>
               <Text style={styles.physician}>
-                Physician: {service.patient.physician.firstName}{" "}
-                {service.patient.physician.lastName}
+                Physician: {service.patient?.physician?.firstName || "Unknown"}{" "}
+                {service.patient?.physician?.lastName || "Physician"}
               </Text>
             </View>
 

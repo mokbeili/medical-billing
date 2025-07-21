@@ -14,7 +14,6 @@ import { ActivityIndicator, Button, Card, Chip } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   healthInstitutionsAPI,
-  icdCodesAPI,
   patientsAPI,
   physiciansAPI,
   referringPhysiciansAPI,
@@ -43,9 +42,6 @@ const NewServiceScreen = ({ navigation }: any) => {
   });
 
   const [selectedCodes, setSelectedCodes] = useState<BillingCode[]>([]);
-  const [icdSearchQuery, setIcdSearchQuery] = useState("");
-  const [icdSearchResults, setIcdSearchResults] = useState<ICDCode[]>([]);
-  const [isSearchingIcd, setIsSearchingIcd] = useState(false);
   const [selectedIcdCode, setSelectedIcdCode] = useState<ICDCode | null>(null);
   const [referringPhysicianSearchQuery, setReferringPhysicianSearchQuery] =
     useState("");
@@ -63,6 +59,40 @@ const NewServiceScreen = ({ navigation }: any) => {
     dateOfBirth: "",
     sex: "",
   });
+
+  // Patient search state
+  const [patientSearchQuery, setPatientSearchQuery] = useState("");
+  const [filteredPatients, setFilteredPatients] = useState<any[]>([]);
+  const [showPatientDropdown, setShowPatientDropdown] = useState(false);
+
+  // Location dropdown state
+  const [showLocationDropdown, setShowLocationDropdown] = useState(false);
+
+  // Location of Service options
+  const locationOfServiceOptions = [
+    { value: "1", label: "Office" },
+    { value: "2", label: "Hospital In-Patient" },
+    { value: "3", label: "Hospital Out-Patient" },
+    { value: "4", label: "Patient's Home" },
+    { value: "5", label: "Other" },
+    { value: "7", label: "Premium" },
+    { value: "9", label: "Emergency Room" },
+    { value: "B", label: "Hospital In-Patient (Premium)" },
+    { value: "C", label: "Hospital Out-Patient (Premium)" },
+    { value: "D", label: "Patient's Home (Premium)" },
+    { value: "E", label: "Other (Premium)" },
+    { value: "F", label: "After-Hours-Clinic (Premium)" },
+    { value: "K", label: "In Hospital (Premium)" },
+    { value: "M", label: "Out Patient (Premium)" },
+    { value: "P", label: "Home (Premium)" },
+    { value: "T", label: "Other (Premium)" },
+  ];
+
+  // Helper function to get location of service text
+  const getLocationOfServiceText = (value: string) => {
+    const option = locationOfServiceOptions.find((opt) => opt.value === value);
+    return option ? option.label : value;
+  };
 
   // Fetch data
   const { data: physicians, isLoading: physiciansLoading } = useQuery({
@@ -88,24 +118,20 @@ const NewServiceScreen = ({ navigation }: any) => {
     }
   }, [physicians]);
 
-  // Search ICD codes
-  const searchIcdCodes = async () => {
-    if (!icdSearchQuery.trim()) {
-      setIcdSearchResults([]);
-      return;
+  // Filter patients based on search query
+  useEffect(() => {
+    if (patients) {
+      const filtered = patients.filter((patient) => {
+        const searchLower = patientSearchQuery.toLowerCase();
+        return (
+          patient.firstName.toLowerCase().includes(searchLower) ||
+          patient.lastName.toLowerCase().includes(searchLower) ||
+          patient.billingNumber.toLowerCase().includes(searchLower)
+        );
+      });
+      setFilteredPatients(filtered);
     }
-
-    setIsSearchingIcd(true);
-    try {
-      const results = await icdCodesAPI.search(icdSearchQuery);
-      setIcdSearchResults(results);
-    } catch (error) {
-      console.error("Error searching ICD codes:", error);
-      Alert.alert("Error", "Failed to search ICD codes");
-    } finally {
-      setIsSearchingIcd(false);
-    }
-  };
+  }, [patients, patientSearchQuery]);
 
   // Search referring physicians
   const searchReferringPhysicians = async () => {
@@ -219,8 +245,6 @@ const NewServiceScreen = ({ navigation }: any) => {
   const handleSelectIcdCode = (icdCode: ICDCode) => {
     setSelectedIcdCode(icdCode);
     setFormData((prev) => ({ ...prev, icdCodeId: icdCode.id }));
-    setIcdSearchQuery("");
-    setIcdSearchResults([]);
   };
 
   const handleRemoveIcdCode = () => {
@@ -240,6 +264,14 @@ const NewServiceScreen = ({ navigation }: any) => {
     setFormData((prev) => ({ ...prev, referringPhysicianId: null }));
   };
 
+  const handleSelectPatient = (patient: any) => {
+    setFormData((prev) => ({ ...prev, patientId: patient.id }));
+    setPatientSearchQuery(
+      `${patient.firstName} ${patient.lastName} (#${patient.billingNumber})`
+    );
+    setShowPatientDropdown(false);
+  };
+
   const validateForm = () => {
     if (!formData.physicianId) {
       Alert.alert("Error", "Please select a physician");
@@ -255,6 +287,14 @@ const NewServiceScreen = ({ navigation }: any) => {
     }
     if (!formData.serviceDate) {
       Alert.alert("Error", "Please select a service date");
+      return false;
+    }
+    if (!formData.serviceLocation) {
+      Alert.alert("Error", "Please select a service location");
+      return false;
+    }
+    if (!formData.locationOfService) {
+      Alert.alert("Error", "Please select a location of service");
       return false;
     }
     return true;
@@ -276,45 +316,47 @@ const NewServiceScreen = ({ navigation }: any) => {
       </View>
 
       <ScrollView style={styles.content}>
-        {/* Physician Selection */}
-        <Card style={styles.card}>
-          <Card.Content>
-            <Text style={styles.sectionTitle}>Physician</Text>
-            {physiciansLoading ? (
-              <ActivityIndicator size="small" color="#2563eb" />
-            ) : (
-              <View style={styles.pickerContainer}>
-                {physicians?.map((physician) => (
-                  <TouchableOpacity
-                    key={physician.id}
-                    style={[
-                      styles.pickerOption,
-                      formData.physicianId === physician.id &&
-                        styles.selectedOption,
-                    ]}
-                    onPress={() =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        physicianId: physician.id,
-                      }))
-                    }
-                  >
-                    <Text
+        {/* Physician Selection - Only show if more than one physician */}
+        {physicians && physicians.length > 1 && (
+          <Card style={styles.card}>
+            <Card.Content>
+              <Text style={styles.sectionTitle}>Physician</Text>
+              {physiciansLoading ? (
+                <ActivityIndicator size="small" color="#2563eb" />
+              ) : (
+                <View style={styles.pickerContainer}>
+                  {physicians?.map((physician) => (
+                    <TouchableOpacity
+                      key={physician.id}
                       style={[
-                        styles.pickerOptionText,
+                        styles.pickerOption,
                         formData.physicianId === physician.id &&
-                          styles.selectedOptionText,
+                          styles.selectedOption,
                       ]}
+                      onPress={() =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          physicianId: physician.id,
+                        }))
+                      }
                     >
-                      {physician.firstName} {physician.lastName} (
-                      {physician.billingNumber})
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-          </Card.Content>
-        </Card>
+                      <Text
+                        style={[
+                          styles.pickerOptionText,
+                          formData.physicianId === physician.id &&
+                            styles.selectedOptionText,
+                        ]}
+                      >
+                        {physician.firstName} {physician.lastName} (
+                        {physician.billingNumber})
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </Card.Content>
+          </Card>
+        )}
 
         {/* Patient Selection */}
         <Card style={styles.card}>
@@ -380,37 +422,36 @@ const NewServiceScreen = ({ navigation }: any) => {
                 </Button>
               </View>
             ) : (
-              <View style={styles.pickerContainer}>
-                {patientsLoading ? (
-                  <ActivityIndicator size="small" color="#2563eb" />
-                ) : (
-                  patients?.map((patient) => (
-                    <TouchableOpacity
-                      key={patient.id}
-                      style={[
-                        styles.pickerOption,
-                        formData.patientId === patient.id &&
-                          styles.selectedOption,
-                      ]}
-                      onPress={() =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          patientId: patient.id,
-                        }))
-                      }
-                    >
-                      <Text
-                        style={[
-                          styles.pickerOptionText,
-                          formData.patientId === patient.id &&
-                            styles.selectedOptionText,
-                        ]}
-                      >
-                        {patient.firstName} {patient.lastName} (#
-                        {patient.billingNumber})
-                      </Text>
-                    </TouchableOpacity>
-                  ))
+              <View style={styles.dropdownContainer}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Search patients by name or billing number..."
+                  value={patientSearchQuery}
+                  onChangeText={(text) => {
+                    setPatientSearchQuery(text);
+                    setShowPatientDropdown(true);
+                  }}
+                  onFocus={() => setShowPatientDropdown(true)}
+                />
+                {showPatientDropdown && (
+                  <View style={styles.dropdown}>
+                    {patientsLoading ? (
+                      <ActivityIndicator size="small" color="#2563eb" />
+                    ) : (
+                      filteredPatients.map((patient) => (
+                        <TouchableOpacity
+                          key={patient.id}
+                          style={styles.dropdownOption}
+                          onPress={() => handleSelectPatient(patient)}
+                        >
+                          <Text style={styles.dropdownOptionText}>
+                            {patient.firstName} {patient.lastName} (#
+                            {patient.billingNumber})
+                          </Text>
+                        </TouchableOpacity>
+                      ))
+                    )}
+                  </View>
                 )}
               </View>
             )}
@@ -432,6 +473,144 @@ const NewServiceScreen = ({ navigation }: any) => {
           </Card.Content>
         </Card>
 
+        {/* Service Location */}
+        <Card style={styles.card}>
+          <Card.Content>
+            <Text style={styles.sectionTitle}>Service Location *</Text>
+            <View style={styles.buttonGroup}>
+              <TouchableOpacity
+                style={[
+                  styles.locationButton,
+                  formData.serviceLocation === "R" &&
+                    styles.selectedLocationButton,
+                ]}
+                onPress={() =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    serviceLocation:
+                      formData.serviceLocation === "R" ? null : "R",
+                  }))
+                }
+              >
+                <Text
+                  style={[
+                    styles.locationButtonText,
+                    formData.serviceLocation === "R" &&
+                      styles.selectedLocationButtonText,
+                  ]}
+                >
+                  Regina
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.locationButton,
+                  formData.serviceLocation === "S" &&
+                    styles.selectedLocationButton,
+                ]}
+                onPress={() =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    serviceLocation:
+                      formData.serviceLocation === "S" ? null : "S",
+                  }))
+                }
+              >
+                <Text
+                  style={[
+                    styles.locationButtonText,
+                    formData.serviceLocation === "S" &&
+                      styles.selectedLocationButtonText,
+                  ]}
+                >
+                  Saskatoon
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.locationButton,
+                  formData.serviceLocation === "X" &&
+                    styles.selectedLocationButton,
+                ]}
+                onPress={() =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    serviceLocation:
+                      formData.serviceLocation === "X" ? null : "X",
+                  }))
+                }
+              >
+                <Text
+                  style={[
+                    styles.locationButtonText,
+                    formData.serviceLocation === "X" &&
+                      styles.selectedLocationButtonText,
+                  ]}
+                >
+                  Rural/Northern
+                </Text>
+              </TouchableOpacity>
+            </View>
+            {!formData.serviceLocation && (
+              <Text style={styles.errorText}>
+                Please select a service location
+              </Text>
+            )}
+          </Card.Content>
+        </Card>
+
+        {/* Location of Service */}
+        <Card style={styles.card}>
+          <Card.Content>
+            <Text style={styles.sectionTitle}>Location of Service *</Text>
+            <View style={styles.dropdownContainer}>
+              <TouchableOpacity
+                style={[styles.input, styles.dropdownInput]}
+                onPress={() => setShowLocationDropdown(!showLocationDropdown)}
+              >
+                <Text
+                  style={
+                    formData.locationOfService
+                      ? styles.dropdownText
+                      : styles.placeholderText
+                  }
+                >
+                  {formData.locationOfService
+                    ? getLocationOfServiceText(formData.locationOfService)
+                    : "Select location of service"}
+                </Text>
+                <Ionicons name="chevron-down" size={20} color="#6b7280" />
+              </TouchableOpacity>
+              {showLocationDropdown && (
+                <View style={styles.dropdown}>
+                  {locationOfServiceOptions.map((option) => (
+                    <TouchableOpacity
+                      key={option.value}
+                      style={styles.dropdownOption}
+                      onPress={() => {
+                        setFormData((prev) => ({
+                          ...prev,
+                          locationOfService: option.value,
+                        }));
+                        setShowLocationDropdown(false);
+                      }}
+                    >
+                      <Text style={styles.dropdownOptionText}>
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+            {!formData.locationOfService && (
+              <Text style={styles.errorText}>
+                Please select a location of service
+              </Text>
+            )}
+          </Card.Content>
+        </Card>
+
         {/* ICD Code */}
         <Card style={styles.card}>
           <Card.Content>
@@ -446,29 +625,17 @@ const NewServiceScreen = ({ navigation }: any) => {
                 </TouchableOpacity>
               </View>
             ) : (
-              <>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Search ICD codes..."
-                  value={icdSearchQuery}
-                  onChangeText={setIcdSearchQuery}
-                  onSubmitEditing={searchIcdCodes}
-                />
-                {isSearchingIcd && (
-                  <ActivityIndicator size="small" color="#2563eb" />
-                )}
-                {icdSearchResults.map((code) => (
-                  <TouchableOpacity
-                    key={code.id}
-                    style={styles.searchResult}
-                    onPress={() => handleSelectIcdCode(code)}
-                  >
-                    <Text style={styles.searchResultText}>
-                      {code.code} - {code.description}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </>
+              <TouchableOpacity
+                style={styles.addCodeButton}
+                onPress={() =>
+                  navigation.navigate("ICDCodeSearch", {
+                    onSelect: handleSelectIcdCode,
+                  })
+                }
+              >
+                <Ionicons name="add" size={20} color="#2563eb" />
+                <Text style={styles.addCodeButtonText}>Add ICD Code</Text>
+              </TouchableOpacity>
             )}
           </Card.Content>
         </Card>
@@ -517,8 +684,8 @@ const NewServiceScreen = ({ navigation }: any) => {
           </Card.Content>
         </Card>
 
-        {/* Health Institution */}
-        <Card style={styles.card}>
+        {/* Health Institution - Commented out */}
+        {/* <Card style={styles.card}>
           <Card.Content>
             <Text style={styles.sectionTitle}>
               Health Institution (Optional)
@@ -579,24 +746,9 @@ const NewServiceScreen = ({ navigation }: any) => {
               </View>
             )}
           </Card.Content>
-        </Card>
+        </Card> */}
 
-        {/* Summary */}
-        <Card style={styles.card}>
-          <Card.Content>
-            <Text style={styles.sectionTitle}>Summary</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              placeholder="Service summary..."
-              value={formData.summary}
-              onChangeText={(text) =>
-                setFormData((prev) => ({ ...prev, summary: text }))
-              }
-              multiline
-              numberOfLines={3}
-            />
-          </Card.Content>
-        </Card>
+        {/* Summary - Removed */}
 
         {/* Billing Codes */}
         <Card style={styles.card}>
@@ -718,6 +870,36 @@ const styles = StyleSheet.create({
     color: "#1e40af",
     fontWeight: "600",
   },
+  dropdownContainer: {
+    position: "relative",
+    marginTop: 8,
+  },
+  dropdown: {
+    position: "absolute",
+    top: "100%",
+    left: 0,
+    right: 0,
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 8,
+    maxHeight: 200,
+    zIndex: 1000,
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  dropdownOption: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3f4f6",
+  },
+  dropdownOptionText: {
+    fontSize: 16,
+    color: "#374151",
+  },
   newPatientForm: {
     marginTop: 8,
   },
@@ -795,6 +977,51 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginBottom: 32,
     backgroundColor: "#2563eb",
+  },
+  buttonGroup: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 8,
+  },
+  locationButton: {
+    flex: 1,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 8,
+    backgroundColor: "#ffffff",
+    alignItems: "center",
+  },
+  selectedLocationButton: {
+    borderColor: "#2563eb",
+    backgroundColor: "#dbeafe",
+  },
+  locationButtonText: {
+    fontSize: 14,
+    color: "#374151",
+    fontWeight: "500",
+  },
+  selectedLocationButtonText: {
+    color: "#1e40af",
+    fontWeight: "600",
+  },
+  errorText: {
+    fontSize: 14,
+    color: "#ef4444",
+    marginTop: 4,
+  },
+  dropdownText: {
+    fontSize: 16,
+    color: "#374151",
+  },
+  placeholderText: {
+    fontSize: 16,
+    color: "#9ca3af",
+  },
+  dropdownInput: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
 });
 

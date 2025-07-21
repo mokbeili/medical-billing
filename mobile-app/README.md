@@ -23,37 +23,49 @@ A React Native mobile application that mirrors the Myon Health web application f
 
 - Node.js (v16 or higher)
 - npm or yarn
-- Expo CLI
-- iOS Simulator (for iOS development)
-- Android Studio (for Android development)
+- Expo CLI (`npm install -g @expo/cli`)
+- iOS Simulator (for iOS development) - requires Xcode on macOS
+- Android Studio (for Android development) - requires Android SDK and emulator
 
-## Setup Instructions
+## Local Development Setup
 
-1. **Install dependencies**:
+This app is configured to run locally on iOS and Android emulators without requiring development builds from Expo/EAS.
 
-   ```bash
-   npm install
-   ```
+### 1. Install Dependencies
 
-2. **Configure API endpoint**:
-   Update the `API_BASE_URL` in `src/services/api.ts` to point to your Next.js backend:
+```bash
+npm install
+```
 
-   ```typescript
-   const API_BASE_URL = __DEV__
-     ? "http://localhost:3001"
-     : "https://www.myonhealth.ca";
-   ```
+### 2. Configure API Endpoint
 
-3. **Start the development server**:
+Update the `API_BASE_URL` in `src/services/api.ts` to point to your Next.js backend:
 
-   ```bash
-   npm start
-   ```
+```typescript
+const API_BASE_URL = __DEV__
+  ? "http://localhost:3000"
+  : "https://www.myonhealth.ca";
+```
 
-4. **Run on device/simulator**:
-   - Press `i` for iOS simulator
-   - Press `a` for Android emulator
-   - Scan QR code with Expo Go app on your phone
+### 3. Start the Development Server
+
+```bash
+npm start
+```
+
+### 4. Run on Emulators
+
+- **iOS Simulator**: Press `i` in the terminal or run `npm run ios`
+- **Android Emulator**: Press `a` in the terminal or run `npm run android`
+- **Physical Device**: Scan the QR code with the Expo Go app
+
+### 5. Development Workflow
+
+The app will automatically reload when you make changes to the code. You can:
+
+- Use the Expo DevTools in your browser for debugging
+- Enable React Native Debugger for better debugging experience
+- Use the React Native Flipper plugin for advanced debugging
 
 ## Project Structure
 
@@ -110,15 +122,24 @@ The app uses a consistent design system with:
 
 ## Building for Production
 
-### iOS
+### Using EAS Build (Recommended)
+
+```bash
+# Install EAS CLI
+npm install -g @expo/eas-cli
+
+# Login to Expo
+eas login
+
+# Build for production
+eas build --platform ios
+eas build --platform android
+```
+
+### Using Expo Classic Build (Deprecated)
 
 ```bash
 npx expo build:ios
-```
-
-### Android
-
-```bash
 npx expo build:android
 ```
 
@@ -129,12 +150,15 @@ npx expo build:android
 1. **API Connection Error**: Ensure the Next.js backend is running and the API_BASE_URL is correct
 2. **Navigation Issues**: Check that all screen components are properly exported
 3. **TypeScript Errors**: Run `npx tsc --noEmit` to check for type errors
+4. **Emulator Not Found**: Make sure you have Xcode (iOS) or Android Studio (Android) properly installed
+5. **Metro Bundler Issues**: Try clearing the cache with `npx expo start --clear`
 
 ### Development Tips
 
 - Use Expo DevTools for debugging
 - Enable React Native Debugger for better debugging experience
 - Use the React Native Flipper plugin for advanced debugging
+- Keep your Expo CLI updated: `npm install -g @expo/cli@latest`
 
 ## Contributing
 
