@@ -68,8 +68,6 @@ export async function POST(request: Request) {
       );
     }
 
-    console.log("Creating service with billing codes:", billingCodes);
-
     // Validate and prepare billing codes data
     const preparedBillingCodes =
       billingCodes?.map((billingCode: any) => ({
@@ -96,8 +94,6 @@ export async function POST(request: Request) {
           ? new Date(billingCode.serviceEndDate)
           : null,
       })) || [];
-
-    console.log("Prepared billing codes:", preparedBillingCodes);
 
     // Create the service
     const service = await prisma.service.create({

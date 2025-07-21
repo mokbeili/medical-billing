@@ -13,5 +13,5 @@ prisma.physician
     },
   })
   .then(() => {
-    console.log("Physician created");
+    // Physician created successfully
   });

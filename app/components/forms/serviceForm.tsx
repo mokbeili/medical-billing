@@ -585,7 +585,6 @@ export default function ServiceForm({
 
       // Calculate service end date based on day range
       let serviceEndDate = null;
-      console.log(code);
       if (code.day_range && code.day_range > 0) {
         const startDate = new Date(serviceStartDate);
         startDate.setDate(startDate.getDate() + code.day_range - 1); // -1 because it's inclusive
@@ -951,7 +950,6 @@ export default function ServiceForm({
     }
 
     if (status === "loading") {
-      console.log("Session is loading, please wait...");
       return;
     }
 

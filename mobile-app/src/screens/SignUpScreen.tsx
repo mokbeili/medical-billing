@@ -50,7 +50,6 @@ const SignUpScreen = () => {
         role,
       });
       // Handle successful sign up
-      console.log("Sign up successful:", response);
       Alert.alert("Success", "Account created successfully! Please sign in.", [
         {
           text: "OK",

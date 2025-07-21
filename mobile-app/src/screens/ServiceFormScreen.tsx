@@ -129,7 +129,6 @@ const ServiceFormScreen = ({ navigation }: any) => {
   // Validate new patient form data
   const isNewPatientFormValid = () => {
     // Check if all required fields are filled
-    console.log(newPatient);
     if (!newPatient.firstName?.trim() || !newPatient.lastName?.trim()) {
       return false;
     }
@@ -279,15 +278,6 @@ const ServiceFormScreen = ({ navigation }: any) => {
     }
   }, [formData.physicianId, physicians, isEditing, formData.serviceLocation]);
 
-  // Debug patients data
-  useEffect(() => {
-    console.log("Patients data changed:", {
-      patients: patients?.length || 0,
-      loading: patientsLoading,
-      data: patients,
-    });
-  }, [patients, patientsLoading]);
-
   // Filter location options based on search query
   useEffect(() => {
     if (locationSearchQuery.trim() === "") {
@@ -303,10 +293,6 @@ const ServiceFormScreen = ({ navigation }: any) => {
   // Filter patients based on search query
   useEffect(() => {
     if (patients) {
-      console.log("Filtering patients:", {
-        patients: patients.length,
-        query: patientSearchQuery,
-      });
       const filtered = patients.filter((patient) => {
         const searchLower = patientSearchQuery.toLowerCase();
         // If search query is empty, show all patients
@@ -319,7 +305,6 @@ const ServiceFormScreen = ({ navigation }: any) => {
           patient.billingNumber.toLowerCase().includes(searchLower)
         );
       });
-      console.log("Filtered patients:", filtered.length);
       setFilteredPatients(filtered);
     }
   }, [patients, patientSearchQuery]);

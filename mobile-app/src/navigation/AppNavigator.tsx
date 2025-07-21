@@ -37,8 +37,6 @@ const ServicesStack = () => {
 };
 
 const MainTabs = () => {
-  console.log("MainTabs rendered");
-
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -93,7 +91,6 @@ const MainTabs = () => {
 };
 
 const AppNavigator = () => {
-  console.log("AppNavigator rendered");
   const { user, isLoading } = useAuth();
 
   if (isLoading) {

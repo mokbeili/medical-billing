@@ -3,8 +3,6 @@ import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const TestScreen = () => {
-  console.log("TestScreen rendered");
-
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>

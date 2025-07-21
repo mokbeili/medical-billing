@@ -33,7 +33,6 @@ const SignInScreen = () => {
       const success = await signIn(email, password);
 
       if (success) {
-        console.log("Sign in successful");
         // Navigation will be handled automatically by the AuthProvider
       } else {
         Alert.alert("Error", "Invalid email or password");

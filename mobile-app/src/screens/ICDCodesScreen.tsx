@@ -19,12 +19,6 @@ const ICDCodesScreen = () => {
     enabled: searchQuery.length > 0,
   });
 
-  // Debug logging
-  console.log("ICD Search - Query:", searchQuery);
-  console.log("ICD Search - Loading:", isLoading);
-  console.log("ICD Search - Error:", error);
-  console.log("ICD Search - Results:", icdCodes?.length || 0);
-
   const renderICDCode = ({ item }: { item: ICDCode }) => (
     <Card style={styles.card} mode="outlined">
       <Card.Content>

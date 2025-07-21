@@ -13,7 +13,6 @@ const HomeScreen = () => {
   const navigation = useNavigation();
 
   const handleSignIn = () => {
-    console.log("Sign In pressed");
     navigation.navigate("SignIn" as never);
   };
 

@@ -17,9 +17,7 @@ async function main() {
     },
   });
 
-  console.log("Test user created:", testUser.email);
-
-  console.log("Seed data created successfully");
+  // Test user created successfully
 }
 
 main()

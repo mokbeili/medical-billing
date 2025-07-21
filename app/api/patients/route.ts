@@ -202,7 +202,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json(responsePatient);
   } catch (error) {
-    console.log(error);
     console.error("Error creating patient:", error);
     return new NextResponse("Internal Server Error", { status: 500 });
   }

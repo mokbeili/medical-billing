@@ -86,11 +86,7 @@ async function populateVectors(
       },
     });
 
-    console.log(`Found ${billingCodes.length} billing codes to process`);
-
     for (const code of billingCodes) {
-      console.log(`Processing code ${code.code}`);
-
       // Generate concise title
       const conciseTitle = await generateConciseTitle(
         code.code,
@@ -123,11 +119,7 @@ async function populateVectors(
             title = ${conciseTitle}
         WHERE id = ${code.id}
       `;
-
-      console.log(`Updated title and vector for code ${code.code}`);
     }
-
-    console.log("Finished populating vectors and updating titles");
   } catch (error) {
     console.error("Error populating vectors:", error);
   } finally {
