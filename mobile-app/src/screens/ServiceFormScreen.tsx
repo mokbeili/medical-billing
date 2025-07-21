@@ -86,6 +86,87 @@ const ServiceFormScreen = ({ navigation }: any) => {
   const [filteredPatients, setFilteredPatients] = useState<any[]>([]);
   const [showPatientDropdown, setShowPatientDropdown] = useState(false);
 
+  // New patient form state
+  const [newPatientErrors, setNewPatientErrors] = useState({
+    billingNumber: false,
+    dateOfBirth: false,
+    sex: false,
+    billingNumberCheckDigit: false,
+  });
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [tempDateOfBirth, setTempDateOfBirth] = useState({
+    year: "",
+    month: "",
+    day: "",
+  });
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | null>(
+    null
+  );
+  const [currentCalendarMonth, setCurrentCalendarMonth] = useState(new Date());
+  const [showYearPicker, setShowYearPicker] = useState(false);
+  const [datePickerStep, setDatePickerStep] = useState<
+    "decade" | "year" | "month" | "day"
+  >("decade");
+  const [selectedDecade, setSelectedDecade] = useState<number>(0);
+  const [selectedYear, setSelectedYear] = useState<number>(0);
+  const [selectedMonth, setSelectedMonth] = useState<number>(0);
+
+  // Billing number validation function (from web form)
+  const checkDigit = (value: string): boolean => {
+    if (value.length !== 9) return false;
+    const weights = [9, 8, 7, 6, 5, 4, 3, 2];
+    const sum = value
+      .slice(0, 8)
+      .split("")
+      .reduce((acc, digit, index) => {
+        const product = parseInt(digit) * weights[index];
+        return acc + product;
+      }, 0);
+    const remainder = sum % 11 > 0 ? 11 - (sum % 11) : 0;
+    return String(remainder) === value[8];
+  };
+
+  // Validate new patient form data
+  const isNewPatientFormValid = () => {
+    // Check if all required fields are filled
+    console.log(newPatient);
+    if (!newPatient.firstName?.trim() || !newPatient.lastName?.trim()) {
+      return false;
+    }
+
+    if (
+      !newPatient.billingNumber ||
+      !newPatient.dateOfBirth ||
+      !newPatient.sex
+    ) {
+      return false;
+    }
+
+    // Validate billing number format and check digit
+    if (
+      newPatient.billingNumber.length !== 9 ||
+      !/^\d{9}$/.test(newPatient.billingNumber)
+    ) {
+      return false;
+    }
+
+    if (!checkDigit(newPatient.billingNumber)) {
+      return false;
+    }
+
+    // Check for duplicate patient
+    if (patients) {
+      const existingPatient = patients.find(
+        (patient) => patient.billingNumber === newPatient.billingNumber
+      );
+      if (existingPatient) {
+        return false;
+      }
+    }
+
+    return true;
+  };
+
   // Location of Service options
   const locationOfServiceOptions = [
     { value: "1", label: "Office" },
@@ -389,6 +470,10 @@ const ServiceFormScreen = ({ navigation }: any) => {
       queryClient.invalidateQueries({ queryKey: ["patients"] });
       // Set the new patient as selected
       setFormData((prev) => ({ ...prev, patientId: newPatient.id }));
+      // Update patient search query to show the selected patient
+      setPatientSearchQuery(
+        `${newPatient.firstName} ${newPatient.lastName} (#${newPatient.billingNumber})`
+      );
     },
     onError: (error) => {
       console.error("Error creating patient:", error);
@@ -426,18 +511,76 @@ const ServiceFormScreen = ({ navigation }: any) => {
   });
 
   const handleCreatePatient = () => {
-    if (
-      !newPatient.firstName ||
-      !newPatient.lastName ||
-      !newPatient.billingNumber ||
-      !newPatient.dateOfBirth ||
-      !newPatient.sex
-    ) {
-      Alert.alert("Error", "Please fill in all patient fields");
+    // Reset errors
+    setNewPatientErrors({
+      billingNumber: false,
+      dateOfBirth: false,
+      sex: false,
+      billingNumberCheckDigit: false,
+    });
+
+    // Validate required fields
+    const errors = {
+      billingNumber: !newPatient.billingNumber,
+      dateOfBirth: !newPatient.dateOfBirth,
+      sex: !newPatient.sex,
+      billingNumberCheckDigit: false,
+    };
+
+    // Check for required fields
+    if (!newPatient.firstName || !newPatient.lastName) {
+      Alert.alert("Error", "Please fill in all required patient fields");
       return;
     }
 
-    createPatientMutation.mutate(newPatient);
+    // Validate billing number format and check digit
+    if (newPatient.billingNumber) {
+      if (
+        newPatient.billingNumber.length !== 9 ||
+        !/^\d{9}$/.test(newPatient.billingNumber)
+      ) {
+        errors.billingNumber = true;
+        Alert.alert("Error", "Billing number must be exactly 9 digits");
+        setNewPatientErrors(errors);
+        return;
+      }
+
+      if (!checkDigit(newPatient.billingNumber)) {
+        errors.billingNumberCheckDigit = true;
+        Alert.alert("Error", "Invalid billing number check digit");
+        setNewPatientErrors(errors);
+        return;
+      }
+    }
+
+    // Check for duplicate patient
+    if (patients) {
+      const existingPatient = patients.find(
+        (patient) => patient.billingNumber === newPatient.billingNumber
+      );
+      if (existingPatient) {
+        Alert.alert(
+          "Error",
+          "A patient with this billing number already exists"
+        );
+        return;
+      }
+    }
+
+    // Check if any errors exist
+    if (errors.billingNumber || errors.dateOfBirth || errors.sex) {
+      Alert.alert("Error", "Please fill in all required patient fields");
+      setNewPatientErrors(errors);
+      return;
+    }
+
+    // Add physicianId to the patient data
+    const patientDataWithPhysician = {
+      ...newPatient,
+      physicianId: formData.physicianId,
+    };
+
+    createPatientMutation.mutate(patientDataWithPhysician);
   };
 
   const handleAddCode = (code: BillingCode) => {
@@ -529,6 +672,252 @@ const ServiceFormScreen = ({ navigation }: any) => {
   const handleCloseIcdCodeModal = () => {
     setShowIcdCodeModal(false);
     setIcdCodeSearchQuery(""); // Clear search when modal is closed
+  };
+
+  const handleOpenDatePicker = () => {
+    // Initialize step-by-step picker
+    if (newPatient.dateOfBirth) {
+      const [year, month, day] = newPatient.dateOfBirth.split("-");
+      const existingDate = new Date(
+        parseInt(year),
+        parseInt(month) - 1,
+        parseInt(day)
+      );
+      setSelectedCalendarDate(existingDate);
+      setCurrentCalendarMonth(existingDate);
+
+      // Set the step values based on existing date
+      const yearNum = parseInt(year);
+      const monthNum = parseInt(month);
+      setSelectedDecade(Math.floor(yearNum / 10) * 10);
+      setSelectedYear(yearNum);
+      setSelectedMonth(monthNum);
+      setDatePickerStep("day"); // Start at day selection since we have a date
+    } else {
+      const today = new Date();
+      setSelectedCalendarDate(today);
+      setCurrentCalendarMonth(today);
+
+      // Set default values
+      const currentYear = today.getFullYear();
+      setSelectedDecade(Math.floor(currentYear / 10) * 10);
+      setSelectedYear(currentYear);
+      setSelectedMonth(today.getMonth() + 1);
+      setDatePickerStep("decade"); // Start at decade selection for new dates
+    }
+    setShowDatePicker(true);
+  };
+
+  const handleConfirmDate = () => {
+    const { year, month, day } = tempDateOfBirth;
+    if (year && month && day) {
+      const formattedDate = `${year}-${month.padStart(2, "0")}-${day.padStart(
+        2,
+        "0"
+      )}`;
+      setNewPatient((prev) => ({ ...prev, dateOfBirth: formattedDate }));
+      if (newPatientErrors.dateOfBirth) {
+        setNewPatientErrors((prev) => ({ ...prev, dateOfBirth: false }));
+      }
+    }
+    setShowDatePicker(false);
+  };
+
+  // Calendar utility functions
+  const getDaysInMonth = (date: Date) => {
+    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  };
+
+  const getFirstDayOfMonth = (date: Date) => {
+    return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+  };
+
+  const generateCalendarDays = (date: Date) => {
+    const daysInMonth = getDaysInMonth(date);
+    const firstDayOfMonth = getFirstDayOfMonth(date);
+    const days = [];
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth() + 1;
+    const currentDay = today.getDate();
+
+    // Add empty cells for days before the first day of the month
+    for (let i = 0; i < firstDayOfMonth; i++) {
+      days.push(null);
+    }
+
+    // Add days of the month
+    for (let i = 1; i <= daysInMonth; i++) {
+      const dayDate = new Date(date.getFullYear(), date.getMonth(), i);
+
+      // Check if this day is in the future
+      const isFutureDay =
+        date.getFullYear() > currentYear ||
+        (date.getFullYear() === currentYear &&
+          date.getMonth() + 1 > currentMonth) ||
+        (date.getFullYear() === currentYear &&
+          date.getMonth() + 1 === currentMonth &&
+          i > currentDay);
+
+      days.push({ date: dayDate, isFuture: isFutureDay });
+    }
+
+    return days;
+  };
+
+  const formatDate = (date: Date) => {
+    return date.toISOString().split("T")[0];
+  };
+
+  const isSameDate = (date1: Date, date2: Date) => {
+    return formatDate(date1) === formatDate(date2);
+  };
+
+  const handleCalendarDateSelect = (date: Date) => {
+    setSelectedCalendarDate(date);
+  };
+
+  const handleCalendarConfirm = () => {
+    if (selectedCalendarDate) {
+      const formattedDate = formatDate(selectedCalendarDate);
+      setNewPatient((prev) => ({ ...prev, dateOfBirth: formattedDate }));
+      if (newPatientErrors.dateOfBirth) {
+        setNewPatientErrors((prev) => ({ ...prev, dateOfBirth: false }));
+      }
+    }
+    setShowDatePicker(false);
+  };
+
+  const handlePreviousMonth = () => {
+    setCurrentCalendarMonth(
+      new Date(
+        currentCalendarMonth.getFullYear(),
+        currentCalendarMonth.getMonth() - 1,
+        1
+      )
+    );
+  };
+
+  const handleNextMonth = () => {
+    setCurrentCalendarMonth(
+      new Date(
+        currentCalendarMonth.getFullYear(),
+        currentCalendarMonth.getMonth() + 1,
+        1
+      )
+    );
+  };
+
+  const handlePreviousYear = () => {
+    setCurrentCalendarMonth(
+      new Date(
+        currentCalendarMonth.getFullYear() - 1,
+        currentCalendarMonth.getMonth(),
+        1
+      )
+    );
+  };
+
+  const handleNextYear = () => {
+    setCurrentCalendarMonth(
+      new Date(
+        currentCalendarMonth.getFullYear() + 1,
+        currentCalendarMonth.getMonth(),
+        1
+      )
+    );
+  };
+
+  const handleYearSelect = () => {
+    // Show year picker modal
+    setShowYearPicker(true);
+  };
+
+  // Step-by-step date picker functions
+  const handleDecadeSelect = (decade: number) => {
+    setSelectedDecade(decade);
+    setDatePickerStep("year");
+  };
+
+  const handleYearSelectStep = (year: number) => {
+    setSelectedYear(year);
+    setDatePickerStep("month");
+  };
+
+  const handleMonthSelect = (month: number) => {
+    setSelectedMonth(month);
+    setDatePickerStep("day");
+    // Set the calendar to the selected year/month
+    setCurrentCalendarMonth(new Date(selectedYear, month - 1, 1));
+  };
+
+  const handleDaySelect = (day: number) => {
+    const selectedDate = new Date(selectedYear, selectedMonth - 1, day);
+    setSelectedCalendarDate(selectedDate);
+    setDatePickerStep("day");
+  };
+
+  const handleBackToDecade = () => {
+    setDatePickerStep("decade");
+  };
+
+  const handleBackToYear = () => {
+    setDatePickerStep("year");
+  };
+
+  const handleBackToMonth = () => {
+    setDatePickerStep("month");
+  };
+
+  const generateDecades = () => {
+    const currentYear = new Date().getFullYear();
+    const decades = [];
+    // Start with the current decade (e.g., 2020s for 2024)
+    const currentDecade = Math.floor(currentYear / 10) * 10;
+    for (let i = 0; i < 12; i++) {
+      const decadeStart = currentDecade - i * 10;
+      decades.push(decadeStart);
+    }
+    return decades;
+  };
+
+  const generateYearsInDecade = (decade: number) => {
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let i = 0; i < 10; i++) {
+      const year = decade + i;
+      if (year <= currentYear) {
+        years.push(year);
+      }
+    }
+    return years;
+  };
+
+  const generateMonths = () => {
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth() + 1; // getMonth() returns 0-11
+
+    const allMonths = [
+      { value: 1, label: "January" },
+      { value: 2, label: "February" },
+      { value: 3, label: "March" },
+      { value: 4, label: "April" },
+      { value: 5, label: "May" },
+      { value: 6, label: "June" },
+      { value: 7, label: "July" },
+      { value: 8, label: "August" },
+      { value: 9, label: "September" },
+      { value: 10, label: "October" },
+      { value: 11, label: "November" },
+      { value: 12, label: "December" },
+    ];
+
+    // If selected year is current year, only show months up to current month
+    if (selectedYear === currentYear) {
+      return allMonths.filter((month) => month.value <= currentMonth);
+    }
+
+    return allMonths;
   };
 
   const handleSelectPatient = (patient: any) => {
@@ -1028,6 +1417,278 @@ const ServiceFormScreen = ({ navigation }: any) => {
           </TouchableOpacity>
         </Modal>
 
+        {/* Date Picker Modal */}
+        <Modal
+          visible={showDatePicker}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowDatePicker(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowDatePicker(false)}
+          >
+            <TouchableOpacity
+              style={styles.modalContent}
+              activeOpacity={1}
+              onPress={() => {}} // Prevent closing when tapping inside modal
+            >
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Select Date of Birth</Text>
+                <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                  <Ionicons name="close" size={24} color="#6b7280" />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.stepPickerContainer}>
+                {/* Step Header */}
+                <View style={styles.stepHeader}>
+                  {datePickerStep !== "decade" && (
+                    <TouchableOpacity onPress={handleBackToDecade}>
+                      <Ionicons name="arrow-back" size={20} color="#6b7280" />
+                    </TouchableOpacity>
+                  )}
+                  <Text style={styles.stepTitle}>
+                    {datePickerStep === "decade" && "Select Decade"}
+                    {datePickerStep === "year" &&
+                      `Select Year (${selectedDecade}s)`}
+                    {datePickerStep === "month" &&
+                      `Select Month (${selectedYear})`}
+                    {datePickerStep === "day" &&
+                      `Select Day (${
+                        generateMonths().find((m) => m.value === selectedMonth)
+                          ?.label
+                      } ${selectedYear})`}
+                  </Text>
+                  {datePickerStep !== "decade" && (
+                    <View style={{ width: 20 }} />
+                  )}
+                </View>
+
+                {/* Decade Selection */}
+                {datePickerStep === "decade" && (
+                  <ScrollView style={styles.stepScrollView}>
+                    {generateDecades().map((decade) => (
+                      <TouchableOpacity
+                        key={decade}
+                        style={styles.stepOption}
+                        onPress={() => handleDecadeSelect(decade)}
+                      >
+                        <Text style={styles.stepOptionText}>
+                          {decade}s ({decade} - {decade + 9})
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                )}
+
+                {/* Year Selection */}
+                {datePickerStep === "year" && (
+                  <ScrollView style={styles.stepScrollView}>
+                    {generateYearsInDecade(selectedDecade).map((year) => (
+                      <TouchableOpacity
+                        key={year}
+                        style={[
+                          styles.stepOption,
+                          selectedYear === year && styles.selectedStepOption,
+                        ]}
+                        onPress={() => handleYearSelectStep(year)}
+                      >
+                        <Text
+                          style={[
+                            styles.stepOptionText,
+                            selectedYear === year &&
+                              styles.selectedStepOptionText,
+                          ]}
+                        >
+                          {year}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                )}
+
+                {/* Month Selection */}
+                {datePickerStep === "month" && (
+                  <ScrollView style={styles.stepScrollView}>
+                    {generateMonths().map((month) => (
+                      <TouchableOpacity
+                        key={month.value}
+                        style={[
+                          styles.stepOption,
+                          selectedMonth === month.value &&
+                            styles.selectedStepOption,
+                        ]}
+                        onPress={() => handleMonthSelect(month.value)}
+                      >
+                        <Text
+                          style={[
+                            styles.stepOptionText,
+                            selectedMonth === month.value &&
+                              styles.selectedStepOptionText,
+                          ]}
+                        >
+                          {month.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                )}
+
+                {/* Day Selection */}
+                {datePickerStep === "day" && (
+                  <View>
+                    {/* Calendar Days Header */}
+                    <View style={styles.calendarDaysHeader}>
+                      {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
+                        (day) => (
+                          <Text key={day} style={styles.calendarDayHeader}>
+                            {day}
+                          </Text>
+                        )
+                      )}
+                    </View>
+
+                    {/* Calendar Grid */}
+                    <View style={styles.calendarGrid}>
+                      {generateCalendarDays(currentCalendarMonth).map(
+                        (dayData, index) => (
+                          <TouchableOpacity
+                            key={index}
+                            style={[
+                              styles.calendarDay,
+                              dayData &&
+                                selectedCalendarDate &&
+                                isSameDate(
+                                  dayData.date,
+                                  selectedCalendarDate
+                                ) &&
+                                styles.selectedCalendarDay,
+                              !dayData && styles.emptyCalendarDay,
+                              dayData?.isFuture && styles.futureCalendarDay,
+                            ]}
+                            onPress={() =>
+                              dayData &&
+                              !dayData.isFuture &&
+                              handleCalendarDateSelect(dayData.date)
+                            }
+                            disabled={!dayData || dayData.isFuture}
+                          >
+                            {dayData && (
+                              <Text
+                                style={[
+                                  styles.calendarDayText,
+                                  selectedCalendarDate &&
+                                    isSameDate(
+                                      dayData.date,
+                                      selectedCalendarDate
+                                    ) &&
+                                    styles.selectedCalendarDayText,
+                                  dayData.isFuture &&
+                                    styles.futureCalendarDayText,
+                                ]}
+                              >
+                                {dayData.date.getDate()}
+                              </Text>
+                            )}
+                          </TouchableOpacity>
+                        )
+                      )}
+                    </View>
+
+                    {/* Selected Date Display */}
+                    {selectedCalendarDate && (
+                      <View style={styles.selectedDateContainer}>
+                        <Text style={styles.selectedDateText}>
+                          Selected: {selectedCalendarDate.toLocaleDateString()}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.modalButtonContainer}>
+                <Button
+                  mode="outlined"
+                  onPress={() => setShowDatePicker(false)}
+                  style={styles.modalButton}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  mode="contained"
+                  onPress={handleCalendarConfirm}
+                  style={styles.modalButton}
+                  disabled={!selectedCalendarDate}
+                >
+                  Confirm
+                </Button>
+              </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
+
+        {/* Year Picker Modal */}
+        <Modal
+          visible={showYearPicker}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowYearPicker(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowYearPicker(false)}
+          >
+            <TouchableOpacity
+              style={styles.modalContent}
+              activeOpacity={1}
+              onPress={() => {}} // Prevent closing when tapping inside modal
+            >
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Select Year</Text>
+                <TouchableOpacity onPress={() => setShowYearPicker(false)}>
+                  <Ionicons name="close" size={24} color="#6b7280" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.yearPickerScrollView}>
+                {Array.from({ length: 120 }, (_, i) => {
+                  const year = new Date().getFullYear() - i;
+                  return (
+                    <TouchableOpacity
+                      key={year}
+                      style={[
+                        styles.yearPickerOption,
+                        currentCalendarMonth.getFullYear() === year &&
+                          styles.selectedYearPickerOption,
+                      ]}
+                      onPress={() => {
+                        setCurrentCalendarMonth(
+                          new Date(year, currentCalendarMonth.getMonth(), 1)
+                        );
+                        setShowYearPicker(false);
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.yearPickerOptionText,
+                          currentCalendarMonth.getFullYear() === year &&
+                            styles.selectedYearPickerOptionText,
+                        ]}
+                      >
+                        {year}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
+
         {/* Health Institution - Commented out */}
         {/* <Card style={styles.card}>
           <Card.Content>
@@ -1141,51 +1802,161 @@ const ServiceFormScreen = ({ navigation }: any) => {
 
             {!isEditing && isCreatingPatient ? (
               <View style={styles.newPatientForm}>
+                <View style={styles.newPatientHeader}>
+                  <Text style={styles.newPatientTitle}>Create New Patient</Text>
+                  <TouchableOpacity onPress={() => setIsCreatingPatient(false)}>
+                    <Ionicons name="close-circle" size={24} color="#6b7280" />
+                  </TouchableOpacity>
+                </View>
+
                 <TextInput
                   style={styles.input}
-                  placeholder="First Name"
+                  placeholder="First Name *"
                   value={newPatient.firstName}
                   onChangeText={(text) =>
                     setNewPatient((prev) => ({ ...prev, firstName: text }))
                   }
                 />
+
                 <TextInput
                   style={styles.input}
-                  placeholder="Last Name"
+                  placeholder="Last Name *"
                   value={newPatient.lastName}
                   onChangeText={(text) =>
                     setNewPatient((prev) => ({ ...prev, lastName: text }))
                   }
                 />
+
                 <TextInput
-                  style={styles.input}
-                  placeholder="Billing Number"
+                  style={[
+                    styles.input,
+                    newPatientErrors.billingNumber && styles.inputError,
+                  ]}
+                  placeholder="Billing Number (9 digits) *"
                   value={newPatient.billingNumber}
-                  onChangeText={(text) =>
-                    setNewPatient((prev) => ({ ...prev, billingNumber: text }))
-                  }
+                  onChangeText={(text) => {
+                    // Only allow digits and limit to 9 characters
+                    const numericText = text.replace(/[^0-9]/g, "").slice(0, 9);
+                    setNewPatient((prev) => ({
+                      ...prev,
+                      billingNumber: numericText,
+                    }));
+                    // Clear error when user starts typing
+                    if (newPatientErrors.billingNumber) {
+                      setNewPatientErrors((prev) => ({
+                        ...prev,
+                        billingNumber: false,
+                      }));
+                    }
+                  }}
+                  keyboardType="numeric"
                 />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Date of Birth (YYYY-MM-DD)"
-                  value={newPatient.dateOfBirth}
-                  onChangeText={(text) =>
-                    setNewPatient((prev) => ({ ...prev, dateOfBirth: text }))
-                  }
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Sex (M/F)"
-                  value={newPatient.sex}
-                  onChangeText={(text) =>
-                    setNewPatient((prev) => ({ ...prev, sex: text }))
-                  }
-                />
+                {newPatientErrors.billingNumber && (
+                  <Text style={styles.errorText}>
+                    Billing number is required
+                  </Text>
+                )}
+                {newPatientErrors.billingNumberCheckDigit && (
+                  <Text style={styles.errorText}>
+                    Invalid billing number check digit
+                  </Text>
+                )}
+
+                <TouchableOpacity
+                  style={[
+                    styles.input,
+                    styles.dateInput,
+                    newPatientErrors.dateOfBirth && styles.inputError,
+                  ]}
+                  onPress={handleOpenDatePicker}
+                >
+                  <Text
+                    style={
+                      newPatient.dateOfBirth
+                        ? styles.dateInputText
+                        : styles.placeholderText
+                    }
+                  >
+                    {newPatient.dateOfBirth || "Date of Birth *"}
+                  </Text>
+                  <Ionicons name="calendar" size={20} color="#6b7280" />
+                </TouchableOpacity>
+                {newPatientErrors.dateOfBirth && (
+                  <Text style={styles.errorText}>
+                    Date of birth is required
+                  </Text>
+                )}
+
+                <Text style={styles.genderLabel}>Gender *</Text>
+                <View style={styles.genderButtons}>
+                  <TouchableOpacity
+                    style={[
+                      styles.genderButton,
+                      newPatient.sex === "M" && styles.selectedGenderButton,
+                      newPatientErrors.sex && styles.inputError,
+                    ]}
+                    onPress={() => {
+                      setNewPatient((prev) => ({ ...prev, sex: "M" }));
+                      if (newPatientErrors.sex) {
+                        setNewPatientErrors((prev) => ({
+                          ...prev,
+                          sex: false,
+                        }));
+                      }
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.genderButtonText,
+                        newPatient.sex === "M" &&
+                          styles.selectedGenderButtonText,
+                      ]}
+                    >
+                      Male
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.genderButton,
+                      newPatient.sex === "F" && styles.selectedGenderButton,
+                      newPatientErrors.sex && styles.inputError,
+                    ]}
+                    onPress={() => {
+                      setNewPatient((prev) => ({ ...prev, sex: "F" }));
+                      if (newPatientErrors.sex) {
+                        setNewPatientErrors((prev) => ({
+                          ...prev,
+                          sex: false,
+                        }));
+                      }
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.genderButtonText,
+                        newPatient.sex === "F" &&
+                          styles.selectedGenderButtonText,
+                      ]}
+                    >
+                      Female
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                {newPatientErrors.sex && (
+                  <Text style={styles.errorText}>Please select a gender</Text>
+                )}
+
                 <Button
                   mode="contained"
                   onPress={handleCreatePatient}
                   loading={createPatientMutation.isPending}
-                  style={styles.createPatientButton}
+                  style={[
+                    styles.createPatientButton,
+                    !isNewPatientFormValid() && styles.disabledButton,
+                  ]}
+                  disabled={
+                    !isNewPatientFormValid() || createPatientMutation.isPending
+                  }
                 >
                   Create Patient
                 </Button>
@@ -1635,6 +2406,201 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 20,
     fontStyle: "italic",
+  },
+  // New patient form styles
+  newPatientHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  newPatientTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#1e293b",
+  },
+  inputError: {
+    borderColor: "#ef4444",
+  },
+  dateInput: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  dateInputText: {
+    fontSize: 16,
+    color: "#374151",
+  },
+  genderLabel: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#374151",
+    marginBottom: 8,
+    marginTop: 8,
+  },
+  genderButtons: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 8,
+  },
+  genderButton: {
+    flex: 1,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 8,
+    backgroundColor: "#ffffff",
+    alignItems: "center",
+  },
+  selectedGenderButton: {
+    borderColor: "#2563eb",
+    backgroundColor: "#dbeafe",
+  },
+  genderButtonText: {
+    fontSize: 14,
+    color: "#374151",
+    fontWeight: "500",
+  },
+  selectedGenderButtonText: {
+    color: "#1e40af",
+    fontWeight: "600",
+  },
+  modalButtonContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 12,
+    marginTop: 16,
+  },
+  modalButton: {
+    flex: 1,
+  },
+  disabledButton: {
+    backgroundColor: "#9ca3af",
+    opacity: 0.6,
+  },
+  stepPickerContainer: {
+    marginBottom: 16,
+  },
+  stepHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+    paddingHorizontal: 8,
+  },
+  stepTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#1e293b",
+    flex: 1,
+    textAlign: "center",
+  },
+  stepScrollView: {
+    maxHeight: 300,
+  },
+  stepOption: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3f4f6",
+    backgroundColor: "#ffffff",
+  },
+  selectedStepOption: {
+    backgroundColor: "#dbeafe",
+  },
+  stepOptionText: {
+    fontSize: 16,
+    color: "#374151",
+    fontWeight: "500",
+    textAlign: "center",
+  },
+  selectedStepOptionText: {
+    color: "#1e40af",
+    fontWeight: "600",
+  },
+  calendarDaysHeader: {
+    flexDirection: "row",
+    marginBottom: 8,
+  },
+  calendarDayHeader: {
+    flex: 1,
+    textAlign: "center",
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#6b7280",
+    paddingVertical: 8,
+  },
+  calendarGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  calendarDay: {
+    width: "14.28%",
+    aspectRatio: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 0.5,
+    borderColor: "#f3f4f6",
+    backgroundColor: "#ffffff",
+  },
+  selectedCalendarDay: {
+    backgroundColor: "#2563eb",
+  },
+  emptyCalendarDay: {
+    backgroundColor: "#f9fafb",
+  },
+  calendarDayText: {
+    fontSize: 14,
+    color: "#374151",
+    fontWeight: "500",
+  },
+  selectedCalendarDayText: {
+    color: "#ffffff",
+    fontWeight: "600",
+  },
+  selectedDateContainer: {
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: "#dbeafe",
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  selectedDateText: {
+    fontSize: 14,
+    color: "#1e40af",
+    fontWeight: "600",
+  },
+  yearPickerScrollView: {
+    maxHeight: 300,
+  },
+  yearPickerOption: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3f4f6",
+    backgroundColor: "#ffffff",
+  },
+  selectedYearPickerOption: {
+    backgroundColor: "#dbeafe",
+  },
+  yearPickerOptionText: {
+    fontSize: 16,
+    color: "#374151",
+    fontWeight: "500",
+    textAlign: "center",
+  },
+  selectedYearPickerOptionText: {
+    color: "#1e40af",
+    fontWeight: "600",
+  },
+  futureCalendarDay: {
+    backgroundColor: "#f3f4f6",
+    opacity: 0.5,
+  },
+  futureCalendarDayText: {
+    color: "#9ca3af",
   },
 });
 

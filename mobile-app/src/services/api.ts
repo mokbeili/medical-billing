@@ -238,6 +238,7 @@ export const patientsAPI = {
     billingNumber: string;
     dateOfBirth: string;
     sex: string;
+    physicianId: string;
   }): Promise<Patient> => {
     const response = await api.post("/api/patients", data);
     return response.data;
