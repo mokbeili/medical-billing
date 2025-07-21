@@ -165,12 +165,12 @@ export interface Service {
     lastName: string;
     middleInitial: string | null;
     billingNumber: string;
-    physician: {
-      id: string;
-      firstName: string;
-      lastName: string;
-      billingNumber: string;
-    };
+  };
+  physician: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    billingNumber: string;
   };
   icdCode: {
     id: number;

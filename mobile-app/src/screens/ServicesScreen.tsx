@@ -145,8 +145,7 @@ const ServicesScreen = ({ navigation }: any) => {
         if (
           firstServiceCode &&
           currentServiceCode &&
-          firstSelected.patient?.physician?.id ===
-            currentService.patient?.physician?.id &&
+          firstSelected.physician?.id === currentService.physician?.id &&
           firstServiceCode.billingCode.section.code ===
             currentServiceCode.billingCode.section.code
         ) {
@@ -209,8 +208,7 @@ const ServicesScreen = ({ navigation }: any) => {
       return (
         serviceCode &&
         firstServiceCode &&
-        service.patient?.physician?.id ===
-          firstService.patient?.physician?.id &&
+        service.physician?.id === firstService.physician?.id &&
         serviceCode.billingCode.section.code ===
           firstServiceCode.billingCode.section.code
       );
@@ -227,7 +225,7 @@ const ServicesScreen = ({ navigation }: any) => {
       <TouchableOpacity
         key={service.id}
         onPress={() =>
-          navigation.navigate("EditService", { serviceId: service.id })
+          navigation.navigate("ServiceForm", { serviceId: service.id })
         }
       >
         <Card style={styles.card} mode="outlined">
@@ -258,8 +256,8 @@ const ServicesScreen = ({ navigation }: any) => {
                 {new Date(service.serviceDate).toLocaleDateString()}
               </Text>
               <Text style={styles.physician}>
-                Physician: {service.patient?.physician?.firstName || "Unknown"}{" "}
-                {service.patient?.physician?.lastName || "Physician"}
+                Physician: {service.physician?.firstName || "Unknown"}{" "}
+                {service.physician?.lastName || "Physician"}
               </Text>
             </View>
 
@@ -304,7 +302,7 @@ const ServicesScreen = ({ navigation }: any) => {
         <Text style={styles.headerTitle}>Services</Text>
         <TouchableOpacity
           style={styles.addButton}
-          onPress={() => navigation.navigate("NewService")}
+          onPress={() => navigation.navigate("ServiceForm")}
         >
           <Ionicons name="add" size={24} color="#ffffff" />
         </TouchableOpacity>

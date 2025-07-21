@@ -6,13 +6,12 @@ import React from "react";
 import { ActivityIndicator, View } from "react-native";
 import { useAuth } from "../contexts/AuthContext";
 import BillingCodeSearchScreen from "../screens/BillingCodeSearchScreen";
-import EditServiceScreen from "../screens/EditServiceScreen";
 import HomeScreen from "../screens/HomeScreen";
 import ICDCodeSearchScreen from "../screens/ICDCodeSearchScreen";
 import ICDCodesScreen from "../screens/ICDCodesScreen";
-import NewServiceScreen from "../screens/NewServiceScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 import SearchScreen from "../screens/SearchScreen";
+import ServiceFormScreen from "../screens/ServiceFormScreen";
 import ServicesScreen from "../screens/ServicesScreen";
 import SignInScreen from "../screens/SignInScreen";
 import SignUpScreen from "../screens/SignUpScreen";
@@ -27,8 +26,7 @@ const ServicesStack = () => {
       initialRouteName="ServicesList"
     >
       <Stack.Screen name="ServicesList" component={ServicesScreen} />
-      <Stack.Screen name="NewService" component={NewServiceScreen} />
-      <Stack.Screen name="EditService" component={EditServiceScreen} />
+      <Stack.Screen name="ServiceForm" component={ServiceFormScreen} />
       <Stack.Screen
         name="BillingCodeSearch"
         component={BillingCodeSearchScreen}

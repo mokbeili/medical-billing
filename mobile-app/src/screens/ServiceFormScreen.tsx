@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useRoute } from "@react-navigation/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import React, { useEffect, useState } from "react";
 import {
@@ -26,8 +27,13 @@ import {
   ServiceFormData,
 } from "../types";
 
-const NewServiceScreen = ({ navigation }: any) => {
+const ServiceFormScreen = ({ navigation }: any) => {
+  const route = useRoute();
+  const params = route.params as { serviceId?: string } | undefined;
+  const serviceId = params?.serviceId;
   const queryClient = useQueryClient();
+  const isEditing = !!serviceId;
+
   const [formData, setFormData] = useState<ServiceFormData>({
     physicianId: "",
     patientId: "",
@@ -98,7 +104,14 @@ const NewServiceScreen = ({ navigation }: any) => {
     return option ? option.label : value;
   };
 
-  // Fetch data
+  // Fetch service data (only when editing)
+  const { data: service, isLoading: serviceLoading } = useQuery({
+    queryKey: ["service", serviceId],
+    queryFn: () => servicesAPI.getById(serviceId!),
+    enabled: !!serviceId,
+  });
+
+  // Fetch other data
   const { data: physicians, isLoading: physiciansLoading } = useQuery({
     queryKey: ["physicians"],
     queryFn: physiciansAPI.getAll,
@@ -115,12 +128,12 @@ const NewServiceScreen = ({ navigation }: any) => {
       queryFn: healthInstitutionsAPI.getAll,
     });
 
-  // Set default physician if only one exists
+  // Set default physician if only one exists (only for new services)
   useEffect(() => {
-    if (physicians && physicians.length === 1) {
+    if (!isEditing && physicians && physicians.length === 1) {
       setFormData((prev) => ({ ...prev, physicianId: physicians[0].id }));
     }
-  }, [physicians]);
+  }, [physicians, isEditing]);
 
   // Filter patients based on search query
   useEffect(() => {
@@ -136,6 +149,67 @@ const NewServiceScreen = ({ navigation }: any) => {
       setFilteredPatients(filtered);
     }
   }, [patients, patientSearchQuery]);
+
+  // Load existing service data (only when editing)
+  useEffect(() => {
+    if (isEditing && service) {
+      console.log("Service:", service);
+      setFormData({
+        physicianId: service.physician.id,
+        patientId: service.patient.id || "",
+        referringPhysicianId: service.referringPhysician?.id || null,
+        icdCodeId: service.icdCode?.id || null,
+        healthInstitutionId: service.healthInstitution?.id || null,
+        summary: service.serviceCodes[0]?.summary || "",
+        serviceDate: new Date(service.serviceDate).toISOString().split("T")[0],
+        serviceLocation: service.serviceCodes[0]?.serviceLocation || null,
+        locationOfService: service.serviceCodes[0]?.locationOfService || null,
+        billingCodes: service.serviceCodes.map((code) => ({
+          codeId: code.billingCode.id,
+          status: code.status,
+          billing_record_type: code.billingCode.billing_record_type || 1,
+          serviceStartTime: code.serviceStartTime,
+          serviceEndTime: code.serviceEndTime,
+          numberOfUnits: code.numberOfUnits,
+          bilateralIndicator: code.bilateralIndicator,
+          specialCircumstances: code.specialCircumstances,
+          serviceDate: code.serviceDate,
+          serviceEndDate: code.serviceEndDate,
+        })),
+      });
+
+      // Set selected codes
+      setSelectedCodes(service.serviceCodes.map((code) => code.billingCode));
+
+      // Set selected ICD code
+      if (service.icdCode) {
+        setSelectedIcdCode({
+          id: parseInt(service.icdCode.code),
+          version: "10",
+          code: service.icdCode.code,
+          description: service.icdCode.description,
+        });
+      }
+
+      // Set selected referring physician
+      if (service.referringPhysician) {
+        setSelectedReferringPhysician({
+          id: parseInt(service.referringPhysician.code),
+          code: service.referringPhysician.code,
+          name: service.referringPhysician.name,
+          location: "",
+          specialty: "",
+        });
+      }
+
+      // Set patient search query with selected patient
+      if (service.patient) {
+        setPatientSearchQuery(
+          `${service.patient.firstName} ${service.patient.lastName} (#${service.patient.billingNumber})`
+        );
+      }
+    }
+  }, [service, isEditing]);
 
   // Debounce referring physician search query
   useEffect(() => {
@@ -174,7 +248,7 @@ const NewServiceScreen = ({ navigation }: any) => {
     searchReferringPhysicians();
   }, [debouncedReferringPhysicianQuery]);
 
-  // Create patient mutation
+  // Create patient mutation (only for new services)
   const createPatientMutation = useMutation({
     mutationFn: patientsAPI.create,
     onSuccess: (newPatient) => {
@@ -209,6 +283,21 @@ const NewServiceScreen = ({ navigation }: any) => {
     onError: (error) => {
       console.error("Error creating service:", error);
       Alert.alert("Error", "Failed to create service");
+    },
+  });
+
+  // Update service mutation
+  const updateServiceMutation = useMutation({
+    mutationFn: (data: ServiceFormData) => servicesAPI.update(serviceId!, data),
+    onSuccess: () => {
+      Alert.alert("Success", "Service updated successfully!");
+      navigation.goBack();
+      queryClient.invalidateQueries({ queryKey: ["services"] });
+      queryClient.invalidateQueries({ queryKey: ["service", serviceId] });
+    },
+    onError: (error) => {
+      console.error("Error updating service:", error);
+      Alert.alert("Error", "Failed to update service");
     },
   });
 
@@ -322,8 +411,25 @@ const NewServiceScreen = ({ navigation }: any) => {
 
   const handleSubmit = () => {
     if (!validateForm()) return;
-    createServiceMutation.mutate(formData);
+
+    if (isEditing) {
+      updateServiceMutation.mutate(formData);
+    } else {
+      createServiceMutation.mutate(formData);
+    }
   };
+
+  // Show loading state when editing and service is loading
+  if (isEditing && serviceLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#2563eb" />
+          <Text style={styles.loadingText}>Loading service...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -331,7 +437,9 @@ const NewServiceScreen = ({ navigation }: any) => {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color="#1e293b" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>New Service</Text>
+        <Text style={styles.headerTitle}>
+          {isEditing ? "Edit Service" : "New Service"}
+        </Text>
         <View style={{ width: 24 }} />
       </View>
 
@@ -383,14 +491,16 @@ const NewServiceScreen = ({ navigation }: any) => {
           <Card.Content>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Patient</Text>
-              <TouchableOpacity
-                onPress={() => setIsCreatingPatient(!isCreatingPatient)}
-              >
-                <Ionicons name="add-circle" size={24} color="#2563eb" />
-              </TouchableOpacity>
+              {!isEditing && (
+                <TouchableOpacity
+                  onPress={() => setIsCreatingPatient(!isCreatingPatient)}
+                >
+                  <Ionicons name="add-circle" size={24} color="#2563eb" />
+                </TouchableOpacity>
+              )}
             </View>
 
-            {isCreatingPatient ? (
+            {!isEditing && isCreatingPatient ? (
               <View style={styles.newPatientForm}>
                 <TextInput
                   style={styles.input}
@@ -814,11 +924,15 @@ const NewServiceScreen = ({ navigation }: any) => {
         <Button
           mode="contained"
           onPress={handleSubmit}
-          loading={createServiceMutation.isPending}
+          loading={
+            createServiceMutation.isPending || updateServiceMutation.isPending
+          }
           style={styles.submitButton}
-          disabled={createServiceMutation.isPending}
+          disabled={
+            createServiceMutation.isPending || updateServiceMutation.isPending
+          }
         >
-          Create Service
+          {isEditing ? "Update Service" : "Create Service"}
         </Button>
       </ScrollView>
     </SafeAreaView>
@@ -847,6 +961,16 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 16,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: "#64748b",
   },
   card: {
     marginBottom: 16,
@@ -1068,4 +1192,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default NewServiceScreen;
+export default ServiceFormScreen;
