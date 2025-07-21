@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import React, { useEffect, useState } from "react";
 import {
   Alert,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,6 +16,7 @@ import { ActivityIndicator, Button, Card, Chip } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   healthInstitutionsAPI,
+  icdCodesAPI,
   patientsAPI,
   physiciansAPI,
   referringPhysiciansAPI,
@@ -57,6 +59,15 @@ const ServiceFormScreen = ({ navigation }: any) => {
     useState(false);
   const [selectedReferringPhysician, setSelectedReferringPhysician] =
     useState<ReferringPhysician | null>(null);
+  const [showReferringPhysicianModal, setShowReferringPhysicianModal] =
+    useState(false);
+  const [showIcdCodeModal, setShowIcdCodeModal] = useState(false);
+  const [icdCodeSearchQuery, setIcdCodeSearchQuery] = useState("");
+  const [icdCodeSearchResults, setIcdCodeSearchResults] = useState<ICDCode[]>(
+    []
+  );
+  const [isSearchingIcdCode, setIsSearchingIcdCode] = useState(false);
+  const [debouncedIcdCodeQuery, setDebouncedIcdCodeQuery] = useState("");
   const [
     debouncedReferringPhysicianQuery,
     setDebouncedReferringPhysicianQuery,
@@ -74,9 +85,6 @@ const ServiceFormScreen = ({ navigation }: any) => {
   const [patientSearchQuery, setPatientSearchQuery] = useState("");
   const [filteredPatients, setFilteredPatients] = useState<any[]>([]);
   const [showPatientDropdown, setShowPatientDropdown] = useState(false);
-
-  // Location dropdown state
-  const [showLocationDropdown, setShowLocationDropdown] = useState(false);
 
   // Location of Service options
   const locationOfServiceOptions = [
@@ -98,10 +106,29 @@ const ServiceFormScreen = ({ navigation }: any) => {
     { value: "T", label: "Other (Premium)" },
   ];
 
+  // Location dropdown state
+  const [showLocationDropdown, setShowLocationDropdown] = useState(false);
+  const [locationSearchQuery, setLocationSearchQuery] = useState("");
+  const [filteredLocationOptions, setFilteredLocationOptions] = useState(
+    locationOfServiceOptions
+  );
+
   // Helper function to get location of service text
   const getLocationOfServiceText = (value: string) => {
     const option = locationOfServiceOptions.find((opt) => opt.value === value);
     return option ? option.label : value;
+  };
+
+  // Helper function to get service location from physician city
+  const getServiceLocationFromCity = (city: string): string | null => {
+    const cityLower = city.toLowerCase();
+    if (cityLower === "saskatoon") {
+      return "S";
+    } else if (cityLower === "regina") {
+      return "R";
+    } else {
+      return "X"; // Rural/Northern for all other cities
+    }
   };
 
   // Fetch service data (only when editing)
@@ -131,21 +158,87 @@ const ServiceFormScreen = ({ navigation }: any) => {
   // Set default physician if only one exists (only for new services)
   useEffect(() => {
     if (!isEditing && physicians && physicians.length === 1) {
-      setFormData((prev) => ({ ...prev, physicianId: physicians[0].id }));
+      const physician = physicians[0];
+      let newServiceLocation = formData.serviceLocation;
+
+      // Pre-select service location based on physician's city if not already set
+      if (!formData.serviceLocation && physician.healthInstitution?.city) {
+        newServiceLocation = getServiceLocationFromCity(
+          physician.healthInstitution.city
+        );
+      }
+
+      setFormData((prev) => ({
+        ...prev,
+        physicianId: physician.id,
+        serviceLocation: newServiceLocation,
+      }));
     }
   }, [physicians, isEditing]);
+
+  // Set service location based on selected physician's city (for new services)
+  useEffect(() => {
+    if (!isEditing && formData.physicianId && physicians) {
+      const selectedPhysician = physicians.find(
+        (p) => p.id === formData.physicianId
+      );
+      if (
+        selectedPhysician &&
+        selectedPhysician.healthInstitution?.city &&
+        !formData.serviceLocation
+      ) {
+        const newServiceLocation = getServiceLocationFromCity(
+          selectedPhysician.healthInstitution.city
+        );
+        setFormData((prev) => ({
+          ...prev,
+          serviceLocation: newServiceLocation,
+        }));
+      }
+    }
+  }, [formData.physicianId, physicians, isEditing, formData.serviceLocation]);
+
+  // Debug patients data
+  useEffect(() => {
+    console.log("Patients data changed:", {
+      patients: patients?.length || 0,
+      loading: patientsLoading,
+      data: patients,
+    });
+  }, [patients, patientsLoading]);
+
+  // Filter location options based on search query
+  useEffect(() => {
+    if (locationSearchQuery.trim() === "") {
+      setFilteredLocationOptions(locationOfServiceOptions);
+    } else {
+      const filtered = locationOfServiceOptions.filter((option) =>
+        option.label.toLowerCase().includes(locationSearchQuery.toLowerCase())
+      );
+      setFilteredLocationOptions(filtered);
+    }
+  }, [locationSearchQuery]);
 
   // Filter patients based on search query
   useEffect(() => {
     if (patients) {
+      console.log("Filtering patients:", {
+        patients: patients.length,
+        query: patientSearchQuery,
+      });
       const filtered = patients.filter((patient) => {
         const searchLower = patientSearchQuery.toLowerCase();
+        // If search query is empty, show all patients
+        if (!searchLower.trim()) {
+          return true;
+        }
         return (
           patient.firstName.toLowerCase().includes(searchLower) ||
           patient.lastName.toLowerCase().includes(searchLower) ||
           patient.billingNumber.toLowerCase().includes(searchLower)
         );
       });
+      console.log("Filtered patients:", filtered.length);
       setFilteredPatients(filtered);
     }
   }, [patients, patientSearchQuery]);
@@ -153,7 +246,6 @@ const ServiceFormScreen = ({ navigation }: any) => {
   // Load existing service data (only when editing)
   useEffect(() => {
     if (isEditing && service) {
-      console.log("Service:", service);
       setFormData({
         physicianId: service.physician.id,
         patientId: service.patient.id || "",
@@ -248,6 +340,38 @@ const ServiceFormScreen = ({ navigation }: any) => {
     searchReferringPhysicians();
   }, [debouncedReferringPhysicianQuery]);
 
+  // Debounce ICD code search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedIcdCodeQuery(icdCodeSearchQuery);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [icdCodeSearchQuery]);
+
+  // Search ICD codes with debounced query
+  useEffect(() => {
+    const searchIcdCodes = async () => {
+      if (!debouncedIcdCodeQuery.trim() || debouncedIcdCodeQuery.length < 2) {
+        setIcdCodeSearchResults([]);
+        return;
+      }
+
+      setIsSearchingIcdCode(true);
+      try {
+        const results = await icdCodesAPI.search(debouncedIcdCodeQuery);
+        setIcdCodeSearchResults(results);
+      } catch (error) {
+        console.error("Error searching ICD codes:", error);
+        Alert.alert("Error", "Failed to search ICD codes");
+      } finally {
+        setIsSearchingIcdCode(false);
+      }
+    };
+
+    searchIcdCodes();
+  }, [debouncedIcdCodeQuery]);
+
   // Create patient mutation (only for new services)
   const createPatientMutation = useMutation({
     mutationFn: patientsAPI.create,
@@ -333,7 +457,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
           billing_record_type: code.billing_record_type,
           serviceStartTime: null,
           serviceEndTime: null,
-          numberOfUnits: null,
+          numberOfUnits: 1, // Default to 1 unit
           bilateralIndicator: null,
           specialCircumstances: null,
           serviceDate: null,
@@ -364,13 +488,31 @@ const ServiceFormScreen = ({ navigation }: any) => {
   const handleSelectReferringPhysician = (physician: ReferringPhysician) => {
     setSelectedReferringPhysician(physician);
     setFormData((prev) => ({ ...prev, referringPhysicianId: physician.id }));
-    setReferringPhysicianSearchQuery("");
-    setReferringPhysicianSearchResults([]);
   };
 
   const handleRemoveReferringPhysician = () => {
     setSelectedReferringPhysician(null);
     setFormData((prev) => ({ ...prev, referringPhysicianId: null }));
+  };
+
+  const handleCloseLocationModal = () => {
+    setShowLocationDropdown(false);
+    setLocationSearchQuery(""); // Clear search when modal is closed
+  };
+
+  const handleClosePatientModal = () => {
+    setShowPatientDropdown(false);
+    // Don't clear patientSearchQuery here as it shows the selected patient
+  };
+
+  const handleCloseReferringPhysicianModal = () => {
+    setShowReferringPhysicianModal(false);
+    setReferringPhysicianSearchQuery(""); // Clear search when modal is closed
+  };
+
+  const handleCloseIcdCodeModal = () => {
+    setShowIcdCodeModal(false);
+    setIcdCodeSearchQuery(""); // Clear search when modal is closed
   };
 
   const handleSelectPatient = (patient: any) => {
@@ -412,10 +554,19 @@ const ServiceFormScreen = ({ navigation }: any) => {
   const handleSubmit = () => {
     if (!validateForm()) return;
 
+    // Ensure all billing codes have required fields
+    const validatedFormData = {
+      ...formData,
+      billingCodes: formData.billingCodes.map((code) => ({
+        ...code,
+        numberOfUnits: code.numberOfUnits || 1, // Ensure numberOfUnits is set
+      })),
+    };
+
     if (isEditing) {
-      updateServiceMutation.mutate(formData);
+      updateServiceMutation.mutate(validatedFormData);
     } else {
-      createServiceMutation.mutate(formData);
+      createServiceMutation.mutate(validatedFormData);
     }
   };
 
@@ -563,26 +714,76 @@ const ServiceFormScreen = ({ navigation }: any) => {
                   }}
                   onFocus={() => setShowPatientDropdown(true)}
                 />
-                {showPatientDropdown && (
-                  <View style={styles.dropdown}>
-                    {patientsLoading ? (
-                      <ActivityIndicator size="small" color="#2563eb" />
-                    ) : (
-                      filteredPatients.map((patient) => (
-                        <TouchableOpacity
-                          key={patient.id}
-                          style={styles.dropdownOption}
-                          onPress={() => handleSelectPatient(patient)}
-                        >
-                          <Text style={styles.dropdownOptionText}>
-                            {patient.firstName} {patient.lastName} (#
-                            {patient.billingNumber})
-                          </Text>
+                <Modal
+                  visible={showPatientDropdown}
+                  transparent={true}
+                  animationType="fade"
+                  onRequestClose={handleClosePatientModal}
+                >
+                  <TouchableOpacity
+                    style={styles.modalOverlay}
+                    activeOpacity={1}
+                    onPress={handleClosePatientModal}
+                  >
+                    <TouchableOpacity
+                      style={styles.modalContent}
+                      activeOpacity={1}
+                      onPress={() => {}} // Prevent closing when tapping inside modal
+                    >
+                      <View style={styles.modalHeader}>
+                        <Text style={styles.modalTitle}>Select Patient</Text>
+                        <TouchableOpacity onPress={handleClosePatientModal}>
+                          <Ionicons name="close" size={24} color="#6b7280" />
                         </TouchableOpacity>
-                      ))
-                    )}
-                  </View>
-                )}
+                      </View>
+                      <TextInput
+                        style={styles.modalSearchInput}
+                        placeholder="Search patients..."
+                        value={patientSearchQuery}
+                        onChangeText={setPatientSearchQuery}
+                        autoFocus={true}
+                      />
+                      <ScrollView style={styles.modalScrollView}>
+                        {patientsLoading ? (
+                          <ActivityIndicator
+                            size="small"
+                            color="#2563eb"
+                            style={styles.modalLoading}
+                          />
+                        ) : (
+                          <>
+                            <Text style={styles.debugText}>
+                              Patients: {patients?.length || 0}, Filtered:{" "}
+                              {filteredPatients.length}, Query: "
+                              {patientSearchQuery}"
+                            </Text>
+                            {filteredPatients.length > 0 ? (
+                              filteredPatients.map((patient) => (
+                                <TouchableOpacity
+                                  key={patient.id}
+                                  style={styles.modalOption}
+                                  onPress={() => {
+                                    handleSelectPatient(patient);
+                                    handleClosePatientModal();
+                                  }}
+                                >
+                                  <Text style={styles.modalOptionText}>
+                                    {patient.firstName} {patient.lastName} (#
+                                    {patient.billingNumber})
+                                  </Text>
+                                </TouchableOpacity>
+                              ))
+                            ) : (
+                              <Text style={styles.noResultsText}>
+                                No patients found. Try a different search term.
+                              </Text>
+                            )}
+                          </>
+                        )}
+                      </ScrollView>
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                </Modal>
               </View>
             )}
           </Card.Content>
@@ -711,27 +912,69 @@ const ServiceFormScreen = ({ navigation }: any) => {
                 </Text>
                 <Ionicons name="chevron-down" size={20} color="#6b7280" />
               </TouchableOpacity>
-              {showLocationDropdown && (
-                <View style={styles.dropdown}>
-                  {locationOfServiceOptions.map((option) => (
-                    <TouchableOpacity
-                      key={option.value}
-                      style={styles.dropdownOption}
-                      onPress={() => {
-                        setFormData((prev) => ({
-                          ...prev,
-                          locationOfService: option.value,
-                        }));
-                        setShowLocationDropdown(false);
-                      }}
-                    >
-                      <Text style={styles.dropdownOptionText}>
-                        {option.label}
+              <Modal
+                visible={showLocationDropdown}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={handleCloseLocationModal}
+              >
+                <TouchableOpacity
+                  style={styles.modalOverlay}
+                  activeOpacity={1}
+                  onPress={handleCloseLocationModal}
+                >
+                  <TouchableOpacity
+                    style={styles.modalContent}
+                    activeOpacity={1}
+                    onPress={() => {}} // Prevent closing when tapping inside modal
+                  >
+                    <View style={styles.modalHeader}>
+                      <Text style={styles.modalTitle}>
+                        Select Location of Service
                       </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
+                      <TouchableOpacity onPress={handleCloseLocationModal}>
+                        <Ionicons name="close" size={24} color="#6b7280" />
+                      </TouchableOpacity>
+                    </View>
+                    <TextInput
+                      style={styles.modalSearchInput}
+                      placeholder="Search locations..."
+                      value={locationSearchQuery}
+                      onChangeText={setLocationSearchQuery}
+                      autoFocus={true}
+                    />
+                    <ScrollView style={styles.modalScrollView}>
+                      <Text style={styles.debugText}>
+                        Location options: {filteredLocationOptions.length} of{" "}
+                        {locationOfServiceOptions.length}
+                      </Text>
+                      {filteredLocationOptions.length > 0 ? (
+                        filteredLocationOptions.map((option) => (
+                          <TouchableOpacity
+                            key={option.value}
+                            style={styles.modalOption}
+                            onPress={() => {
+                              setFormData((prev) => ({
+                                ...prev,
+                                locationOfService: option.value,
+                              }));
+                              handleCloseLocationModal();
+                            }}
+                          >
+                            <Text style={styles.modalOptionText}>
+                              {option.label}
+                            </Text>
+                          </TouchableOpacity>
+                        ))
+                      ) : (
+                        <Text style={styles.noResultsText}>
+                          No location options available.
+                        </Text>
+                      )}
+                    </ScrollView>
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              </Modal>
             </View>
             {!formData.locationOfService && (
               <Text style={styles.errorText}>
@@ -744,7 +987,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
         {/* ICD Code */}
         <Card style={styles.card}>
           <Card.Content>
-            <Text style={styles.sectionTitle}>ICD Code (Optional)</Text>
+            <Text style={styles.sectionTitle}>ICD Code</Text>
             {selectedIcdCode ? (
               <View style={styles.selectedItem}>
                 <Text style={styles.selectedItemText}>
@@ -757,11 +1000,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
             ) : (
               <TouchableOpacity
                 style={styles.addCodeButton}
-                onPress={() =>
-                  navigation.navigate("ICDCodeSearch", {
-                    onSelect: handleSelectIcdCode,
-                  })
-                }
+                onPress={() => setShowIcdCodeModal(true)}
               >
                 <Ionicons name="add" size={20} color="#2563eb" />
                 <Text style={styles.addCodeButtonText}>Add ICD Code</Text>
@@ -793,35 +1032,166 @@ const ServiceFormScreen = ({ navigation }: any) => {
                 </TouchableOpacity>
               </View>
             ) : (
-              <>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Search referring physicians..."
-                  value={referringPhysicianSearchQuery}
-                  onChangeText={setReferringPhysicianSearchQuery}
-                />
-                {isSearchingReferringPhysician && (
-                  <ActivityIndicator size="small" color="#2563eb" />
-                )}
-                {referringPhysicianSearchResults.map((physician) => (
-                  <TouchableOpacity
-                    key={physician.id}
-                    style={styles.searchResult}
-                    onPress={() => handleSelectReferringPhysician(physician)}
-                  >
-                    <Text style={styles.searchResultText}>
-                      {physician.name} - {physician.specialty} ({physician.code}
-                      )
-                    </Text>
-                    <Text style={styles.searchResultSubtext}>
-                      {physician.location}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </>
+              <TouchableOpacity
+                style={styles.addCodeButton}
+                onPress={() => setShowReferringPhysicianModal(true)}
+              >
+                <Ionicons name="add" size={20} color="#2563eb" />
+                <Text style={styles.addCodeButtonText}>
+                  Add Referring Physician
+                </Text>
+              </TouchableOpacity>
             )}
           </Card.Content>
         </Card>
+
+        {/* Referring Physician Modal */}
+        <Modal
+          visible={showReferringPhysicianModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={handleCloseReferringPhysicianModal}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={handleCloseReferringPhysicianModal}
+          >
+            <TouchableOpacity
+              style={styles.modalContent}
+              activeOpacity={1}
+              onPress={() => {}} // Prevent closing when tapping inside modal
+            >
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>
+                  Select Referring Physician
+                </Text>
+                <TouchableOpacity onPress={handleCloseReferringPhysicianModal}>
+                  <Ionicons name="close" size={24} color="#6b7280" />
+                </TouchableOpacity>
+              </View>
+              <TextInput
+                style={styles.modalSearchInput}
+                placeholder="Search referring physicians..."
+                value={referringPhysicianSearchQuery}
+                onChangeText={setReferringPhysicianSearchQuery}
+                autoFocus={true}
+              />
+              <ScrollView style={styles.modalScrollView}>
+                {isSearchingReferringPhysician ? (
+                  <ActivityIndicator
+                    size="small"
+                    color="#2563eb"
+                    style={styles.modalLoading}
+                  />
+                ) : (
+                  <>
+                    <Text style={styles.debugText}>
+                      Results: {referringPhysicianSearchResults.length}
+                    </Text>
+                    {referringPhysicianSearchResults.length > 0 ? (
+                      referringPhysicianSearchResults.map((physician) => (
+                        <TouchableOpacity
+                          key={physician.id}
+                          style={styles.modalOption}
+                          onPress={() => {
+                            handleSelectReferringPhysician(physician);
+                            handleCloseReferringPhysicianModal();
+                          }}
+                        >
+                          <Text style={styles.modalOptionText}>
+                            {physician.name} - {physician.specialty} (
+                            {physician.code})
+                          </Text>
+                          <Text style={styles.modalOptionSubtext}>
+                            {physician.location}
+                          </Text>
+                        </TouchableOpacity>
+                      ))
+                    ) : (
+                      <Text style={styles.noResultsText}>
+                        {referringPhysicianSearchQuery.trim()
+                          ? "No referring physicians found. Try a different search term."
+                          : "Start typing to search for referring physicians."}
+                      </Text>
+                    )}
+                  </>
+                )}
+              </ScrollView>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
+
+        {/* ICD Code Modal */}
+        <Modal
+          visible={showIcdCodeModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={handleCloseIcdCodeModal}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={handleCloseIcdCodeModal}
+          >
+            <TouchableOpacity
+              style={styles.modalContent}
+              activeOpacity={1}
+              onPress={() => {}} // Prevent closing when tapping inside modal
+            >
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Select ICD Code</Text>
+                <TouchableOpacity onPress={handleCloseIcdCodeModal}>
+                  <Ionicons name="close" size={24} color="#6b7280" />
+                </TouchableOpacity>
+              </View>
+              <TextInput
+                style={styles.modalSearchInput}
+                placeholder="Search ICD codes..."
+                value={icdCodeSearchQuery}
+                onChangeText={setIcdCodeSearchQuery}
+                autoFocus={true}
+              />
+              <ScrollView style={styles.modalScrollView}>
+                {isSearchingIcdCode ? (
+                  <ActivityIndicator
+                    size="small"
+                    color="#2563eb"
+                    style={styles.modalLoading}
+                  />
+                ) : (
+                  <>
+                    <Text style={styles.debugText}>
+                      Results: {icdCodeSearchResults.length}
+                    </Text>
+                    {icdCodeSearchResults.length > 0 ? (
+                      icdCodeSearchResults.map((icdCode) => (
+                        <TouchableOpacity
+                          key={icdCode.id}
+                          style={styles.modalOption}
+                          onPress={() => {
+                            handleSelectIcdCode(icdCode);
+                            handleCloseIcdCodeModal();
+                          }}
+                        >
+                          <Text style={styles.modalOptionText}>
+                            {icdCode.code} - {icdCode.description}
+                          </Text>
+                        </TouchableOpacity>
+                      ))
+                    ) : (
+                      <Text style={styles.noResultsText}>
+                        {icdCodeSearchQuery.trim()
+                          ? "No ICD codes found. Try a different search term."
+                          : "Start typing to search for ICD codes."}
+                      </Text>
+                    )}
+                  </>
+                )}
+              </ScrollView>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
 
         {/* Health Institution - Commented out */}
         {/* <Card style={styles.card}>
@@ -1024,34 +1394,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   dropdownContainer: {
-    position: "relative",
     marginTop: 8,
-  },
-  dropdown: {
-    position: "absolute",
-    top: "100%",
-    left: 0,
-    right: 0,
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 8,
-    maxHeight: 200,
-    zIndex: 1000,
-    elevation: 5,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  dropdownOption: {
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
-  },
-  dropdownOptionText: {
-    fontSize: 16,
-    color: "#374151",
   },
   newPatientForm: {
     marginTop: 8,
@@ -1189,6 +1532,84 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  modalContent: {
+    width: "90%",
+    maxHeight: "80%",
+    backgroundColor: "#ffffff",
+    borderRadius: 10,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+    justifyContent: "flex-start",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    width: "100%",
+    marginBottom: 15,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#1e293b",
+  },
+  modalSearchInput: {
+    width: "100%",
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    backgroundColor: "#f3f4f6",
+    marginBottom: 15,
+  },
+  modalScrollView: {
+    width: "100%",
+    flex: 1,
+    minHeight: 200,
+  },
+  modalOption: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3f4f6",
+    backgroundColor: "#ffffff",
+  },
+  modalOptionText: {
+    fontSize: 16,
+    color: "#374151",
+    fontWeight: "500",
+  },
+  modalOptionSubtext: {
+    fontSize: 12,
+    color: "#6b7280",
+    marginTop: 4,
+  },
+  modalLoading: {
+    marginTop: 10,
+  },
+  debugText: {
+    fontSize: 12,
+    color: "#4b5563",
+    marginBottom: 10,
+    textAlign: "center",
+  },
+  noResultsText: {
+    fontSize: 16,
+    color: "#6b7280",
+    textAlign: "center",
+    marginTop: 20,
+    fontStyle: "italic",
   },
 });
 

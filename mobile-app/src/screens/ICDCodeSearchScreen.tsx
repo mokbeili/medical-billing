@@ -32,12 +32,6 @@ const ICDCodeSearchScreen = ({ navigation }: any) => {
     enabled: searchQuery.length > 0,
   });
 
-  // Debug logging
-  console.log("ICD Search Screen - Query:", searchQuery);
-  console.log("ICD Search Screen - Loading:", isLoading);
-  console.log("ICD Search Screen - Error:", error);
-  console.log("ICD Search Screen - Results:", icdCodes?.length || 0);
-
   const handleSelectCode = (code: ICDCode) => {
     onSelect(code);
     navigation.goBack();

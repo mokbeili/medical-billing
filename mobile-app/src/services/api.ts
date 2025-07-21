@@ -195,7 +195,9 @@ export const servicesAPI = {
   },
 
   create: async (data: ServiceFormData): Promise<Service> => {
+    console.log("Sending service creation request:", data);
     const response = await api.post("/api/services", data);
+    console.log("Service creation response:", response.data);
     return response.data;
   },
 

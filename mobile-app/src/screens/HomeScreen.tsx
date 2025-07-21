@@ -1,7 +1,6 @@
 import { useNavigation } from "@react-navigation/native";
 import React from "react";
 import {
-  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,34 +8,13 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { authAPI } from "../services/api";
 
 const HomeScreen = () => {
   const navigation = useNavigation();
 
-  const handleStartSearching = () => {
-    console.log("Start Searching pressed");
-    navigation.navigate("Main" as never);
-  };
-
   const handleSignIn = () => {
     console.log("Sign In pressed");
     navigation.navigate("SignIn" as never);
-  };
-
-  const testAPIConnection = async () => {
-    try {
-      console.log("Testing API connection...");
-      const session = await authAPI.getSession();
-      console.log("API connection successful:", session);
-      Alert.alert("Success", "API connection is working!");
-    } catch (error: any) {
-      console.error("API connection failed:", error);
-      Alert.alert(
-        "Connection Failed",
-        "Cannot connect to the API. Please make sure your Next.js backend is running on http://172.16.1.172:3000"
-      );
-    }
   };
 
   return (
@@ -74,24 +52,10 @@ const HomeScreen = () => {
 
           <View style={styles.buttonContainer}>
             <TouchableOpacity
-              style={styles.primaryButton}
-              onPress={handleStartSearching}
-            >
-              <Text style={styles.primaryButtonText}>Start Searching</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
               style={styles.secondaryButton}
               onPress={handleSignIn}
             >
               <Text style={styles.secondaryButtonText}>Sign In</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.testButton}
-              onPress={testAPIConnection}
-            >
-              <Text style={styles.testButtonText}>Test API Connection</Text>
             </TouchableOpacity>
           </View>
 
