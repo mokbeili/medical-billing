@@ -76,6 +76,12 @@ export interface BillingCode {
   };
   billing_record_type: number;
   referring_practitioner_required: string | null;
+  fee_determinant: string;
+  multiple_unit_indicator: string | null;
+  max_units: number | null;
+  start_time_required: string | null;
+  stop_time_required: string | null;
+  day_range: number | null;
 }
 
 export interface AIPrompt {

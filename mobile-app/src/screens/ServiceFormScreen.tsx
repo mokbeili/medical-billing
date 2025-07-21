@@ -568,29 +568,37 @@ const ServiceFormScreen = ({ navigation }: any) => {
     createPatientMutation.mutate(patientDataWithPhysician);
   };
 
-  const handleAddCode = (code: BillingCode) => {
-    if (selectedCodes.some((c) => c.id === code.id)) {
-      Alert.alert("Error", "This code is already added");
+  const handleAddCodes = (codes: BillingCode[], subSelections?: any[]) => {
+    // Filter out codes that are already selected
+    const newCodes = codes.filter(
+      (code) => !selectedCodes.some((c) => c.id === code.id)
+    );
+
+    if (newCodes.length === 0) {
+      Alert.alert("Info", "All selected codes are already added");
       return;
     }
 
-    setSelectedCodes([...selectedCodes, code]);
+    setSelectedCodes([...selectedCodes, ...newCodes]);
     setFormData((prev) => ({
       ...prev,
       billingCodes: [
         ...prev.billingCodes,
-        {
-          codeId: code.id,
-          status: "PENDING",
-          billing_record_type: code.billing_record_type,
-          serviceStartTime: null,
-          serviceEndTime: null,
-          numberOfUnits: 1, // Default to 1 unit
-          bilateralIndicator: null,
-          specialCircumstances: null,
-          serviceDate: null,
-          serviceEndDate: null,
-        },
+        ...newCodes.map((code) => {
+          const subSelection = subSelections?.find((s) => s.codeId === code.id);
+          return {
+            codeId: code.id,
+            status: "PENDING",
+            billing_record_type: code.billing_record_type,
+            serviceStartTime: subSelection?.serviceStartTime || null,
+            serviceEndTime: subSelection?.serviceEndTime || null,
+            numberOfUnits: subSelection?.numberOfUnits || 1,
+            bilateralIndicator: subSelection?.bilateralIndicator || null,
+            specialCircumstances: subSelection?.specialCircumstances || null,
+            serviceDate: subSelection?.serviceDate || null,
+            serviceEndDate: subSelection?.serviceEndDate || null,
+          };
+        }),
       ],
     }));
   };
@@ -1761,7 +1769,8 @@ const ServiceFormScreen = ({ navigation }: any) => {
               style={styles.addCodeButton}
               onPress={() =>
                 navigation.navigate("BillingCodeSearch", {
-                  onSelect: handleAddCode,
+                  onSelect: handleAddCodes,
+                  existingCodes: selectedCodes,
                 })
               }
             >
