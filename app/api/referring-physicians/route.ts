@@ -1,10 +1,33 @@
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
+    // Check for mobile app authentication first
+    const userHeader = request.headers.get("x-user");
+    let user = null;
+
+    if (userHeader) {
+      try {
+        user = JSON.parse(userHeader);
+      } catch (error) {
+        console.error("Error parsing user header:", error);
+      }
+    }
+
+    // If no mobile user, try NextAuth session
+    if (!user) {
+      const session = await getServerSession(authOptions);
+      if (!session?.user) {
+        return new NextResponse("Unauthorized", { status: 401 });
+      }
+      user = session.user;
+    }
+
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search");
 
@@ -38,7 +61,6 @@ export async function GET(request: Request) {
     `;
 
     const results = await prisma.$queryRawUnsafe(searchQuery, search);
-
     return NextResponse.json(results);
   } catch (error) {
     console.error("Error fetching referring physicians:", error);

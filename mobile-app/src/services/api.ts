@@ -253,7 +253,7 @@ export const icdCodesAPI = {
 export const referringPhysiciansAPI = {
   search: async (query: string): Promise<ReferringPhysician[]> => {
     const response = await api.get(
-      `/api/referring-physicians?query=${encodeURIComponent(query)}`
+      `/api/referring-physicians?search=${encodeURIComponent(query)}`
     );
     return response.data;
   },

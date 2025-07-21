@@ -51,6 +51,10 @@ const NewServiceScreen = ({ navigation }: any) => {
     useState(false);
   const [selectedReferringPhysician, setSelectedReferringPhysician] =
     useState<ReferringPhysician | null>(null);
+  const [
+    debouncedReferringPhysicianQuery,
+    setDebouncedReferringPhysicianQuery,
+  ] = useState("");
   const [isCreatingPatient, setIsCreatingPatient] = useState(false);
   const [newPatient, setNewPatient] = useState({
     firstName: "",
@@ -133,26 +137,42 @@ const NewServiceScreen = ({ navigation }: any) => {
     }
   }, [patients, patientSearchQuery]);
 
-  // Search referring physicians
-  const searchReferringPhysicians = async () => {
-    if (!referringPhysicianSearchQuery.trim()) {
-      setReferringPhysicianSearchResults([]);
-      return;
-    }
+  // Debounce referring physician search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedReferringPhysicianQuery(referringPhysicianSearchQuery);
+    }, 300);
 
-    setIsSearchingReferringPhysician(true);
-    try {
-      const results = await referringPhysiciansAPI.search(
-        referringPhysicianSearchQuery
-      );
-      setReferringPhysicianSearchResults(results);
-    } catch (error) {
-      console.error("Error searching referring physicians:", error);
-      Alert.alert("Error", "Failed to search referring physicians");
-    } finally {
-      setIsSearchingReferringPhysician(false);
-    }
-  };
+    return () => clearTimeout(timer);
+  }, [referringPhysicianSearchQuery]);
+
+  // Search referring physicians with debounced query
+  useEffect(() => {
+    const searchReferringPhysicians = async () => {
+      if (
+        !debouncedReferringPhysicianQuery.trim() ||
+        debouncedReferringPhysicianQuery.length < 2
+      ) {
+        setReferringPhysicianSearchResults([]);
+        return;
+      }
+
+      setIsSearchingReferringPhysician(true);
+      try {
+        const results = await referringPhysiciansAPI.search(
+          debouncedReferringPhysicianQuery
+        );
+        setReferringPhysicianSearchResults(results);
+      } catch (error) {
+        console.error("Error searching referring physicians:", error);
+        Alert.alert("Error", "Failed to search referring physicians");
+      } finally {
+        setIsSearchingReferringPhysician(false);
+      }
+    };
+
+    searchReferringPhysicians();
+  }, [debouncedReferringPhysicianQuery]);
 
   // Create patient mutation
   const createPatientMutation = useMutation({
@@ -648,10 +668,16 @@ const NewServiceScreen = ({ navigation }: any) => {
             </Text>
             {selectedReferringPhysician ? (
               <View style={styles.selectedItem}>
-                <Text style={styles.selectedItemText}>
-                  {selectedReferringPhysician.name} (
-                  {selectedReferringPhysician.code})
-                </Text>
+                <View style={styles.selectedItemContent}>
+                  <Text style={styles.selectedItemText}>
+                    {selectedReferringPhysician.name} -{" "}
+                    {selectedReferringPhysician.specialty} (
+                    {selectedReferringPhysician.code})
+                  </Text>
+                  <Text style={styles.selectedItemSubtext}>
+                    {selectedReferringPhysician.location}
+                  </Text>
+                </View>
                 <TouchableOpacity onPress={handleRemoveReferringPhysician}>
                   <Ionicons name="close-circle" size={20} color="#ef4444" />
                 </TouchableOpacity>
@@ -663,7 +689,6 @@ const NewServiceScreen = ({ navigation }: any) => {
                   placeholder="Search referring physicians..."
                   value={referringPhysicianSearchQuery}
                   onChangeText={setReferringPhysicianSearchQuery}
-                  onSubmitEditing={searchReferringPhysicians}
                 />
                 {isSearchingReferringPhysician && (
                   <ActivityIndicator size="small" color="#2563eb" />
@@ -675,7 +700,11 @@ const NewServiceScreen = ({ navigation }: any) => {
                     onPress={() => handleSelectReferringPhysician(physician)}
                   >
                     <Text style={styles.searchResultText}>
-                      {physician.name} ({physician.code})
+                      {physician.name} - {physician.specialty} ({physician.code}
+                      )
+                    </Text>
+                    <Text style={styles.searchResultSubtext}>
+                      {physician.location}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -918,6 +947,12 @@ const styles = StyleSheet.create({
   searchResultText: {
     fontSize: 14,
     color: "#374151",
+    fontWeight: "500",
+  },
+  searchResultSubtext: {
+    fontSize: 12,
+    color: "#6b7280",
+    marginTop: 2,
   },
   selectedItem: {
     flexDirection: "row",
@@ -929,10 +964,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#93c5fd",
   },
+  selectedItemContent: {
+    flex: 1,
+  },
   selectedItemText: {
     fontSize: 14,
     color: "#1e40af",
-    flex: 1,
+    fontWeight: "500",
+  },
+  selectedItemSubtext: {
+    fontSize: 12,
+    color: "#6b7280",
+    marginTop: 2,
   },
   selectedCode: {
     flexDirection: "row",
