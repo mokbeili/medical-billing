@@ -25,6 +25,7 @@ import { Service } from "../types";
 const ServicesScreen = ({ navigation }: any) => {
   const [filteredServices, setFilteredServices] = useState<Service[]>([]);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [filters, setFilters] = useState({
     patientName: "",
     billingNumber: "",
@@ -32,7 +33,6 @@ const ServicesScreen = ({ navigation }: any) => {
     serviceDate: "",
     code: "",
     section: "",
-    includeClaimed: false,
   });
 
   const {
@@ -50,10 +50,8 @@ const ServicesScreen = ({ navigation }: any) => {
     if (services) {
       let filtered = [...services];
 
-      // Filter out services with claims by default unless includeClaimed is true
-      if (!filters.includeClaimed) {
-        filtered = filtered.filter((service) => service.claimId === null);
-      }
+      // Filter out services with claims by default
+      filtered = filtered.filter((service) => service.claimId === null);
 
       // Filter out services without patient data
       filtered = filtered.filter((service) => service.patient != null);
@@ -308,45 +306,53 @@ const ServicesScreen = ({ navigation }: any) => {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.filters}>
-        <TextInput
-          style={styles.filterInput}
-          placeholder="Patient Name"
-          value={filters.patientName}
-          onChangeText={(text) => setFilters({ ...filters, patientName: text })}
-        />
-        <TextInput
-          style={styles.filterInput}
-          placeholder="Billing Number"
-          value={filters.billingNumber}
-          onChangeText={(text) =>
-            setFilters({ ...filters, billingNumber: text })
-          }
-        />
-        <TextInput
-          style={styles.filterInput}
-          placeholder="Service Date (YYYY-MM-DD)"
-          value={filters.serviceDate}
-          onChangeText={(text) => setFilters({ ...filters, serviceDate: text })}
-        />
-        <TextInput
-          style={styles.filterInput}
-          placeholder="Code"
-          value={filters.code}
-          onChangeText={(text) => setFilters({ ...filters, code: text })}
-        />
-        <View style={styles.checkboxContainer}>
-          <Checkbox
-            status={filters.includeClaimed ? "checked" : "unchecked"}
-            onPress={() =>
-              setFilters({
-                ...filters,
-                includeClaimed: !filters.includeClaimed,
-              })
-            }
+      <View style={styles.filtersContainer}>
+        <TouchableOpacity
+          style={styles.filtersHeader}
+          onPress={() => setFiltersExpanded(!filtersExpanded)}
+        >
+          <Text style={styles.filtersTitle}>Filters</Text>
+          <Ionicons
+            name={filtersExpanded ? "chevron-up" : "chevron-down"}
+            size={20}
+            color="#64748b"
           />
-          <Text style={styles.checkboxLabel}>Include Claimed Services</Text>
-        </View>
+        </TouchableOpacity>
+
+        {filtersExpanded && (
+          <View style={styles.filters}>
+            <TextInput
+              style={styles.filterInput}
+              placeholder="Patient Name"
+              value={filters.patientName}
+              onChangeText={(text) =>
+                setFilters({ ...filters, patientName: text })
+              }
+            />
+            <TextInput
+              style={styles.filterInput}
+              placeholder="Billing Number"
+              value={filters.billingNumber}
+              onChangeText={(text) =>
+                setFilters({ ...filters, billingNumber: text })
+              }
+            />
+            <TextInput
+              style={styles.filterInput}
+              placeholder="Service Date (YYYY-MM-DD)"
+              value={filters.serviceDate}
+              onChangeText={(text) =>
+                setFilters({ ...filters, serviceDate: text })
+              }
+            />
+            <TextInput
+              style={styles.filterInput}
+              placeholder="Code"
+              value={filters.code}
+              onChangeText={(text) => setFilters({ ...filters, code: text })}
+            />
+          </View>
+        )}
       </View>
 
       {selectedServices.length > 0 && (
@@ -424,11 +430,25 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 8,
   },
-  filters: {
+  filtersContainer: {
     padding: 16,
     backgroundColor: "#ffffff",
     borderBottomWidth: 1,
     borderBottomColor: "#e2e8f0",
+  },
+  filtersHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingBottom: 12,
+  },
+  filtersTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#1e293b",
+  },
+  filters: {
+    paddingTop: 12,
   },
   filterInput: {
     borderWidth: 1,
@@ -438,16 +458,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     fontSize: 16,
   },
-  checkboxContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 8,
-  },
-  checkboxLabel: {
-    marginLeft: 8,
-    fontSize: 16,
-    color: "#374151",
-  },
+
   actionBar: {
     flexDirection: "row",
     justifyContent: "space-between",
