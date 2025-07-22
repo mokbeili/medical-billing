@@ -66,29 +66,53 @@ const BillingCodeSearchScreen = ({ navigation }: any) => {
       setCodeSubSelections((prev) => prev.filter((s) => s.codeId !== code.id));
     } else {
       setSelectedCodes([...selectedCodes, code]);
-      // Initialize sub-selections for this code
-      const existingSubSelection = codeSubSelections.find(
-        (s) => s.codeId === code.id
-      );
-      if (!existingSubSelection) {
-        const calculatedDates = calculateServiceDates(code);
-        setCodeSubSelections((prev) => [
-          ...prev,
-          {
-            codeId: code.id,
-            serviceDate: calculatedDates.serviceDate,
-            serviceEndDate: calculatedDates.serviceEndDate,
-            bilateralIndicator: null,
-            serviceStartTime: null,
-            serviceEndTime: null,
-            numberOfUnits: 1,
-            specialCircumstances: null,
-          },
-        ]);
+
+      // Check if the code requires extra selections
+      if (requiresExtraSelections(code)) {
+        // Initialize sub-selections for this code
+        const existingSubSelection = codeSubSelections.find(
+          (s) => s.codeId === code.id
+        );
+        if (!existingSubSelection) {
+          const calculatedDates = calculateServiceDates(code);
+          setCodeSubSelections((prev) => [
+            ...prev,
+            {
+              codeId: code.id,
+              serviceDate: calculatedDates.serviceDate,
+              serviceEndDate: calculatedDates.serviceEndDate,
+              bilateralIndicator: null,
+              serviceStartTime: null,
+              serviceEndTime: null,
+              numberOfUnits: 1,
+              specialCircumstances: null,
+            },
+          ]);
+        }
+        // Show sub-selection modal
+        setCurrentCodeForSubSelection(code);
+        setShowSubSelectionModal(true);
+      } else {
+        // For codes that don't require extra selections, add default sub-selection
+        const existingSubSelection = codeSubSelections.find(
+          (s) => s.codeId === code.id
+        );
+        if (!existingSubSelection) {
+          setCodeSubSelections((prev) => [
+            ...prev,
+            {
+              codeId: code.id,
+              serviceDate: null,
+              serviceEndDate: null,
+              bilateralIndicator: null,
+              serviceStartTime: null,
+              serviceEndTime: null,
+              numberOfUnits: 1,
+              specialCircumstances: null,
+            },
+          ]);
+        }
       }
-      // Show sub-selection modal
-      setCurrentCodeForSubSelection(code);
-      setShowSubSelectionModal(true);
     }
   };
 
@@ -126,6 +150,41 @@ const BillingCodeSearchScreen = ({ navigation }: any) => {
     return code.section.code === "H";
   };
 
+  // Function to check if a code requires any extra selections
+  const requiresExtraSelections = (code: BillingCode): boolean => {
+    // Check if it's a type 57 code (requires service dates)
+    if (isType57Code(code)) {
+      return true;
+    }
+
+    // Check if multiple units are required
+    if (code.multiple_unit_indicator === "U") {
+      return true;
+    }
+
+    // Check if start/stop time is required
+    if (code.start_time_required === "Y" || code.stop_time_required === "Y") {
+      return true;
+    }
+
+    // Check if bilateral indicator is required (has "Bilateral" in title)
+    if (code.title.includes("Bilateral")) {
+      return true;
+    }
+
+    // Check if special circumstances are required (W/X sections)
+    if (isWorXSection(code)) {
+      return true;
+    }
+
+    // Check if special circumstances are required (H section)
+    if (isHSection(code)) {
+      return true;
+    }
+
+    return false;
+  };
+
   // Function to calculate service dates for type 57 codes
   const calculateServiceDates = (
     code: BillingCode
@@ -135,24 +194,28 @@ const BillingCodeSearchScreen = ({ navigation }: any) => {
     }
 
     // Check if this code has previous codes defined and if any of them are already selected
-    console.log(code.previousCodes);
     if (code.previousCodes && code.previousCodes.length > 0) {
       // Find if any of the previous codes are already in the existing codes
-      const selectedPreviousCodes = existingCodes.filter((existingCode) =>
+      const selectedPreviousCodes = selectedCodes.filter((existingCode) =>
         code.previousCodes?.some(
-          (prevCode) => prevCode.previousCode.id === existingCode.id
+          (prevCode) => prevCode.previous_code.id === existingCode.id
         )
       );
 
       if (selectedPreviousCodes.length > 0) {
         // For now, we'll use the service date as the start date
         // In a more complex implementation, we'd track the end dates of previous codes
-        let serviceStartDate = serviceDate;
+        let serviceStartDate =
+          codeSubSelections.find(
+            (s) => s.codeId === selectedPreviousCodes[0].id
+          )?.serviceEndDate || "";
 
         // Calculate service end date based on day range
         let serviceEndDate = null;
         if (code.day_range && code.day_range > 0) {
-          const startDate = new Date(serviceStartDate);
+          const startDate = new Date(serviceStartDate || "");
+          startDate.setDate(startDate.getDate() + 1);
+          serviceStartDate = startDate.toISOString().split("T")[0];
           startDate.setDate(startDate.getDate() + code.day_range - 1); // -1 because it's inclusive
           serviceEndDate = startDate.toISOString().split("T")[0];
         }
@@ -587,9 +650,10 @@ const BillingCodeSearchScreen = ({ navigation }: any) => {
 
             <View style={styles.modalButtonContainer}>
               <Button
-                mode="outlined"
+                mode="contained"
                 onPress={() => setShowSubSelectionModal(false)}
                 style={styles.modalButton}
+                labelStyle={styles.modalButtonLabel}
               >
                 Done
               </Button>
@@ -1033,6 +1097,11 @@ const styles = StyleSheet.create({
   },
   modalButton: {
     backgroundColor: "#2563eb",
+  },
+  modalButtonLabel: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "600",
   },
   readOnlyInput: {
     backgroundColor: "#f3f4f6",

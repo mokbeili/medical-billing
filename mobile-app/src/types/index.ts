@@ -96,7 +96,7 @@ export interface BillingCode {
   stop_time_required: string | null;
   day_range: number | null;
   previousCodes?: Array<{
-    previousCode: {
+    previous_code: {
       id: number;
       code: string;
       title: string;
