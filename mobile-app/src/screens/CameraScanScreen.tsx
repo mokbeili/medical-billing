@@ -104,14 +104,10 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
       if (!textractService.configured) {
         Alert.alert(
           "AWS Textract Not Configured",
-          "Please configure AWS Textract credentials to use the OCR feature.",
+          "Please configure AWS Textract credentials using environment variables. See the documentation for setup instructions.",
           [
             {
-              text: "Configure AWS",
-              onPress: () => navigation.navigate("AWSConfig"),
-            },
-            {
-              text: "Cancel",
+              text: "OK",
               style: "cancel",
             },
           ]
@@ -130,14 +126,10 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
       console.error("AWS Textract error:", error);
       Alert.alert(
         "AWS Textract Error",
-        "Failed to process image with AWS Textract. Please check your configuration and try again.",
+        "Failed to process image with AWS Textract. Please check your environment configuration and try again.",
         [
           {
-            text: "Configure AWS",
-            onPress: () => navigation.navigate("AWSConfig"),
-          },
-          {
-            text: "Try Again",
+            text: "OK",
             style: "cancel",
           },
         ]
@@ -193,10 +185,6 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
     setScannedData(null);
   };
 
-  const handleConfigureAWS = () => {
-    navigation.navigate("AWSConfig");
-  };
-
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -221,15 +209,6 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
                 <Ionicons name="cloud" size={20} color="#059669" />
                 <Text style={styles.ocrStatusText}>AWS Textract</Text>
               </View>
-
-              {!textractService.configured && (
-                <TouchableOpacity
-                  style={styles.configureButton}
-                  onPress={handleConfigureAWS}
-                >
-                  <Text style={styles.configureButtonText}>Configure AWS</Text>
-                </TouchableOpacity>
-              )}
             </View>
           </Card.Content>
         </Card>
@@ -402,17 +381,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "500",
     color: "#374151",
-  },
-  configureButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: "#2563eb",
-    borderRadius: 6,
-  },
-  configureButtonText: {
-    fontSize: 12,
-    color: "#ffffff",
-    fontWeight: "500",
   },
   image: {
     width: "100%",

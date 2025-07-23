@@ -1,4 +1,3 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import CryptoJS from "crypto-js";
 import * as Constants from "expo-constants";
 import { Platform } from "react-native";
@@ -26,60 +25,42 @@ export class AWSTextractService {
   private isConfigured: boolean = false;
 
   constructor() {
-    // Try to load configuration from environment variables first, then AsyncStorage
+    // Load configuration from environment variables
     this.loadConfiguration();
   }
 
-  // Load configuration from environment variables or AsyncStorage
-  private async loadConfiguration() {
+  // Load configuration from environment variables
+  private loadConfiguration() {
     try {
-      // First, try to load from environment variables
-      const envConfig = (Constants as any).expoConfig?.extra;
+      // Try different ways to access the configuration
+      let envConfig;
+
+      // Method 1: Try Constants.expoConfig
+      if ((Constants as any).expoConfig?.extra) {
+        envConfig = (Constants as any).expoConfig.extra;
+      }
+      // Method 2: Try Constants.manifest
+      else if ((Constants as any).manifest?.extra) {
+        envConfig = (Constants as any).manifest.extra;
+      }
+      // Method 3: Try Constants.default
+      else if ((Constants as any).default?.expoConfig?.extra) {
+        envConfig = (Constants as any).default.expoConfig.extra;
+      }
 
       if (
         envConfig?.awsConfigured &&
         envConfig?.awsAccessKeyId &&
         envConfig?.awsSecretAccessKey
       ) {
-        // Use environment variables
         this.accessKeyId = envConfig.awsAccessKeyId;
         this.secretAccessKey = envConfig.awsSecretAccessKey;
         this.region = envConfig.awsRegion || "us-east-1";
         this.isConfigured = true;
-        console.log("AWS Textract configured from environment variables");
-        return;
-      }
-
-      // Fallback to AsyncStorage if environment variables are not set
-      const accessKeyId = await AsyncStorage.getItem("aws_access_key_id");
-      const secretAccessKey = await AsyncStorage.getItem(
-        "aws_secret_access_key"
-      );
-      const region = await AsyncStorage.getItem("aws_region");
-      const configured = await AsyncStorage.getItem("aws_configured");
-
-      if (accessKeyId && secretAccessKey && configured === "true") {
-        this.accessKeyId = accessKeyId;
-        this.secretAccessKey = secretAccessKey;
-        this.region = region || "us-east-1";
-        this.isConfigured = true;
-        console.log("AWS Textract configured from AsyncStorage");
       }
     } catch (error) {
       console.error("Error loading AWS configuration:", error);
     }
-  }
-
-  // Configure AWS credentials
-  configure(credentials: {
-    accessKeyId: string;
-    secretAccessKey: string;
-    region?: string;
-  }) {
-    this.accessKeyId = credentials.accessKeyId;
-    this.secretAccessKey = credentials.secretAccessKey;
-    this.region = credentials.region || "us-east-1";
-    this.isConfigured = true;
   }
 
   // Convert image to base64 for AWS Textract
@@ -232,7 +213,6 @@ export class AWSTextractService {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error("AWS Textract API error:", errorText);
 
         if (response.status === 403) {
           throw new Error(
@@ -282,8 +262,6 @@ export class AWSTextractService {
         blocks: result.Blocks,
       };
     } catch (error) {
-      console.error("AWS Textract error:", error);
-
       if (error instanceof Error) {
         if (error.message.includes("InvalidSignatureException")) {
           throw new Error(
@@ -329,14 +307,26 @@ export class AWSTextractService {
         }
       }
 
-      // Find date of birth and gender (format: DD-MMM-YYYY AGE GENDER)
+      // If we didn't find the name after MRN, look for it in the format "LASTNAME, FIRSTNAME" anywhere
+      if (!firstName || !lastName) {
+        for (const line of lines) {
+          const nameMatch = line.match(/^([^,]+),\s*([^,\s]+)$/);
+          if (nameMatch) {
+            lastName = nameMatch[1].trim();
+            firstName = nameMatch[2].trim();
+            break;
+          }
+        }
+      }
+
+      // Find date of birth and gender
       let dateOfBirth = "";
       let gender = "";
 
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         // Look for date pattern DD-MMM-YYYY
-        const dobMatch = line.match(/(\d{2})-([A-Z]{3})-(\d{4})/);
+        const dobMatch = line.match(/^(\d{2})-([A-Z]{3})-(\d{4})$/);
         if (dobMatch) {
           const day = dobMatch[1];
           const month = dobMatch[2];
@@ -363,12 +353,32 @@ export class AWSTextractService {
             dateOfBirth = `${year}-${monthNum}-${day}`;
           }
 
-          // Extract gender (M or F) from the same line
-          const genderMatch = line.match(/\b([MF])\b/);
-          if (genderMatch) {
-            gender = genderMatch[1];
+          // Look for gender on the next line or the same line
+          if (i + 1 < lines.length) {
+            const nextLine = lines[i + 1];
+            const genderMatch = nextLine.match(/^([MF])$/);
+            if (genderMatch) {
+              gender = genderMatch[1];
+            }
+          } else {
+            // Fallback: try to find gender on the same line
+            const genderMatch = line.match(/\b([MF])\b/);
+            if (genderMatch) {
+              gender = genderMatch[1];
+            }
           }
           break;
+        }
+      }
+
+      // If we still don't have gender, look for it anywhere
+      if (!gender) {
+        for (const line of lines) {
+          const genderMatch = line.match(/^([MF])$/);
+          if (genderMatch) {
+            gender = genderMatch[1];
+            break;
+          }
         }
       }
 
@@ -414,6 +424,7 @@ export class AWSTextractService {
         !dateOfBirth ||
         !gender
       ) {
+        console.log("Missing required fields, returning null");
         return null;
       }
 
@@ -426,7 +437,6 @@ export class AWSTextractService {
         serviceDate,
       };
     } catch (error) {
-      console.error("Error parsing patient data:", error);
       return null;
     }
   }

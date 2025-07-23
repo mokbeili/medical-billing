@@ -4,7 +4,7 @@ This document explains how to configure AWS Textract credentials using environme
 
 ## Overview
 
-The app now supports loading AWS Textract credentials from environment variables, with AsyncStorage as a fallback for user-configured credentials. This allows for easier deployment and configuration management.
+The app loads AWS Textract credentials from environment variables. This allows for easier deployment and configuration management without requiring manual setup in the app.
 
 ## Setup Instructions
 
@@ -40,20 +40,13 @@ The environment variables will be automatically loaded when you build and run th
 npm start
 ```
 
-## Configuration Priority
+## Configuration
 
-The app uses the following priority order for AWS credentials:
+The app loads AWS credentials from environment variables:
 
-1. **Environment Variables** (highest priority)
-
-   - Loaded from `.env` file
-   - Embedded in app bundle
-   - Used if both `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are set
-
-2. **AsyncStorage** (fallback)
-   - User-configured credentials via the app UI
-   - Stored locally on device
-   - Used if environment variables are not set
+- **Environment Variables**: Loaded from `.env` file
+- **Embedded in app bundle**: Credentials are included in the app build
+- **Required**: Both `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` must be set
 
 **Note**: The app requires AWS Textract to be configured to function. There is no mock OCR fallback.
 
@@ -65,11 +58,7 @@ The app uses the following priority order for AWS credentials:
 - **Cons**: Credentials embedded in app bundle (visible in decompiled app)
 - **Best for**: Development, testing, internal apps
 
-### AsyncStorage (User Configuration)
-
-- **Pros**: Credentials not in app bundle, user controls
-- **Cons**: Requires user setup, credentials stored on device
-- **Best for**: Production apps, user-controlled credentials
+**Note**: For production apps, consider using AWS Cognito Identity Pools, backend proxy, or AWS STS temporary credentials for better security.
 
 ## Production Recommendations
 
@@ -109,11 +98,11 @@ For production apps, consider these more secure approaches:
 3. Ensure Textract is available in the specified region
 4. Test credentials in AWS Console
 
-### App Still Using AsyncStorage
+### App Not Using Environment Variables
 
 1. Check that both `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are set
 2. Verify `.env` file is in the correct location
-3. Restart the app completely
+3. Restart the development server completely
 4. Check console logs for configuration messages
 
 ## Example Configuration
@@ -134,14 +123,13 @@ AWS_REGION=us-east-1
 API_BASE_URL=https://your-backend-api.com
 ```
 
-## Migration from AsyncStorage
+## Migration
 
-If you previously used AsyncStorage for credentials and want to switch to environment variables:
+If you previously used manual AWS configuration in the app:
 
 1. Set up environment variables as described above
-2. The app will automatically use environment variables if available
-3. User-configured AsyncStorage credentials will be ignored
-4. You can clear AsyncStorage credentials if desired
+2. The app will automatically use environment variables
+3. Manual configuration is no longer available
 
 ## File Structure
 
@@ -151,6 +139,6 @@ mobile-app/
 ├── .env.example           # Example environment file
 ├── app.config.js          # Expo configuration with env vars
 ├── src/utils/
-│   └── awsTextractService.ts  # Updated to use env vars
+│   └── awsTextractService.ts  # Uses environment variables
 └── ENVIRONMENT_VARIABLES.md   # This documentation
 ```

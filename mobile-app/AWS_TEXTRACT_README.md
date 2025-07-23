@@ -15,22 +15,21 @@ AWS Textract is Amazon's machine learning service that automatically extracts te
 - **Handwriting Recognition**: Can extract handwritten text
 - **Confidence Scores**: Provides confidence levels for extracted text
 
-### 2. Automatic Configuration
+### 2. Environment-Based Configuration
 
-- **Environment Variables**: Load AWS credentials from `.env` file (recommended for development)
-- **Credential Management**: Securely stores AWS credentials in AsyncStorage (fallback)
+- **Environment Variables**: Load AWS credentials from `.env` file
 - **Auto-Loading**: Automatically loads configuration on app startup
-- **Configuration UI**: User-friendly interface for setting up AWS credentials
+- **No Manual Configuration**: Credentials must be set via environment variables
 
 ### 3. Error Handling
 
 - **Comprehensive Error Handling**: Handles various AWS Textract failure scenarios
 - **User Guidance**: Provides clear error messages and configuration guidance
-- **Retry Options**: Users can retry failed operations or configure AWS credentials
+- **Retry Options**: Users can retry failed operations
 
 ## Setup Instructions
 
-### 1. Environment Variables Setup (Recommended for Development)
+### 1. Environment Variables Setup
 
 1. **Create Environment File**
 
@@ -60,7 +59,7 @@ AWS Textract is Amazon's machine learning service that automatically extracts te
 
 The app will automatically use these credentials. See `ENVIRONMENT_VARIABLES.md` for detailed instructions.
 
-### 2. Manual Configuration Setup (Alternative)
+### 2. AWS Account Setup
 
 1. **Create AWS Account**
 
@@ -91,24 +90,6 @@ The app will automatically use these credentials. See `ENVIRONMENT_VARIABLES.md`
    - Create new access key
    - Save the Access Key ID and Secret Access Key
 
-### 2. Mobile App Configuration
-
-1. **Access Configuration Screen**
-
-   - Navigate to Service Form
-   - Tap camera icon
-   - Tap "Configure AWS" button
-
-2. **Enter Credentials**
-
-   - Access Key ID: Your AWS Access Key ID
-   - Secret Access Key: Your AWS Secret Access Key
-   - Region: AWS region (e.g., us-east-1, us-west-2)
-
-3. **Test Connection**
-   - Tap "Test Connection" to verify setup
-   - Ensure credentials are working correctly
-
 ## Implementation Details
 
 ### Files Structure
@@ -118,10 +99,9 @@ src/
 ├── utils/
 │   └── awsTextractService.ts    # AWS Textract service
 ├── screens/
-│   ├── CameraScanScreen.tsx    # Camera scanning interface
-│   └── AWSConfigScreen.tsx     # AWS configuration UI
+│   └── CameraScanScreen.tsx    # Camera scanning interface
 └── navigation/
-    └── AppNavigator.tsx        # Navigation with AWS config
+    └── AppNavigator.tsx        # Navigation
 ```
 
 ### Key Components
@@ -152,20 +132,13 @@ export class AWSTextractService {
 - Handles AWS Textract errors gracefully
 - Displays confidence scores
 
-#### 3. AWSConfigScreen (`src/screens/AWSConfigScreen.tsx`)
-
-- Secure credential input
-- Connection testing
-- Configuration management
-- Setup instructions
-
 ### Data Flow
 
 1. **Image Capture**: User takes photo or selects image
-2. **Configuration Check**: App checks if AWS is configured
+2. **Configuration Check**: App checks if AWS is configured via environment variables
 3. **OCR Processing**:
    - If AWS configured: Use AWS Textract
-   - If AWS not configured: Prompt user to configure AWS
+   - If AWS not configured: Show error message
    - If AWS fails: Show error and retry options
 4. **Text Parsing**: Extract patient information from OCR text
 5. **Form Population**: Auto-populate service form
@@ -174,9 +147,9 @@ export class AWSTextractService {
 
 ### Credential Storage
 
-- **AsyncStorage**: Credentials stored locally on device
-- **No Cloud Storage**: Credentials never sent to backend
-- **Encryption**: Consider additional encryption for production
+- **Environment Variables**: Credentials loaded from `.env` file
+- **No Local Storage**: Credentials not stored on device
+- **Build-time Configuration**: Credentials embedded in app bundle
 
 ### AWS Security
 
@@ -300,11 +273,11 @@ try {
 
 ### App Issues
 
-1. **Configuration Not Saving**
+1. **Configuration Not Loading**
 
-   - Check AsyncStorage permissions
-   - Restart app after configuration
-   - Clear app data and reconfigure
+   - Check that `.env` file exists and has correct format
+   - Verify environment variable names are correct
+   - Restart the development server after changing `.env`
 
 2. **OCR Not Working**
    - Verify image quality
