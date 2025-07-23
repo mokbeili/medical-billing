@@ -5,7 +5,9 @@ import React from "react";
 
 import { ActivityIndicator, View } from "react-native";
 import { useAuth } from "../contexts/AuthContext";
+import AWSConfigScreen from "../screens/AWSConfigScreen";
 import BillingCodeSearchScreen from "../screens/BillingCodeSearchScreen";
+import CameraScanScreen from "../screens/CameraScanScreen";
 import HomeScreen from "../screens/HomeScreen";
 import ICDCodeSearchScreen from "../screens/ICDCodeSearchScreen";
 import ICDCodesScreen from "../screens/ICDCodesScreen";
@@ -27,6 +29,8 @@ const ServicesStack = () => {
     >
       <Stack.Screen name="ServicesList" component={ServicesScreen} />
       <Stack.Screen name="ServiceForm" component={ServiceFormScreen} />
+      <Stack.Screen name="CameraScan" component={CameraScanScreen} />
+      <Stack.Screen name="AWSConfig" component={AWSConfigScreen} />
       <Stack.Screen
         name="BillingCodeSearch"
         component={BillingCodeSearchScreen}

@@ -29,6 +29,15 @@ import {
   ServiceFormData,
 } from "../types";
 
+interface ScannedPatientData {
+  billingNumber: string;
+  firstName: string;
+  lastName: string;
+  dateOfBirth: string;
+  gender: string;
+  serviceDate?: string;
+}
+
 const ServiceFormScreen = ({ navigation }: any) => {
   const route = useRoute();
   const params = route.params as { serviceId?: string } | undefined;
@@ -384,6 +393,64 @@ const ServiceFormScreen = ({ navigation }: any) => {
       }
     }
   }, [service, isEditing]);
+
+  // Handle scanned patient data from camera
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("focus", () => {
+      const params = route.params as
+        | { scannedPatientData?: ScannedPatientData }
+        | undefined;
+      if (params?.scannedPatientData && !isEditing) {
+        const scannedData = params.scannedPatientData;
+
+        // Check if patient already exists
+        if (patients) {
+          const existingPatient = patients.find(
+            (patient) => patient.billingNumber === scannedData.billingNumber
+          );
+
+          if (existingPatient) {
+            // Patient exists, select them
+            setFormData((prev) => ({ ...prev, patientId: existingPatient.id }));
+            setPatientSearchQuery(
+              `${existingPatient.firstName} ${existingPatient.lastName} (#${existingPatient.billingNumber})`
+            );
+            Alert.alert(
+              "Patient Found",
+              `Patient ${existingPatient.firstName} ${existingPatient.lastName} already exists and has been selected.`
+            );
+          } else {
+            // Patient doesn't exist, populate new patient form
+            setNewPatient({
+              firstName: scannedData.firstName,
+              lastName: scannedData.lastName,
+              billingNumber: scannedData.billingNumber,
+              dateOfBirth: scannedData.dateOfBirth,
+              sex: scannedData.gender,
+            });
+            setIsCreatingPatient(true);
+            Alert.alert(
+              "New Patient",
+              `Patient ${scannedData.firstName} ${scannedData.lastName} not found. New patient form has been populated with scanned data.`
+            );
+          }
+        }
+
+        // Set service date if available
+        if (scannedData.serviceDate) {
+          setFormData((prev) => ({
+            ...prev,
+            serviceDate: scannedData.serviceDate!,
+          }));
+        }
+
+        // Clear the params to prevent re-processing
+        navigation.setParams({ scannedPatientData: undefined });
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation, route.params, patients, isEditing]);
 
   // Debounce referring physician search query
   useEffect(() => {
@@ -1305,7 +1372,15 @@ const ServiceFormScreen = ({ navigation }: any) => {
         {/* Service Date */}
         <Card style={styles.card}>
           <Card.Content>
-            <Text style={styles.sectionTitle}>Service / Admit Date</Text>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Service / Admit Date</Text>
+              <TouchableOpacity
+                onPress={() => navigation.navigate("CameraScan")}
+                style={styles.headerButton}
+              >
+                <Ionicons name="camera" size={20} color="#2563eb" />
+              </TouchableOpacity>
+            </View>
             <TouchableOpacity
               style={[styles.input, styles.dateInput]}
               onPress={handleOpenServiceDatePicker}
@@ -2189,11 +2264,20 @@ const ServiceFormScreen = ({ navigation }: any) => {
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Patient</Text>
               {!isEditing && (
-                <TouchableOpacity
-                  onPress={() => setIsCreatingPatient(!isCreatingPatient)}
-                >
-                  <Ionicons name="add-circle" size={24} color="#2563eb" />
-                </TouchableOpacity>
+                <View style={styles.headerButtons}>
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate("CameraScan")}
+                    style={styles.headerButton}
+                  >
+                    <Ionicons name="camera" size={24} color="#2563eb" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setIsCreatingPatient(!isCreatingPatient)}
+                    style={styles.headerButton}
+                  >
+                    <Ionicons name="add-circle" size={24} color="#2563eb" />
+                  </TouchableOpacity>
+                </View>
               )}
             </View>
 
@@ -2550,6 +2634,14 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 12,
+  },
+  headerButtons: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  headerButton: {
+    padding: 4,
   },
   input: {
     borderWidth: 1,

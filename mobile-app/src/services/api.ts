@@ -18,7 +18,7 @@ import {
 // For physical devices on same WiFi, use computer's local IP
 // For Android emulator, use 10.0.2.2 to access localhost services
 const API_BASE_URL = __DEV__
-  ? "http://192.168.0.149:3000" // Your computer's local IP for physical devices
+  ? "http://192.168.16.115:3000" // Your computer's local IP for physical devices
   : "https://www.myonhealth.ca"; // Update this with your actual domain
 
 const api = axios.create({
@@ -55,6 +55,14 @@ api.interceptors.response.use(
   },
   (error) => {
     console.error("API Error:", error);
+    console.error("Error details:", {
+      message: error.message,
+      code: error.code,
+      response: error.response?.data,
+      status: error.response?.status,
+      url: error.config?.url,
+      method: error.config?.method,
+    });
     return Promise.reject(error);
   }
 );

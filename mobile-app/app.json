@@ -17,7 +17,9 @@
       "bundleIdentifier": "com.myonhealth.mobile",
       "buildNumber": "1",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "This app needs access to camera to scan patient information from documents.",
+        "NSPhotoLibraryUsageDescription": "This app needs access to photo library to select patient documents for scanning."
       }
     },
     "android": {
@@ -26,13 +28,32 @@
         "backgroundColor": "#2563eb"
       },
       "package": "com.myonhealth.mobile",
-      "usesCleartextTraffic": true
+      "usesCleartextTraffic": true,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "scheme": "myon-health",
     "platforms": ["ios", "android"],
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Myon Health to access your camera to scan patient documents."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Myon Health to access your photo library to select patient documents."
+        }
+      ]
+    ],
     "extra": {
       "eas": {
         "projectId": "f9c07c7d-ab5b-4f93-9a4a-5c8b5b4472fb"
