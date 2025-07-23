@@ -15,9 +15,10 @@ import {
 } from "../types";
 
 // Configure axios base URL to point to your Next.js app
+// For physical devices on same WiFi, use computer's local IP
 // For Android emulator, use 10.0.2.2 to access localhost services
 const API_BASE_URL = __DEV__
-  ? "http://10.0.2.2:3000" // Android emulator localhost
+  ? "http://192.168.0.149:3000" // Your computer's local IP for physical devices
   : "https://www.myonhealth.ca"; // Update this with your actual domain
 
 const api = axios.create({

@@ -1,8 +1,30 @@
-import React from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useState } from "react";
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { testAPI } from "../services/api";
 
 const TestScreen = () => {
+  const [isLoading, setIsLoading] = useState(false);
+
+  const testAPIConnection = async () => {
+    setIsLoading(true);
+    try {
+      const result = await testAPI.test();
+      Alert.alert(
+        "Success",
+        `API Test: ${result.message}\nTimestamp: ${result.timestamp}`
+      );
+    } catch (error: any) {
+      console.error("API Test Error:", error);
+      Alert.alert(
+        "Error",
+        `API Test Failed: ${error?.message || "Network error"}`
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
@@ -10,8 +32,14 @@ const TestScreen = () => {
         <Text style={styles.subtitle}>
           If you can see this, navigation is working!
         </Text>
-        <TouchableOpacity style={styles.button}>
-          <Text style={styles.buttonText}>Test Button</Text>
+        <TouchableOpacity
+          style={[styles.button, isLoading && styles.buttonDisabled]}
+          onPress={testAPIConnection}
+          disabled={isLoading}
+        >
+          <Text style={styles.buttonText}>
+            {isLoading ? "Testing..." : "Test API Connection"}
+          </Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -51,6 +79,9 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 16,
     fontWeight: "600",
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
 });
 

@@ -5,11 +5,12 @@ import { NextResponse } from "next/server";
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Skip middleware for auth-related paths
+  // Skip middleware for auth-related paths and test endpoint
   if (
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/auth") ||
-    pathname.startsWith("/api/mobile-auth")
+    pathname.startsWith("/api/mobile-auth") ||
+    pathname === "/api/test"
   ) {
     return NextResponse.next();
   }

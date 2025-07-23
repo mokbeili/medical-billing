@@ -11,9 +11,7 @@
       "resizeMode": "contain",
       "backgroundColor": "#2563eb"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.myonhealth.mobile",
@@ -27,16 +25,14 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#2563eb"
       },
-      "package": "com.myonhealth.mobile"
+      "package": "com.myonhealth.mobile",
+      "usesCleartextTraffic": true
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "scheme": "myon-health",
-    "platforms": [
-      "ios",
-      "android"
-    ],
+    "platforms": ["ios", "android"],
     "extra": {
       "eas": {
         "projectId": "f9c07c7d-ab5b-4f93-9a4a-5c8b5b4472fb"
