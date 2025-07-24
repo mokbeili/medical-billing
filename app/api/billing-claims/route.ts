@@ -440,6 +440,18 @@ export async function POST(request: Request) {
       }
     }
 
+    // Update all services' status to PENDING
+    await prisma.service.updateMany({
+      where: {
+        id: {
+          in: serviceIds,
+        },
+      },
+      data: {
+        status: "SENT",
+      },
+    });
+
     return NextResponse.json(claim);
   } catch (error) {
     console.error("Error creating billing claim:", error);

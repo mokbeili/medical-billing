@@ -1,5 +1,6 @@
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { ServiceStatus } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
@@ -16,10 +17,7 @@ export async function PATCH(
     const { id } = params;
     const { status } = await request.json();
 
-    if (
-      !status ||
-      !["PENDING", "SENT", "APPROVED", "REJECTED"].includes(status)
-    ) {
+    if (!status || !Object.values(ServiceStatus).includes(status)) {
       return new NextResponse("Invalid status", { status: 400 });
     }
 

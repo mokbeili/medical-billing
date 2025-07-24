@@ -1,5 +1,6 @@
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { ServiceStatus } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
@@ -79,7 +80,7 @@ export async function DELETE(
 
     // Check if all services are PENDING
     const hasNonPendingServices = claim.services.some(
-      (service) => service.status !== "PENDING"
+      (service) => service.status !== ServiceStatus.PENDING
     );
 
     if (hasNonPendingServices) {

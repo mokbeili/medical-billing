@@ -56,6 +56,11 @@ const ServicesScreen = ({ navigation }: any) => {
       // Filter out services without patient data
       filtered = filtered.filter((service) => service.patient != null);
 
+      // Only show services with PENDING status for claim creation
+      filtered = filtered.filter((service) =>
+        service.serviceCodes.some((code) => code.status === "PENDING")
+      );
+
       if (filters.status && filters.status !== "ALL") {
         filtered = filtered.filter((service) =>
           service.serviceCodes.some((code) => code.status === filters.status)
@@ -118,6 +123,18 @@ const ServicesScreen = ({ navigation }: any) => {
     const service = services?.find((s) => s.id === serviceId);
     if (!service?.patient) {
       Alert.alert("Error", "Cannot select service with missing patient data");
+      return;
+    }
+
+    // Don't allow selection of services that are not PENDING
+    const hasPendingStatus = service.serviceCodes.some(
+      (code) => code.status === "PENDING"
+    );
+    if (!hasPendingStatus) {
+      Alert.alert(
+        "Error",
+        "Cannot select service that is not in PENDING status"
+      );
       return;
     }
 
@@ -200,12 +217,16 @@ const ServicesScreen = ({ navigation }: any) => {
     const firstService = filteredServices[0];
     const firstServiceCode = firstService.serviceCodes[0];
 
-    // Only select services that match the first service's physician and jurisdiction
+    // Only select services that match the first service's physician and jurisdiction and have PENDING status
     const validServices = filteredServices.filter((service) => {
       const serviceCode = service.serviceCodes[0];
+      const hasPendingStatus = service.serviceCodes.some(
+        (code) => code.status === "PENDING"
+      );
       return (
         serviceCode &&
         firstServiceCode &&
+        hasPendingStatus &&
         service.physician?.id === firstService.physician?.id &&
         serviceCode.billingCode.section.code ===
           firstServiceCode.billingCode.section.code
@@ -218,7 +239,7 @@ const ServicesScreen = ({ navigation }: any) => {
   const renderService = (service: Service) => {
     const isSelected = selectedServices.includes(service.id);
     const hasClaim = service.claimId !== null;
-
+    const hasPendingStatus = service.status === "PENDING";
     return (
       <TouchableOpacity
         key={service.id}
@@ -244,7 +265,7 @@ const ServicesScreen = ({ navigation }: any) => {
                   e.stopPropagation();
                   handleServiceSelect(service.id);
                 }}
-                disabled={hasClaim}
+                disabled={hasClaim || !hasPendingStatus}
               />
             </View>
 
@@ -288,6 +309,14 @@ const ServicesScreen = ({ navigation }: any) => {
                 </Chip>
               </View>
             )}
+
+            {!hasPendingStatus && !hasClaim && (
+              <View style={styles.statusBadge}>
+                <Chip mode="flat" style={styles.nonPendingChip}>
+                  Not Pending
+                </Chip>
+              </View>
+            )}
           </Card.Content>
         </Card>
       </TouchableOpacity>
@@ -297,7 +326,12 @@ const ServicesScreen = ({ navigation }: any) => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Services</Text>
+        <View>
+          <Text style={styles.headerTitle}>Services</Text>
+          <Text style={styles.headerSubtitle}>
+            Only PENDING services can be selected for claims
+          </Text>
+        </View>
         <TouchableOpacity
           style={styles.addButton}
           onPress={() => navigation.navigate("ServiceForm")}
@@ -424,6 +458,11 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: "bold",
     color: "#1e293b",
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    color: "#64748b",
+    marginTop: 2,
   },
   addButton: {
     backgroundColor: "#2563eb",
@@ -579,6 +618,14 @@ const styles = StyleSheet.create({
   },
   claimedChip: {
     backgroundColor: "#fef3c7",
+  },
+  statusBadge: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+  },
+  nonPendingChip: {
+    backgroundColor: "#fee2e2",
   },
   emptyContainer: {
     flex: 1,

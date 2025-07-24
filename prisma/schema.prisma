@@ -271,7 +271,7 @@ model BillingClaim {
 model Service {
   id                   Int                 @id @default(autoincrement())
   claimId              String?             @map("claim_id")
-  status               ClaimStatus
+  status               ServiceStatus       @default(OPEN)
   createdAt            DateTime            @default(now()) @map("created_at")
   updatedAt            DateTime            @updatedAt @map("updated_at")
   patientId            String?             @map("patient_id")
@@ -391,6 +391,12 @@ enum Role {
   PATIENT
   PHYSICIAN
   ADMIN
+}
+
+enum ServiceStatus {
+  OPEN
+  PENDING
+  SENT
 }
 
 enum ClaimStatus {

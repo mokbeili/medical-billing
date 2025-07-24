@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ClaimStatus } from "@prisma/client";
+import { ServiceStatus } from "@prisma/client";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -20,6 +20,7 @@ interface Service {
   id: string;
   serviceDate: string;
   claimId: string | null;
+  status: ServiceStatus;
   patient: {
     firstName: string;
     lastName: string;
@@ -45,7 +46,6 @@ interface Service {
   } | null;
   serviceCodes: {
     id: number;
-    status: ClaimStatus;
     specialCircumstances: string | null;
     bilateralIndicator: string | null;
     serviceStartTime: string | null;
@@ -113,8 +113,8 @@ export default function ServiceRecordsPage() {
     }
 
     if (filters.status && filters.status !== "ALL") {
-      filtered = filtered.filter((service) =>
-        service.serviceCodes.some((code) => code.status === filters.status)
+      filtered = filtered.filter(
+        (service) => service.status === filters.status
       );
     }
 
@@ -305,11 +305,9 @@ export default function ServiceRecordsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">All Statuses</SelectItem>
+                  <SelectItem value="OPEN">Open</SelectItem>
                   <SelectItem value="PENDING">Pending</SelectItem>
-                  <SelectItem value="GENERATED">Generated</SelectItem>
                   <SelectItem value="SENT">Sent</SelectItem>
-                  <SelectItem value="APPROVED">Approved</SelectItem>
-                  <SelectItem value="REJECTED">Rejected</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -427,6 +425,9 @@ export default function ServiceRecordsPage() {
                       Service Start Date
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
@@ -443,7 +444,10 @@ export default function ServiceRecordsPage() {
                               checked={selectedServices.includes(service.id)}
                               onChange={() => handleServiceSelect(service.id)}
                               className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                              disabled={service.claimId !== null}
+                              disabled={
+                                service.claimId !== null ||
+                                service.status !== "PENDING"
+                              }
                             />
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
@@ -459,6 +463,21 @@ export default function ServiceRecordsPage() {
                             {new Date(service.serviceDate)
                               .toISOString()
                               .slice(0, 10)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <span
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                service.status === "OPEN"
+                                  ? "bg-green-100 text-green-800"
+                                  : service.status === "PENDING"
+                                  ? "bg-yellow-100 text-yellow-800"
+                                  : service.status === "SENT"
+                                  ? "bg-blue-100 text-blue-800"
+                                  : "bg-gray-100 text-gray-800"
+                              }`}
+                            >
+                              {service.status}
+                            </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             <div className="flex space-x-2">
@@ -489,7 +508,7 @@ export default function ServiceRecordsPage() {
                         </tr>
                         {expandedServiceId === service.id && (
                           <tr>
-                            <td colSpan={4} className="bg-gray-50 px-6 py-4">
+                            <td colSpan={5} className="bg-gray-50 px-6 py-4">
                               <div className="overflow-x-auto">
                                 <table className="min-w-full divide-y divide-gray-200 border">
                                   <thead>

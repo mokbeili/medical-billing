@@ -201,6 +201,7 @@ export interface Service {
   id: string;
   serviceDate: string;
   claimId: string | null;
+  status: string;
   patient: {
     id: string;
     firstName: string;

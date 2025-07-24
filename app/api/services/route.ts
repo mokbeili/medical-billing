@@ -1,7 +1,7 @@
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { decryptPatientFields } from "@/utils/patientEncryption";
-import { ClaimStatus } from "@prisma/client";
+import { ServiceStatus } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
@@ -50,6 +50,7 @@ export async function POST(request: Request) {
       billingCodes,
       serviceLocation,
       locationOfService,
+      serviceStatus,
     } = data;
 
     // Validate required fields
@@ -117,7 +118,19 @@ export async function POST(request: Request) {
               },
             }
           : undefined,
-        status: ClaimStatus.PENDING,
+        status: (() => {
+          if (!serviceStatus) return ServiceStatus.OPEN;
+          switch (serviceStatus) {
+            case "OPEN":
+              return ServiceStatus.OPEN;
+            case "PENDING":
+              return ServiceStatus.PENDING;
+            case "SENT":
+              return ServiceStatus.SENT;
+            default:
+              return ServiceStatus.OPEN;
+          }
+        })(),
         referringPhysician: referringPhysicianId
           ? {
               connect: {
@@ -302,7 +315,7 @@ export async function PUT(request: Request) {
       referringPhysicianId,
       icdCodeId,
       summary,
-      status,
+      serviceStatus,
       billingCodes,
       serviceLocation,
       locationOfService,
@@ -369,8 +382,19 @@ export async function PUT(request: Request) {
         : { disconnect: true };
     }
 
-    if (status !== undefined) {
-      updateData.status = status;
+    if (serviceStatus !== undefined) {
+      updateData.status = (() => {
+        switch (serviceStatus) {
+          case "OPEN":
+            return ServiceStatus.OPEN;
+          case "PENDING":
+            return ServiceStatus.PENDING;
+          case "SENT":
+            return ServiceStatus.SENT;
+          default:
+            return ServiceStatus.OPEN;
+        }
+      })();
     }
 
     // Handle billing codes update if provided

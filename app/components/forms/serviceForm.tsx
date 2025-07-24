@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ServiceStatus } from "@prisma/client";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import { useSession } from "next-auth/react";
@@ -121,6 +122,7 @@ interface Service {
   healthInstitutionId: number | null;
   summary: string;
   serviceDate: string;
+  serviceStatus: string;
   specialCircumstances: {
     codeId: number;
     value: string;
@@ -191,6 +193,7 @@ export default function ServiceForm({
     dateOfBirth: "",
     sex: "",
   });
+  const [isDone, setIsDone] = useState(false);
   const [formData, setFormData] = useState({
     physicianId: physicians.length === 1 ? physicians[0].id : "",
     patientId: "",
@@ -201,6 +204,7 @@ export default function ServiceForm({
     serviceDate: new Date().toISOString().split("T")[0],
     serviceLocation: null as string | null,
     locationOfService: null as string | null,
+    status: "OPEN",
     billingCodes: [] as Array<{
       codeId: number;
       status: string;
@@ -214,7 +218,6 @@ export default function ServiceForm({
       serviceEndDate: string | null;
     }>,
   });
-
   const [serviceErrors, setServiceErrors] = useState<ServiceErrors>({
     physician: false,
     patient: false,
@@ -237,7 +240,6 @@ export default function ServiceForm({
           const response = await fetch(`/api/services/${serviceId}`);
           if (response.ok) {
             const service = await response.json();
-
             // Set form data with existing service data
             setFormData({
               physicianId: service.physicianId,
@@ -246,6 +248,7 @@ export default function ServiceForm({
               icdCodeId: service.icdCodeId,
               healthInstitutionId: service.healthInstitutionId,
               summary: service.summary,
+              status: service.serviceStatus,
               serviceDate: new Date(service.serviceDate)
                 .toISOString()
                 .split("T")[0],
@@ -273,6 +276,7 @@ export default function ServiceForm({
                   : null,
               })),
             });
+            setIsDone(service.status === ServiceStatus.PENDING);
 
             // Set selected codes
             setSelectedCodes(
@@ -597,7 +601,7 @@ export default function ServiceForm({
           ...formData.billingCodes,
           {
             codeId: code.id,
-            status: "PENDING",
+            status: isDone ? "PENDING" : "OPEN",
             billing_record_type: code.billing_record_type,
             serviceStartTime: null,
             serviceEndTime: null,
@@ -983,6 +987,7 @@ export default function ServiceForm({
           serviceDate: primaryServiceDate.toISOString(),
           serviceLocation: formData.serviceLocation,
           locationOfService: formData.locationOfService,
+          serviceStatus: isDone ? "PENDING" : "OPEN",
           billingCodes: formData.billingCodes.map((code) => ({
             codeId: code.codeId,
             status: code.status,
@@ -1036,6 +1041,7 @@ export default function ServiceForm({
           serviceDate: primaryServiceDate.toISOString(),
           serviceLocation: formData.serviceLocation,
           locationOfService: formData.locationOfService,
+          serviceStatus: isDone ? "PENDING" : "OPEN",
           billingCodes: formData.billingCodes.map((code) => ({
             codeId: code.codeId,
             status: code.status,
@@ -2139,6 +2145,22 @@ export default function ServiceForm({
                   }
                 />
               </div> */}
+
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="done"
+              checked={isDone}
+              onChange={(e) => setIsDone(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <label
+              htmlFor="done"
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+            >
+              Done
+            </label>
+          </div>
 
           <div className="flex justify-end">
             <Button type="submit">

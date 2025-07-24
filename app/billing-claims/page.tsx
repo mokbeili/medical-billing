@@ -4,6 +4,7 @@ import Layout from "@/app/components/layout/Layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { ServiceStatus } from "@prisma/client";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -26,7 +27,7 @@ interface BillingClaim {
   };
   services: {
     id: number;
-    status: "PENDING" | "SENT" | "APPROVED" | "REJECTED";
+    status: ServiceStatus;
     serviceDate: string;
     summary: string;
     serviceCodes: {
@@ -113,7 +114,7 @@ export default function BillingClaimsSearchPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ status: "SENT" }),
+        body: JSON.stringify({ status: ServiceStatus.SENT }),
       });
 
       if (response.ok) {
@@ -124,7 +125,7 @@ export default function BillingClaimsSearchPage() {
                   ...c,
                   services: c.services.map((s) => ({
                     ...s,
-                    status: "SENT",
+                    status: ServiceStatus.SENT,
                   })),
                 }
               : c
@@ -234,7 +235,7 @@ export default function BillingClaimsSearchPage() {
                         </Button>
                       )}
                       {claim.services.every(
-                        (service) => service.status === "PENDING"
+                        (service) => service.status === ServiceStatus.PENDING
                       ) && (
                         <>
                           <Button
