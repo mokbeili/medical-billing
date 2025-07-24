@@ -303,6 +303,9 @@ export async function PUT(request: Request) {
       icdCodeId,
       summary,
       status,
+      billingCodes,
+      serviceLocation,
+      locationOfService,
     } = data;
 
     // Validate required fields
@@ -368,6 +371,48 @@ export async function PUT(request: Request) {
 
     if (status !== undefined) {
       updateData.status = status;
+    }
+
+    // Handle billing codes update if provided
+    if (billingCodes !== undefined) {
+      // First, delete all existing service codes for this service
+      await prisma.serviceCodes.deleteMany({
+        where: {
+          serviceId: parseInt(id),
+        },
+      });
+
+      // Then create new service codes
+      if (billingCodes && billingCodes.length > 0) {
+        const preparedBillingCodes = billingCodes.map((billingCode: any) => ({
+          billingCode: {
+            connect: {
+              id: billingCode.codeId,
+            },
+          },
+          serviceLocation: serviceLocation || "X",
+          locationOfService: locationOfService || "1",
+          serviceStartTime: billingCode.serviceStartTime
+            ? new Date(billingCode.serviceStartTime)
+            : null,
+          serviceEndTime: billingCode.serviceEndTime
+            ? new Date(billingCode.serviceEndTime)
+            : null,
+          numberOfUnits: billingCode.numberOfUnits || 1,
+          bilateralIndicator: billingCode.bilateralIndicator || null,
+          specialCircumstances: billingCode.specialCircumstances || null,
+          serviceDate: billingCode.serviceDate
+            ? new Date(billingCode.serviceDate)
+            : new Date(serviceDate || new Date()),
+          serviceEndDate: billingCode.serviceEndDate
+            ? new Date(billingCode.serviceEndDate)
+            : null,
+        }));
+
+        updateData.serviceCodes = {
+          create: preparedBillingCodes,
+        };
+      }
     }
 
     // Update the service

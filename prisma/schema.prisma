@@ -311,11 +311,14 @@ model ServiceCodes {
   specialCircumstances String?     @map("special_circumstances")
   serviceLocation      String      @map("service_location")
   locationOfService    String      @map("location_of_service")
+  claimNumber          Int?        @map("claim_number")
+  sequence             Int?        @map("sequence")
   billingCode          BillingCode @relation(fields: [codeId], references: [id])
   service              Service     @relation(fields: [serviceId], references: [id])
 
   @@index([serviceId])
   @@index([codeId])
+  @@index([claimNumber])
   @@map("service_codes")
 }
 

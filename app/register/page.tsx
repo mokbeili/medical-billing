@@ -1,14 +1,9 @@
 "use client";
 
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+import { Check, ChevronsUpDown, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const CANADIAN_PROVINCES = [
   { code: "AB", name: "Alberta" },
@@ -25,6 +20,45 @@ const CANADIAN_PROVINCES = [
   { code: "NU", name: "Nunavut" },
   { code: "YT", name: "Yukon" },
 ];
+
+// Canadian postal code validation function
+const validateCanadianPostalCode = (postalCode: string): boolean => {
+  // Canadian postal code format: A1A 1A1 (letter-number-letter space number-letter-number)
+  const postalCodeRegex = /^[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d$/;
+  return postalCodeRegex.test(postalCode);
+};
+
+// Format postal code to standard format (A1A 1A1)
+const formatPostalCode = (postalCode: string): string => {
+  // Remove all non-alphanumeric characters
+  const cleaned = postalCode.replace(/[^A-Za-z0-9]/g, "");
+
+  if (cleaned.length === 6) {
+    // Insert space after first 3 characters
+    return cleaned.slice(0, 3) + " " + cleaned.slice(3);
+  }
+
+  return postalCode;
+};
+
+// Password strength validation
+const validatePasswordStrength = (password: string) => {
+  const checks = {
+    length: password.length >= 8,
+    uppercase: /[A-Z]/.test(password),
+    lowercase: /[a-z]/.test(password),
+    number: /\d/.test(password),
+    special: /[!@#$%^&*(),.?":{}|<>]/.test(password),
+  };
+
+  const strength = Object.values(checks).filter(Boolean).length;
+
+  return {
+    checks,
+    strength,
+    isValid: strength >= 4, // At least 4 out of 5 criteria must be met
+  };
+};
 
 interface FormData {
   email: string;
@@ -56,14 +90,83 @@ export default function RegisterPage() {
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [postalCodeError, setPostalCodeError] = useState("");
+  const [open, setOpen] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [provinceSearch, setProvinceSearch] = useState("");
+  const provinceDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        provinceDropdownRef.current &&
+        !provinceDropdownRef.current.contains(event.target as Node)
+      ) {
+        setOpen(false);
+        setProvinceSearch("");
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  // Calculate password strength
+  const passwordStrength = validatePasswordStrength(formData.password);
+
+  // Check if all required fields are filled
+  const isFormValid = () => {
+    const requiredFields = [
+      formData.email,
+      formData.password,
+      formData.confirmPassword,
+      formData.address.street,
+      formData.address.city,
+      formData.address.state,
+      formData.address.postalCode,
+    ];
+
+    const allFieldsFilled = requiredFields.every(
+      (field) => field.trim() !== ""
+    );
+    const passwordsMatch = formData.password === formData.confirmPassword;
+    const passwordStrong = passwordStrength.isValid;
+    const postalCodeValid = validateCanadianPostalCode(
+      formData.address.postalCode
+    );
+
+    return (
+      allFieldsFilled && passwordsMatch && passwordStrong && postalCodeValid
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setPostalCodeError("");
     setLoading(true);
 
     if (formData.password !== formData.confirmPassword) {
       setError("Passwords do not match");
+      setLoading(false);
+      return;
+    }
+
+    if (!passwordStrength.isValid) {
+      setError("Password does not meet strength requirements");
+      setLoading(false);
+      return;
+    }
+
+    // Validate postal code
+    if (!validateCanadianPostalCode(formData.address.postalCode)) {
+      setPostalCodeError(
+        "Please enter a valid Canadian postal code (e.g., A1A 1A1)"
+      );
       setLoading(false);
       return;
     }
@@ -105,6 +208,31 @@ export default function RegisterPage() {
         [field]: value,
       },
     });
+
+    // Clear postal code error when user starts typing
+    if (field === "postalCode") {
+      setPostalCodeError("");
+    }
+  };
+
+  const handlePostalCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.toUpperCase();
+    const formatted = formatPostalCode(value);
+    updateAddress("postalCode", formatted);
+  };
+
+  const getPasswordStrengthColor = () => {
+    if (passwordStrength.strength <= 2) return "bg-red-500";
+    if (passwordStrength.strength === 3) return "bg-yellow-500";
+    if (passwordStrength.strength === 4) return "bg-blue-500";
+    return "bg-green-500";
+  };
+
+  const getPasswordStrengthText = () => {
+    if (passwordStrength.strength <= 2) return "Weak";
+    if (passwordStrength.strength === 3) return "Fair";
+    if (passwordStrength.strength === 4) return "Good";
+    return "Strong";
   };
 
   return (
@@ -138,27 +266,206 @@ export default function RegisterPage() {
                   setFormData({ ...formData, email: e.target.value })
                 }
               />
-              <input
-                type="password"
-                required
-                className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Password"
-                value={formData.password}
-                onChange={(e) =>
-                  setFormData({ ...formData, password: e.target.value })
-                }
-              />
-              <input
-                type="password"
-                required
-                className="appearance-none rounded-b-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Confirm Password"
-                value={formData.confirmPassword}
-                onChange={(e) =>
-                  setFormData({ ...formData, confirmPassword: e.target.value })
-                }
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  required
+                  className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm pr-10"
+                  placeholder="Password"
+                  value={formData.password}
+                  onChange={(e) =>
+                    setFormData({ ...formData, password: e.target.value })
+                  }
+                />
+                <button
+                  type="button"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4 text-gray-400" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-gray-400" />
+                  )}
+                </button>
+              </div>
+              <div className="relative">
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  required
+                  className="appearance-none rounded-b-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm pr-10"
+                  placeholder="Confirm Password"
+                  value={formData.confirmPassword}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      confirmPassword: e.target.value,
+                    })
+                  }
+                />
+                <button
+                  type="button"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff className="h-4 w-4 text-gray-400" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-gray-400" />
+                  )}
+                </button>
+              </div>
             </div>
+
+            {/* Password Strength Indicator */}
+            {formData.password && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">Password strength:</span>
+                  <span
+                    className={cn(
+                      "font-medium",
+                      passwordStrength.strength <= 2
+                        ? "text-red-600"
+                        : passwordStrength.strength === 3
+                        ? "text-yellow-600"
+                        : passwordStrength.strength === 4
+                        ? "text-blue-600"
+                        : "text-green-600"
+                    )}
+                  >
+                    {getPasswordStrengthText()}
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className={cn(
+                      "h-2 rounded-full transition-all duration-300",
+                      getPasswordStrengthColor()
+                    )}
+                    style={{
+                      width: `${(passwordStrength.strength / 5) * 100}%`,
+                    }}
+                  ></div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                  <div
+                    className={cn(
+                      "flex items-center",
+                      passwordStrength.checks.length
+                        ? "text-green-600"
+                        : "text-gray-400"
+                    )}
+                  >
+                    <Check
+                      className={cn(
+                        "h-3 w-3 mr-1",
+                        passwordStrength.checks.length
+                          ? "text-green-600"
+                          : "text-gray-400"
+                      )}
+                    />
+                    At least 8 characters
+                  </div>
+                  <div
+                    className={cn(
+                      "flex items-center",
+                      passwordStrength.checks.uppercase
+                        ? "text-green-600"
+                        : "text-gray-400"
+                    )}
+                  >
+                    <Check
+                      className={cn(
+                        "h-3 w-3 mr-1",
+                        passwordStrength.checks.uppercase
+                          ? "text-green-600"
+                          : "text-gray-400"
+                      )}
+                    />
+                    One uppercase letter
+                  </div>
+                  <div
+                    className={cn(
+                      "flex items-center",
+                      passwordStrength.checks.lowercase
+                        ? "text-green-600"
+                        : "text-gray-400"
+                    )}
+                  >
+                    <Check
+                      className={cn(
+                        "h-3 w-3 mr-1",
+                        passwordStrength.checks.lowercase
+                          ? "text-green-600"
+                          : "text-gray-400"
+                      )}
+                    />
+                    One lowercase letter
+                  </div>
+                  <div
+                    className={cn(
+                      "flex items-center",
+                      passwordStrength.checks.number
+                        ? "text-green-600"
+                        : "text-gray-400"
+                    )}
+                  >
+                    <Check
+                      className={cn(
+                        "h-3 w-3 mr-1",
+                        passwordStrength.checks.number
+                          ? "text-green-600"
+                          : "text-gray-400"
+                      )}
+                    />
+                    One number
+                  </div>
+                  <div
+                    className={cn(
+                      "flex items-center",
+                      passwordStrength.checks.special
+                        ? "text-green-600"
+                        : "text-gray-400"
+                    )}
+                  >
+                    <Check
+                      className={cn(
+                        "h-3 w-3 mr-1",
+                        passwordStrength.checks.special
+                          ? "text-green-600"
+                          : "text-gray-400"
+                      )}
+                    />
+                    One special character
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Password Match Indicator */}
+            {formData.confirmPassword && (
+              <div
+                className={cn(
+                  "flex items-center text-sm",
+                  formData.password === formData.confirmPassword
+                    ? "text-green-600"
+                    : "text-red-600"
+                )}
+              >
+                <Check
+                  className={cn(
+                    "h-4 w-4 mr-2",
+                    formData.password === formData.confirmPassword
+                      ? "text-green-600"
+                      : "text-red-600"
+                  )}
+                />
+                {formData.password === formData.confirmPassword
+                  ? "Passwords match"
+                  : "Passwords do not match"}
+              </div>
+            )}
           </div>
 
           {/* Address Section */}
@@ -191,31 +498,89 @@ export default function RegisterPage() {
                   value={formData.address.city}
                   onChange={(e) => updateAddress("city", e.target.value)}
                 />
-                <Select
-                  value={formData.address.state}
-                  onValueChange={(value) => updateAddress("state", value)}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select Province" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CANADIAN_PROVINCES.map((province) => (
-                      <SelectItem key={province.code} value={province.code}>
-                        {province.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="relative" ref={provinceDropdownRef}>
+                  <button
+                    type="button"
+                    onClick={() => setOpen(!open)}
+                    className="flex h-10 w-full items-center justify-between rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 hover:bg-gray-50"
+                  >
+                    {formData.address.state
+                      ? CANADIAN_PROVINCES.find(
+                          (province) => province.code === formData.address.state
+                        )?.name
+                      : "Select Province..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </button>
+
+                  {open && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+                      <div className="p-2">
+                        <input
+                          type="text"
+                          placeholder="Search province..."
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          value={provinceSearch}
+                          onChange={(e) => setProvinceSearch(e.target.value)}
+                        />
+                      </div>
+                      <div className="max-h-48 overflow-auto">
+                        {CANADIAN_PROVINCES.filter(
+                          (province) =>
+                            province.name
+                              .toLowerCase()
+                              .includes(provinceSearch.toLowerCase()) ||
+                            province.code
+                              .toLowerCase()
+                              .includes(provinceSearch.toLowerCase())
+                        ).map((province) => (
+                          <button
+                            key={province.code}
+                            type="button"
+                            onClick={() => {
+                              updateAddress("state", province.code);
+                              setOpen(false);
+                              setProvinceSearch("");
+                            }}
+                            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 flex items-center"
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                formData.address.state === province.code
+                                  ? "opacity-100"
+                                  : "opacity-0"
+                              )}
+                            />
+                            {province.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <input
-                  type="text"
-                  required
-                  className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  placeholder="Postal Code"
-                  value={formData.address.postalCode}
-                  onChange={(e) => updateAddress("postalCode", e.target.value)}
-                />
+                <div>
+                  <input
+                    type="text"
+                    required
+                    className={cn(
+                      "appearance-none rounded-md relative block w-full px-3 py-2 border placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm",
+                      postalCodeError
+                        ? "border-red-300 focus:border-red-500 focus:ring-red-500"
+                        : "border-gray-300 focus:border-blue-500"
+                    )}
+                    placeholder="Postal Code (A1A 1A1)"
+                    value={formData.address.postalCode}
+                    onChange={handlePostalCodeChange}
+                    maxLength={7}
+                  />
+                  {postalCodeError && (
+                    <p className="mt-1 text-sm text-red-600">
+                      {postalCodeError}
+                    </p>
+                  )}
+                </div>
                 <input
                   type="text"
                   required
@@ -232,8 +597,13 @@ export default function RegisterPage() {
           <div>
             <button
               type="submit"
-              disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              disabled={loading || !isFormValid()}
+              className={cn(
+                "group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500",
+                isFormValid() && !loading
+                  ? "bg-blue-600 hover:bg-blue-700"
+                  : "bg-gray-400 cursor-not-allowed"
+              )}
             >
               {loading ? (
                 <span className="flex items-center">

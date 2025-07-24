@@ -424,6 +424,22 @@ export async function POST(request: Request) {
       },
     });
 
+    // Update service codes with claim number and sequence
+    for (let i = 0; i < serviceRecords.length; i++) {
+      const record = serviceRecords[i];
+      const originalRecord = allServiceRecords[i];
+
+      if (originalRecord && originalRecord.serviceCode) {
+        await prisma.serviceCodes.update({
+          where: { id: originalRecord.serviceCode.id },
+          data: {
+            claimNumber: record.claimNumber,
+            sequence: record.sequence,
+          },
+        });
+      }
+    }
+
     return NextResponse.json(claim);
   } catch (error) {
     console.error("Error creating billing claim:", error);
