@@ -230,6 +230,32 @@ export default function ServiceRecordsPage() {
     }
   };
 
+  const handleFinishService = async (serviceId: string) => {
+    try {
+      const response = await fetch(`/api/services/${serviceId}/status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status: "PENDING" }),
+      });
+
+      if (response.ok) {
+        // Refresh the services list
+        const updatedResponse = await fetch("/api/services");
+        if (updatedResponse.ok) {
+          const data = await updatedResponse.json();
+          setServices(data);
+          setFilteredServices(data);
+        }
+      } else {
+        console.error("Error updating service status");
+      }
+    } catch (error) {
+      console.error("Error finishing service:", error);
+    }
+  };
+
   const handleSelectAll = () => {
     if (filteredServices.length === 0) return;
 
@@ -503,6 +529,17 @@ export default function ServiceRecordsPage() {
                                   Edit
                                 </Link>
                               )}
+                              {service.status === "OPEN" &&
+                                service.claimId === null && (
+                                  <button
+                                    className="text-orange-600 hover:underline focus:outline-none"
+                                    onClick={() =>
+                                      handleFinishService(service.id)
+                                    }
+                                  >
+                                    Done
+                                  </button>
+                                )}
                             </div>
                           </td>
                         </tr>
