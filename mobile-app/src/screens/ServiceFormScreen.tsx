@@ -55,6 +55,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
     serviceDate: new Date().toISOString().split("T")[0],
     serviceLocation: null,
     locationOfService: null,
+    serviceStatus: "OPEN",
     billingCodes: [],
   });
 
@@ -345,6 +346,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
         serviceDate: new Date(service.serviceDate).toISOString().split("T")[0],
         serviceLocation: service.serviceCodes[0]?.serviceLocation || null,
         locationOfService: service.serviceCodes[0]?.locationOfService || null,
+        serviceStatus: service.status,
         billingCodes: service.serviceCodes.map((code) => ({
           codeId: code.billingCode.id,
           status: code.status,
@@ -552,8 +554,10 @@ const ServiceFormScreen = ({ navigation }: any) => {
   // Create service mutation
   const createServiceMutation = useMutation({
     mutationFn: servicesAPI.create,
-    onSuccess: () => {
-      Alert.alert("Success", "Service created successfully!");
+    onSuccess: (data) => {
+      const status =
+        data.status === "PENDING" ? "approved and finished" : "saved";
+      Alert.alert("Success", `Service ${status} successfully!`);
       navigation.goBack();
       queryClient.invalidateQueries({ queryKey: ["services"] });
     },
@@ -566,8 +570,10 @@ const ServiceFormScreen = ({ navigation }: any) => {
   // Update service mutation
   const updateServiceMutation = useMutation({
     mutationFn: (data: ServiceFormData) => servicesAPI.update(serviceId!, data),
-    onSuccess: () => {
-      Alert.alert("Success", "Service updated successfully!");
+    onSuccess: (data) => {
+      const status =
+        data.status === "PENDING" ? "approved and finished" : "saved";
+      Alert.alert("Success", `Service ${status} successfully!`);
       navigation.goBack();
       queryClient.invalidateQueries({ queryKey: ["services"] });
       queryClient.invalidateQueries({ queryKey: ["service", serviceId] });
@@ -1283,12 +1289,33 @@ const ServiceFormScreen = ({ navigation }: any) => {
     return true;
   };
 
-  const handleSubmit = () => {
+  const handleSave = () => {
     if (!validateForm()) return;
 
     // Ensure all billing codes have required fields
     const validatedFormData = {
       ...formData,
+      serviceStatus: "OPEN",
+      billingCodes: formData.billingCodes.map((code) => ({
+        ...code,
+        numberOfUnits: code.numberOfUnits || 1, // Ensure numberOfUnits is set
+      })),
+    };
+
+    if (isEditing) {
+      updateServiceMutation.mutate(validatedFormData);
+    } else {
+      createServiceMutation.mutate(validatedFormData);
+    }
+  };
+
+  const handleApproveAndFinish = () => {
+    if (!validateForm()) return;
+
+    // Ensure all billing codes have required fields
+    const validatedFormData = {
+      ...formData,
+      serviceStatus: "PENDING",
       billingCodes: formData.billingCodes.map((code) => ({
         ...code,
         numberOfUnits: code.numberOfUnits || 1, // Ensure numberOfUnits is set
@@ -2567,20 +2594,35 @@ const ServiceFormScreen = ({ navigation }: any) => {
           </Card>
         )}
 
-        {/* Submit Button */}
-        <Button
-          mode="contained"
-          onPress={handleSubmit}
-          loading={
-            createServiceMutation.isPending || updateServiceMutation.isPending
-          }
-          style={styles.submitButton}
-          disabled={
-            createServiceMutation.isPending || updateServiceMutation.isPending
-          }
-        >
-          {isEditing ? "Update Service" : "Create Service"}
-        </Button>
+        {/* Submit Buttons */}
+        <View style={styles.submitButtonsContainer}>
+          <Button
+            mode="outlined"
+            onPress={handleSave}
+            loading={
+              createServiceMutation.isPending || updateServiceMutation.isPending
+            }
+            style={[styles.submitButton, styles.saveButton]}
+            disabled={
+              createServiceMutation.isPending || updateServiceMutation.isPending
+            }
+          >
+            Save
+          </Button>
+          <Button
+            mode="contained"
+            onPress={handleApproveAndFinish}
+            loading={
+              createServiceMutation.isPending || updateServiceMutation.isPending
+            }
+            style={[styles.submitButton, styles.approveButton]}
+            disabled={
+              createServiceMutation.isPending || updateServiceMutation.isPending
+            }
+          >
+            Approve & Finish
+          </Button>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -2768,10 +2810,21 @@ const styles = StyleSheet.create({
     color: "#2563eb",
     fontWeight: "500",
   },
-  submitButton: {
+  submitButtonsContainer: {
+    flexDirection: "row",
+    gap: 12,
     marginTop: 16,
     marginBottom: 32,
-    backgroundColor: "#2563eb",
+  },
+  submitButton: {
+    flex: 1,
+  },
+  saveButton: {
+    borderColor: "#2563eb",
+    borderWidth: 2,
+  },
+  approveButton: {
+    backgroundColor: "#059669",
   },
   buttonGroup: {
     flexDirection: "row",

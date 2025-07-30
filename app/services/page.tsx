@@ -537,7 +537,7 @@ export default function ServiceRecordsPage() {
                                       handleFinishService(service.id)
                                     }
                                   >
-                                    Done
+                                    Approve & Finish
                                   </button>
                                 )}
                             </div>

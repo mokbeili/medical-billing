@@ -11,7 +11,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ServiceStatus } from "@prisma/client";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import { useSession } from "next-auth/react";
@@ -193,7 +192,7 @@ export default function ServiceForm({
     dateOfBirth: "",
     sex: "",
   });
-  const [isDone, setIsDone] = useState(false);
+
   const [formData, setFormData] = useState({
     physicianId: physicians.length === 1 ? physicians[0].id : "",
     patientId: "",
@@ -276,7 +275,6 @@ export default function ServiceForm({
                   : null,
               })),
             });
-            setIsDone(service.status === ServiceStatus.PENDING);
 
             // Set selected codes
             setSelectedCodes(
@@ -601,7 +599,7 @@ export default function ServiceForm({
           ...formData.billingCodes,
           {
             codeId: code.id,
-            status: isDone ? "PENDING" : "OPEN",
+            status: "OPEN",
             billing_record_type: code.billing_record_type,
             serviceStartTime: null,
             serviceEndTime: null,
@@ -946,7 +944,7 @@ export default function ServiceForm({
     );
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!validateForm()) {
@@ -987,7 +985,7 @@ export default function ServiceForm({
           serviceDate: primaryServiceDate.toISOString(),
           serviceLocation: formData.serviceLocation,
           locationOfService: formData.locationOfService,
-          serviceStatus: isDone ? "PENDING" : "OPEN",
+          serviceStatus: "OPEN",
           billingCodes: formData.billingCodes.map((code) => ({
             codeId: code.codeId,
             status: code.status,
@@ -1041,7 +1039,154 @@ export default function ServiceForm({
           serviceDate: primaryServiceDate.toISOString(),
           serviceLocation: formData.serviceLocation,
           locationOfService: formData.locationOfService,
-          serviceStatus: isDone ? "PENDING" : "OPEN",
+          serviceStatus: "OPEN",
+          billingCodes: formData.billingCodes.map((code) => ({
+            codeId: code.codeId,
+            status: code.status,
+            serviceStartTime: code.serviceStartTime
+              ? combineDateTime(
+                  new Date(code.serviceDate || formData.serviceDate),
+                  code.serviceStartTime
+                )
+              : null,
+            serviceEndTime: code.serviceEndTime
+              ? combineDateTime(
+                  new Date(code.serviceDate || formData.serviceDate),
+                  code.serviceEndTime
+                )
+              : null,
+            numberOfUnits: code.numberOfUnits || null,
+            bilateralIndicator: code.bilateralIndicator,
+            specialCircumstances: code.specialCircumstances,
+            serviceDate: code.serviceDate
+              ? new Date(code.serviceDate).toISOString()
+              : primaryServiceDate.toISOString(),
+            serviceEndDate: code.serviceEndDate
+              ? new Date(code.serviceEndDate).toISOString()
+              : null,
+          })),
+        };
+
+        const serviceResponse = await fetch("/api/services", {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.user?.id}`,
+          },
+          body: JSON.stringify(serviceData),
+        });
+
+        if (!serviceResponse.ok) {
+          console.error(serviceResponse);
+          throw new Error("Failed to update service");
+        }
+      }
+
+      router.push("/services");
+    } catch (error) {
+      console.error(
+        "Error creating/updating service and service codes:",
+        error
+      );
+    }
+  };
+
+  const handleApproveAndFinish = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!validateForm()) {
+      return;
+    }
+
+    if (status === "loading") {
+      return;
+    }
+
+    if (status === "unauthenticated" || !session) {
+      console.error("No active session. Please log in.");
+      router.push("/auth/signin");
+      return;
+    }
+
+    try {
+      // Use the user's selected service date as the primary service date
+      const primaryServiceDate = new Date(formData.serviceDate);
+      // Helper function to combine date and time
+      const combineDateTime = (date: Date, timeStr: string) => {
+        if (!timeStr) return null;
+        const [hours, minutes] = timeStr.split(":").map(Number);
+        const newDate = new Date(date);
+        newDate.setHours(hours, minutes, 0, 0);
+        return newDate.toISOString();
+      };
+
+      if (type === "new") {
+        // Create new service with billing codes in a single request
+        const serviceData = {
+          physicianId: formData.physicianId,
+          patientId: formData.patientId,
+          referringPhysicianId: formData.referringPhysicianId,
+          icdCodeId: formData.icdCodeId,
+          healthInstitutionId: formData.healthInstitutionId,
+          summary: formData.summary,
+          serviceDate: primaryServiceDate.toISOString(),
+          serviceLocation: formData.serviceLocation,
+          locationOfService: formData.locationOfService,
+          serviceStatus: "PENDING",
+          billingCodes: formData.billingCodes.map((code) => ({
+            codeId: code.codeId,
+            status: code.status,
+            serviceStartTime: code.serviceStartTime
+              ? combineDateTime(
+                  new Date(code.serviceDate || formData.serviceDate),
+                  code.serviceStartTime
+                )
+              : null,
+            serviceEndTime: code.serviceEndTime
+              ? combineDateTime(
+                  new Date(code.serviceDate || formData.serviceDate),
+                  code.serviceEndTime
+                )
+              : null,
+            numberOfUnits: code.numberOfUnits || null,
+            bilateralIndicator: code.bilateralIndicator,
+            specialCircumstances: code.specialCircumstances,
+            serviceDate: code.serviceDate
+              ? new Date(code.serviceDate).toISOString()
+              : primaryServiceDate.toISOString(),
+            serviceEndDate: code.serviceEndDate
+              ? new Date(code.serviceEndDate).toISOString()
+              : null,
+          })),
+        };
+
+        const serviceResponse = await fetch("/api/services", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.user?.id}`,
+          },
+          body: JSON.stringify(serviceData),
+        });
+
+        if (!serviceResponse.ok) {
+          console.error(serviceResponse);
+          throw new Error("Failed to create service");
+        }
+      } else if (type === "edit" && serviceId) {
+        // Update existing service with billing codes in a single request
+        const serviceData = {
+          id: serviceId,
+          physicianId: formData.physicianId,
+          patientId: formData.patientId,
+          referringPhysicianId: formData.referringPhysicianId,
+          icdCodeId: formData.icdCodeId,
+          healthInstitutionId: formData.healthInstitutionId,
+          summary: formData.summary,
+          serviceDate: primaryServiceDate.toISOString(),
+          serviceLocation: formData.serviceLocation,
+          locationOfService: formData.locationOfService,
+          serviceStatus: "PENDING",
           billingCodes: formData.billingCodes.map((code) => ({
             codeId: code.codeId,
             status: code.status,
@@ -1136,7 +1281,7 @@ export default function ServiceForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form className="space-y-6">
       <Card>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -2146,25 +2291,12 @@ export default function ServiceForm({
                 />
               </div> */}
 
-          <div className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              id="done"
-              checked={isDone}
-              onChange={(e) => setIsDone(e.target.checked)}
-              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-            />
-            <label
-              htmlFor="done"
-              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-            >
-              Done
-            </label>
-          </div>
-
-          <div className="flex justify-end">
-            <Button type="submit">
-              {type === "edit" ? "Update" : "Submit"}
+          <div className="flex justify-end space-x-2">
+            <Button type="button" variant="outline" onClick={handleSave}>
+              Save
+            </Button>
+            <Button type="button" onClick={handleApproveAndFinish}>
+              Approve & Finish
             </Button>
           </div>
         </CardContent>

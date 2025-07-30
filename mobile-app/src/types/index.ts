@@ -242,6 +242,7 @@ export interface ServiceFormData {
   serviceDate: string;
   serviceLocation: string | null;
   locationOfService: string | null;
+  serviceStatus: string;
   billingCodes: Array<{
     codeId: number;
     status: string;
