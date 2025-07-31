@@ -203,38 +203,55 @@ const BillingCodeSearchScreen = ({ navigation }: any) => {
       );
 
       if (selectedPreviousCodes.length > 0) {
-        // For now, we'll use the service date as the start date
-        // In a more complex implementation, we'd track the end dates of previous codes
-        let serviceStartDate =
-          codeSubSelections.find(
-            (s) => s.codeId === selectedPreviousCodes[0].id
-          )?.serviceEndDate || "";
+        // Find the most recent previous code and calculate dates
+        const previousCode =
+          selectedPreviousCodes[selectedPreviousCodes.length - 1];
+        const previousSubSelection = codeSubSelections.find(
+          (s) => s.codeId === previousCode.id
+        );
 
-        // Calculate service end date based on day range
-        let serviceEndDate = null;
-        if (code.day_range && code.day_range > 0) {
-          const startDate = new Date(serviceStartDate || "");
-          startDate.setDate(startDate.getDate() + 1);
-          serviceStartDate = startDate.toISOString().split("T")[0];
-          startDate.setDate(startDate.getDate() + code.day_range - 1); // -1 because it's inclusive
-          serviceEndDate = startDate.toISOString().split("T")[0];
+        if (previousSubSelection) {
+          const previousStartDate = new Date(
+            previousSubSelection.serviceDate || serviceDate
+          );
+
+          // Set the previous code's end date as previous start date + day range - 1
+          let previousEndDate = null;
+          if (previousCode.day_range && previousCode.day_range > 0) {
+            const endDate = new Date(previousStartDate);
+            endDate.setDate(endDate.getDate() + previousCode.day_range - 1);
+            previousEndDate = endDate.toISOString().split("T")[0];
+
+            // Update the previous code's end date in sub selections
+            handleUpdateSubSelection(previousCode.id, {
+              serviceEndDate: previousEndDate,
+            });
+          }
+
+          // Set the new code's start date to previous start date + day range
+          let serviceStartDate = serviceDate;
+          if (previousCode.day_range && previousCode.day_range > 0) {
+            const newStartDate = new Date(previousStartDate);
+            newStartDate.setDate(
+              newStartDate.getDate() + previousCode.day_range
+            );
+            serviceStartDate = newStartDate.toISOString().split("T")[0];
+          } else {
+            // If previous code has no day range, start the next day
+            const newStartDate = new Date(previousStartDate);
+            newStartDate.setDate(newStartDate.getDate() + 1);
+            serviceStartDate = newStartDate.toISOString().split("T")[0];
+          }
+
+          // For type 57 codes, do not set an end date initially
+          return { serviceDate: serviceStartDate, serviceEndDate: null };
         }
-
-        return { serviceDate: serviceStartDate, serviceEndDate };
       }
     }
 
     // If no previous codes are selected or no previous codes defined, use the service date
-    let serviceStartDate = serviceDate;
-    let serviceEndDate = null;
-
-    if (code.day_range && code.day_range > 0) {
-      const startDate = new Date(serviceStartDate);
-      startDate.setDate(startDate.getDate() + code.day_range - 1); // -1 because it's inclusive
-      serviceEndDate = startDate.toISOString().split("T")[0];
-    }
-
-    return { serviceDate: serviceStartDate, serviceEndDate };
+    // For type 57 codes, do not set an end date initially
+    return { serviceDate: serviceDate, serviceEndDate: null };
   };
 
   const renderSubSelectionModal = () => {

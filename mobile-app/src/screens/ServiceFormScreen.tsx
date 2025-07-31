@@ -91,6 +91,11 @@ const ServiceFormScreen = ({ navigation }: any) => {
     sex: "",
   });
 
+  // Add state for discharge date modal
+  const [showDischargeDateModal, setShowDischargeDateModal] = useState(false);
+  const [dischargeDate, setDischargeDate] = useState("");
+  const [pendingApproveAndFinish, setPendingApproveAndFinish] = useState(false);
+
   // Patient search state
   const [patientSearchQuery, setPatientSearchQuery] = useState("");
   const [filteredPatients, setFilteredPatients] = useState<any[]>([]);
@@ -669,29 +674,119 @@ const ServiceFormScreen = ({ navigation }: any) => {
     }
 
     setSelectedCodes([...selectedCodes, ...newCodes]);
-    setFormData((prev) => ({
-      ...prev,
-      billingCodes: [
-        ...prev.billingCodes,
-        ...newCodes.map((code) => {
-          const subSelection = subSelections?.find((s) => s.codeId === code.id);
-          return {
-            codeId: code.id,
-            status: "PENDING",
-            billing_record_type: code.billing_record_type,
-            serviceStartTime: subSelection?.serviceStartTime || null,
-            serviceEndTime: subSelection?.serviceEndTime || null,
-            numberOfUnits: subSelection?.numberOfUnits || 1,
-            bilateralIndicator: subSelection?.bilateralIndicator || null,
-            specialCircumstances: subSelection?.specialCircumstances || null,
-            serviceDate: subSelection?.serviceDate || null,
-            serviceEndDate: subSelection?.serviceEndDate || null,
-            fee_determinant: code.fee_determinant,
-            multiple_unit_indicator: code.multiple_unit_indicator,
-          };
-        }),
-      ],
-    }));
+    setFormData((prev) => {
+      const updatedBillingCodes = [...prev.billingCodes];
+
+      // Process each new code
+      newCodes.forEach((code) => {
+        const subSelection = subSelections?.find((s) => s.codeId === code.id);
+
+        // Calculate service start date for type 57 codes
+        let serviceStartDate =
+          subSelection?.serviceDate || formData.serviceDate;
+        let serviceEndDate = subSelection?.serviceEndDate || null;
+
+        if (code.billing_record_type === 57) {
+          // Check if this code has previous codes defined and if any of them are already selected
+          if (code.previousCodes && code.previousCodes.length > 0) {
+            // Find if any of the previous codes are already in the form
+            const selectedPreviousCodes = updatedBillingCodes.filter(
+              (selectedCode) =>
+                code.previousCodes?.some(
+                  (prevCode) =>
+                    prevCode.previous_code.id === selectedCode.codeId
+                )
+            );
+
+            if (selectedPreviousCodes.length > 0) {
+              // Find the most recent previous code and calculate dates
+              const previousCode =
+                selectedPreviousCodes[selectedPreviousCodes.length - 1];
+              const previousCodeIndex = updatedBillingCodes.findIndex(
+                (bc) => bc.codeId === previousCode.codeId
+              );
+              const previousSelectedCode = selectedCodes.find(
+                (c) => c.id === previousCode.codeId
+              );
+
+              if (previousCodeIndex >= 0 && previousSelectedCode) {
+                const previousStartDate = new Date(
+                  updatedBillingCodes[previousCodeIndex].serviceDate ||
+                    formData.serviceDate
+                );
+
+                // Set the previous code's end date as previous start date + day range - 1
+                if (
+                  previousSelectedCode.day_range &&
+                  previousSelectedCode.day_range > 0
+                ) {
+                  const previousEndDate = new Date(previousStartDate);
+                  previousEndDate.setDate(
+                    previousEndDate.getDate() +
+                      previousSelectedCode.day_range -
+                      1
+                  );
+
+                  // Update the previous code's end date
+                  updatedBillingCodes[previousCodeIndex] = {
+                    ...updatedBillingCodes[previousCodeIndex],
+                    serviceEndDate: previousEndDate.toISOString().split("T")[0],
+                  };
+                }
+
+                // Set the new code's start date to previous start date + day range
+                if (
+                  previousSelectedCode.day_range &&
+                  previousSelectedCode.day_range > 0
+                ) {
+                  const newStartDate = new Date(previousStartDate);
+                  newStartDate.setDate(
+                    newStartDate.getDate() + previousSelectedCode.day_range
+                  );
+                  serviceStartDate = newStartDate.toISOString().split("T")[0];
+                } else {
+                  // If previous code has no day range, start the next day
+                  const newStartDate = new Date(previousStartDate);
+                  newStartDate.setDate(newStartDate.getDate() + 1);
+                  serviceStartDate = newStartDate.toISOString().split("T")[0];
+                }
+              }
+            }
+            // If no previous codes are selected, keep the default service start date
+          }
+          // For type 57 codes, do not set an end date initially
+          serviceEndDate = null;
+        } else {
+          // For non-type 57 codes, calculate service end date based on day range
+          if (code.day_range && code.day_range > 0) {
+            const startDate = new Date(serviceStartDate);
+            startDate.setDate(startDate.getDate() + code.day_range - 1); // -1 because it's inclusive
+            serviceEndDate = startDate.toISOString().split("T")[0];
+          }
+        }
+
+        // Add the new code to the billing codes
+        updatedBillingCodes.push({
+          codeId: code.id,
+          status: "PENDING",
+          billing_record_type: code.billing_record_type,
+          serviceStartTime: subSelection?.serviceStartTime || null,
+          serviceEndTime: subSelection?.serviceEndTime || null,
+          numberOfUnits: subSelection?.numberOfUnits || 1,
+          bilateralIndicator: subSelection?.bilateralIndicator || null,
+          specialCircumstances: subSelection?.specialCircumstances || null,
+          serviceDate: serviceStartDate,
+          serviceEndDate: serviceEndDate,
+          fee_determinant: code.fee_determinant,
+          multiple_unit_indicator: code.multiple_unit_indicator,
+        });
+      });
+
+      return {
+        ...prev,
+        billingCodes: updatedBillingCodes,
+      };
+    });
   };
 
   const handleRemoveCode = (codeId: number) => {
@@ -811,13 +906,18 @@ const ServiceFormScreen = ({ navigation }: any) => {
     setShowServiceDatePicker(true);
   };
 
-  const handleConfirmDate = () => {
-    const { year, month, day } = tempDateOfBirth;
-    if (year && month && day) {
-      const formattedDate = `${year}-${month.padStart(2, "0")}-${day.padStart(
-        2,
-        "0"
-      )}`;
+  const handleCalendarConfirm = () => {
+    if (selectedCalendarDate) {
+      const formattedDate = formatDate(selectedCalendarDate);
+
+      // Check if this is for discharge date
+      if (showDischargeDateModal) {
+        setDischargeDate(formattedDate);
+        setShowDatePicker(false);
+        return;
+      }
+
+      // Default behavior for new patient date of birth
       setNewPatient((prev) => ({ ...prev, dateOfBirth: formattedDate }));
       if (newPatientErrors.dateOfBirth) {
         setNewPatientErrors((prev) => ({ ...prev, dateOfBirth: false }));
@@ -927,17 +1027,6 @@ const ServiceFormScreen = ({ navigation }: any) => {
 
   const handleServiceCalendarDateSelect = (date: Date) => {
     setSelectedServiceCalendarDate(date);
-  };
-
-  const handleCalendarConfirm = () => {
-    if (selectedCalendarDate) {
-      const formattedDate = formatDate(selectedCalendarDate);
-      setNewPatient((prev) => ({ ...prev, dateOfBirth: formattedDate }));
-      if (newPatientErrors.dateOfBirth) {
-        setNewPatientErrors((prev) => ({ ...prev, dateOfBirth: false }));
-      }
-    }
-    setShowDatePicker(false);
   };
 
   const handleServiceCalendarConfirm = () => {
@@ -1312,6 +1401,96 @@ const ServiceFormScreen = ({ navigation }: any) => {
   const handleApproveAndFinish = () => {
     if (!validateForm()) return;
 
+    // Check if there are type 57 codes that need discharge date
+    const type57Codes = formData.billingCodes.filter((code) => {
+      const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
+      return selectedCode && selectedCode.billing_record_type === 57;
+    });
+
+    // Find the last type 57 code (the one with no next codes present)
+    const lastType57Code = type57Codes.find((code) => {
+      const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
+      if (!selectedCode) return false;
+
+      // Check if this code has any next codes that are also selected
+      const hasNextCodes = formData.billingCodes.some((nextCode) => {
+        const nextSelectedCode = selectedCodes.find(
+          (c) => c.id === nextCode.codeId
+        );
+        return (
+          nextSelectedCode &&
+          nextSelectedCode.previousCodes?.some(
+            (prevCode) => prevCode.previous_code.id === selectedCode.id
+          )
+        );
+      });
+
+      return !hasNextCodes;
+    });
+
+    if (lastType57Code && !lastType57Code.serviceEndDate) {
+      // Prompt for discharge date
+      setShowDischargeDateModal(true);
+      setPendingApproveAndFinish(true);
+      return;
+    }
+
+    // Proceed with normal approve and finish
+    performApproveAndFinish();
+  };
+
+  const handleConfirmDischargeDate = () => {
+    if (!dischargeDate) return;
+
+    // Find the last type 57 code and set its end date
+    const type57Codes = formData.billingCodes.filter((code) => {
+      const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
+      return selectedCode && selectedCode.billing_record_type === 57;
+    });
+
+    const lastType57Code = type57Codes.find((code) => {
+      const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
+      if (!selectedCode) return false;
+
+      const hasNextCodes = formData.billingCodes.some((nextCode) => {
+        const nextSelectedCode = selectedCodes.find(
+          (c) => c.id === nextCode.codeId
+        );
+        return (
+          nextSelectedCode &&
+          nextSelectedCode.previousCodes?.some(
+            (prevCode) => prevCode.previous_code.id === selectedCode.id
+          )
+        );
+      });
+
+      return !hasNextCodes;
+    });
+
+    if (lastType57Code) {
+      setFormData((prev) => ({
+        ...prev,
+        billingCodes: prev.billingCodes.map((code) => {
+          if (code.codeId === lastType57Code.codeId) {
+            return {
+              ...code,
+              serviceEndDate: dischargeDate,
+            };
+          }
+          return code;
+        }),
+      }));
+    }
+
+    setShowDischargeDateModal(false);
+    setDischargeDate("");
+    setPendingApproveAndFinish(false);
+
+    // Now proceed with approve and finish
+    performApproveAndFinish();
+  };
+
+  const performApproveAndFinish = () => {
     // Ensure all billing codes have required fields
     const validatedFormData = {
       ...formData,
@@ -2624,6 +2803,100 @@ const ServiceFormScreen = ({ navigation }: any) => {
           </Button>
         </View>
       </ScrollView>
+
+      {/* Discharge Date Modal */}
+      <Modal
+        visible={showDischargeDateModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setShowDischargeDateModal(false);
+          setDischargeDate("");
+          setPendingApproveAndFinish(false);
+        }}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => {
+            setShowDischargeDateModal(false);
+            setDischargeDate("");
+            setPendingApproveAndFinish(false);
+          }}
+        >
+          <TouchableOpacity
+            style={styles.modalContent}
+            activeOpacity={1}
+            onPress={() => {}} // Prevent closing when tapping inside modal
+          >
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Set Discharge Date</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowDischargeDateModal(false);
+                  setDischargeDate("");
+                  setPendingApproveAndFinish(false);
+                }}
+              >
+                <Ionicons name="close" size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalDescription}>
+              Please set the discharge date for the last type 57 code in the
+              service.
+            </Text>
+            <TouchableOpacity
+              style={styles.modalSearchInput}
+              onPress={() => {
+                // Use the existing date picker pattern
+                setDatePickerStep("day");
+                setShowDatePicker(true);
+                // Store the current discharge date for restoration if needed
+                if (dischargeDate) {
+                  const [year, month, day] = dischargeDate
+                    .split("-")
+                    .map(Number);
+                  setSelectedYear(year);
+                  setSelectedMonth(month - 1);
+                  // Set the calendar date directly
+                  setSelectedCalendarDate(new Date(year, month - 1, day));
+                }
+              }}
+            >
+              <Text
+                style={
+                  dischargeDate ? styles.dropdownText : styles.placeholderText
+                }
+              >
+                {dischargeDate || "Select discharge date..."}
+              </Text>
+            </TouchableOpacity>
+            <View style={styles.modalButtonContainer}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => {
+                  setShowDischargeDateModal(false);
+                  setDischargeDate("");
+                  setPendingApproveAndFinish(false);
+                }}
+              >
+                <Text style={styles.modalButtonCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalButton,
+                  styles.modalButtonConfirm,
+                  !dischargeDate && styles.modalButtonDisabled,
+                ]}
+                onPress={handleConfirmDischargeDate}
+                disabled={!dischargeDate}
+              >
+                <Text style={styles.modalButtonConfirmText}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -3015,6 +3288,28 @@ const styles = StyleSheet.create({
   },
   modalButton: {
     flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  modalButtonCancel: {
+    backgroundColor: "#6b7280",
+  },
+  modalButtonCancelText: {
+    color: "#ffffff",
+    fontWeight: "600",
+  },
+  modalButtonConfirm: {
+    backgroundColor: "#059669",
+  },
+  modalButtonConfirmText: {
+    color: "#ffffff",
+    fontWeight: "600",
+  },
+  modalButtonDisabled: {
+    backgroundColor: "#9ca3af",
+    opacity: 0.6,
   },
   disabledButton: {
     backgroundColor: "#9ca3af",
@@ -3162,6 +3457,12 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#1e293b",
     marginBottom: 12,
+    textAlign: "center",
+  },
+  modalDescription: {
+    fontSize: 16,
+    color: "#374151",
+    marginBottom: 16,
     textAlign: "center",
   },
 });
