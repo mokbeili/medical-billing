@@ -19,15 +19,7 @@ import { Service } from "../types";
 const ServicesScreen = ({ navigation }: any) => {
   const [filteredServices, setFilteredServices] = useState<Service[]>([]);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
-  const [filtersExpanded, setFiltersExpanded] = useState(false);
-  const [filters, setFilters] = useState({
-    patientName: "",
-    billingNumber: "",
-    status: "",
-    serviceDate: "",
-    code: "",
-    section: "",
-  });
+  const [searchQuery, setSearchQuery] = useState("");
 
   const {
     data: services,
@@ -53,62 +45,33 @@ const ServicesScreen = ({ navigation }: any) => {
       // Only show services with OPEN status by default
       filtered = filtered.filter((service) => service.status === "OPEN");
 
-      if (filters.status && filters.status !== "ALL") {
-        filtered = filtered.filter(
-          (service) => service.status === filters.status
-        );
-      }
+      // Apply search filter
+      if (searchQuery.trim()) {
+        const searchTerm = searchQuery.toLowerCase().trim();
+        filtered = filtered.filter((service) => {
+          // Search by patient name
+          const patientName = `${service.patient?.firstName || ""} ${
+            service.patient?.lastName || ""
+          }`.toLowerCase();
+          if (patientName.includes(searchTerm)) return true;
 
-      if (filters.patientName) {
-        const searchTerm = filters.patientName.toLowerCase();
-        filtered = filtered.filter(
-          (service) =>
-            service.patient?.firstName?.toLowerCase().includes(searchTerm) ||
-            service.patient?.lastName?.toLowerCase().includes(searchTerm)
-        );
-      }
+          // Search by billing number
+          const billingNumber =
+            service.patient?.billingNumber?.toLowerCase() || "";
+          if (billingNumber.includes(searchTerm)) return true;
 
-      if (filters.billingNumber) {
-        const searchTerm = filters.billingNumber.toLowerCase();
-        filtered = filtered.filter((service) =>
-          service.patient?.billingNumber?.toLowerCase().includes(searchTerm)
-        );
-      }
+          // Search by ICD description
+          const icdDescription =
+            service.icdCode?.description?.toLowerCase() || "";
+          if (icdDescription.includes(searchTerm)) return true;
 
-      if (filters.serviceDate) {
-        const searchTerm = filters.serviceDate.toLowerCase();
-        filtered = filtered.filter(
-          (service) =>
-            new Date(service.serviceDate).toISOString().slice(0, 16) ===
-            searchTerm
-        );
-      }
-
-      if (filters.code) {
-        const searchTerm = filters.code.toLowerCase();
-        filtered = filtered.filter((service) =>
-          service.serviceCodes.some((code) =>
-            code.billingCode.code.toLowerCase().includes(searchTerm)
-          )
-        );
-      }
-
-      if (filters.section) {
-        const searchTerm = filters.section.toLowerCase();
-        filtered = filtered.filter((service) =>
-          service.serviceCodes.some(
-            (code) =>
-              code.billingCode.section.code
-                .toLowerCase()
-                .includes(searchTerm) ||
-              code.billingCode.section.title.toLowerCase().includes(searchTerm)
-          )
-        );
+          return false;
+        });
       }
 
       setFilteredServices(filtered);
     }
-  }, [services, filters]);
+  }, [services, searchQuery]);
 
   const handleServiceSelect = (serviceId: string) => {
     // Don't allow selection of services without patient data
@@ -378,9 +341,6 @@ const ServicesScreen = ({ navigation }: any) => {
       <View style={styles.header}>
         <View>
           <Text style={styles.headerTitle}>Services</Text>
-          <Text style={styles.headerSubtitle}>
-            Only OPEN services can be selected for claims
-          </Text>
         </View>
         <TouchableOpacity
           style={styles.addButton}
@@ -390,53 +350,13 @@ const ServicesScreen = ({ navigation }: any) => {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.filtersContainer}>
-        <TouchableOpacity
-          style={styles.filtersHeader}
-          onPress={() => setFiltersExpanded(!filtersExpanded)}
-        >
-          <Text style={styles.filtersTitle}>Filters</Text>
-          <Ionicons
-            name={filtersExpanded ? "chevron-up" : "chevron-down"}
-            size={20}
-            color="#64748b"
-          />
-        </TouchableOpacity>
-
-        {filtersExpanded && (
-          <View style={styles.filters}>
-            <TextInput
-              style={styles.filterInput}
-              placeholder="Patient Name"
-              value={filters.patientName}
-              onChangeText={(text) =>
-                setFilters({ ...filters, patientName: text })
-              }
-            />
-            <TextInput
-              style={styles.filterInput}
-              placeholder="Billing Number"
-              value={filters.billingNumber}
-              onChangeText={(text) =>
-                setFilters({ ...filters, billingNumber: text })
-              }
-            />
-            <TextInput
-              style={styles.filterInput}
-              placeholder="Service Date (YYYY-MM-DD)"
-              value={filters.serviceDate}
-              onChangeText={(text) =>
-                setFilters({ ...filters, serviceDate: text })
-              }
-            />
-            <TextInput
-              style={styles.filterInput}
-              placeholder="Code"
-              value={filters.code}
-              onChangeText={(text) => setFilters({ ...filters, code: text })}
-            />
-          </View>
-        )}
+      <View style={styles.searchContainer}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search by patient name, billing number, or ICD description..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
       </View>
 
       {selectedServices.length > 0 && (
@@ -519,33 +439,19 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 8,
   },
-  filtersContainer: {
+  searchContainer: {
     padding: 16,
     backgroundColor: "#ffffff",
     borderBottomWidth: 1,
     borderBottomColor: "#e2e8f0",
   },
-  filtersHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingBottom: 12,
-  },
-  filtersTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1e293b",
-  },
-  filters: {
-    paddingTop: 12,
-  },
-  filterInput: {
+  searchInput: {
     borderWidth: 1,
     borderColor: "#d1d5db",
     borderRadius: 8,
     padding: 12,
-    marginBottom: 8,
     fontSize: 16,
+    backgroundColor: "#ffffff",
   },
 
   actionBar: {
