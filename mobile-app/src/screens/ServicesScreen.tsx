@@ -11,13 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import {
-  ActivityIndicator,
-  Button,
-  Card,
-  Checkbox,
-  Chip,
-} from "react-native-paper";
+import { ActivityIndicator, Button, Card, Chip } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { servicesAPI } from "../services/api";
 import { Service } from "../types";
@@ -56,14 +50,12 @@ const ServicesScreen = ({ navigation }: any) => {
       // Filter out services without patient data
       filtered = filtered.filter((service) => service.patient != null);
 
-      // Only show services with PENDING status for claim creation
-      filtered = filtered.filter((service) =>
-        service.serviceCodes.some((code) => code.status === "PENDING")
-      );
+      // Only show services with OPEN status by default
+      filtered = filtered.filter((service) => service.status === "OPEN");
 
       if (filters.status && filters.status !== "ALL") {
-        filtered = filtered.filter((service) =>
-          service.serviceCodes.some((code) => code.status === filters.status)
+        filtered = filtered.filter(
+          (service) => service.status === filters.status
         );
       }
 
@@ -126,15 +118,12 @@ const ServicesScreen = ({ navigation }: any) => {
       return;
     }
 
-    // Don't allow selection of services that are not PENDING
-    const hasPendingStatus = service.serviceCodes.some(
-      (code) => code.status === "PENDING"
+    // Don't allow selection of services that are not OPEN
+    const hasOpenStatus = service.serviceCodes.some(
+      (code) => code.status === "OPEN"
     );
-    if (!hasPendingStatus) {
-      Alert.alert(
-        "Error",
-        "Cannot select service that is not in PENDING status"
-      );
+    if (!hasOpenStatus) {
+      Alert.alert("Error", "Cannot select service that is not in OPEN status");
       return;
     }
 
@@ -217,16 +206,16 @@ const ServicesScreen = ({ navigation }: any) => {
     const firstService = filteredServices[0];
     const firstServiceCode = firstService.serviceCodes[0];
 
-    // Only select services that match the first service's physician and jurisdiction and have PENDING status
+    // Only select services that match the first service's physician and jurisdiction and have OPEN status
     const validServices = filteredServices.filter((service) => {
       const serviceCode = service.serviceCodes[0];
-      const hasPendingStatus = service.serviceCodes.some(
-        (code) => code.status === "PENDING"
+      const hasOpenStatus = service.serviceCodes.some(
+        (code) => code.status === "OPEN"
       );
       return (
         serviceCode &&
         firstServiceCode &&
-        hasPendingStatus &&
+        hasOpenStatus &&
         service.physician?.id === firstService.physician?.id &&
         serviceCode.billingCode.section.code ===
           firstServiceCode.billingCode.section.code
@@ -239,7 +228,35 @@ const ServicesScreen = ({ navigation }: any) => {
   const renderService = (service: Service) => {
     const isSelected = selectedServices.includes(service.id);
     const hasClaim = service.claimId !== null;
-    const hasPendingStatus = service.status === "PENDING";
+    const hasOpenStatus = service.status === "OPEN";
+
+    // Generate patient description
+    const getPatientDescription = () => {
+      if (!service.patient) return "Unknown patient";
+
+      const age = service.patient.dateOfBirth
+        ? new Date().getFullYear() -
+          new Date(service.patient.dateOfBirth).getFullYear()
+        : null;
+
+      const sex = service.patient.sex || "unknown";
+      const sexText = sex === "M" ? "male" : sex === "F" ? "female" : "unknown";
+
+      if (age) {
+        return `${age} year old ${sexText}`;
+      }
+      return `${sexText}`;
+    };
+
+    // Format date as DD/MM/YYYY without timezone conversion
+    const formatServiceDate = (dateString: string) => {
+      const date = new Date(dateString);
+      const day = date.getUTCDate().toString().padStart(2, "0");
+      const month = (date.getUTCMonth() + 1).toString().padStart(2, "0");
+      const year = date.getUTCFullYear();
+      return `${day}/${month}/${year}`;
+    };
+
     return (
       <TouchableOpacity
         key={service.id}
@@ -255,41 +272,74 @@ const ServicesScreen = ({ navigation }: any) => {
                   {service.patient?.firstName || "Unknown"}{" "}
                   {service.patient?.lastName || "Patient"}
                 </Text>
+                <Text style={styles.patientDescription}>
+                  {getPatientDescription()}
+                </Text>
                 <Text style={styles.billingNumber}>
                   #{service.patient?.billingNumber || "N/A"}
                 </Text>
               </View>
-              <Checkbox
+              <View style={styles.serviceDateContainer}>
+                <Text style={styles.serviceDate}>
+                  {formatServiceDate(service.serviceDate)}
+                </Text>
+                <View style={styles.actionButtons}>
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() => {
+                      // TODO: Add rounding functionality
+                      console.log("Rounding pressed for service:", service.id);
+                    }}
+                  >
+                    <Ionicons name="repeat" size={20} color="#2563eb" />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() => {
+                      // TODO: Add service code functionality
+                      console.log(
+                        "Add service code pressed for service:",
+                        service.id
+                      );
+                    }}
+                  >
+                    <Ionicons name="add" size={20} color="#059669" />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() => {
+                      // TODO: Add discharge patient functionality
+                      console.log(
+                        "Discharge patient pressed for service:",
+                        service.id
+                      );
+                    }}
+                  >
+                    <Ionicons name="exit-outline" size={20} color="#dc2626" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+              {/* <Checkbox
                 status={isSelected ? "checked" : "unchecked"}
                 onPress={(e) => {
                   e.stopPropagation();
                   handleServiceSelect(service.id);
                 }}
-                disabled={hasClaim || !hasPendingStatus}
-              />
-            </View>
-
-            <View style={styles.serviceInfo}>
-              <Text style={styles.serviceDate}>
-                Service Date:{" "}
-                {new Date(service.serviceDate).toLocaleDateString()}
-              </Text>
-              <Text style={styles.physician}>
-                Physician: {service.physician?.firstName || "Unknown"}{" "}
-                {service.physician?.lastName || "Physician"}
-              </Text>
+                disabled={hasClaim || !hasOpenStatus}
+              /> */}
             </View>
 
             {service.icdCode && (
               <View style={styles.icdCode}>
-                <Text style={styles.icdLabel}>ICD Code:</Text>
                 <Text style={styles.icdText}>
-                  {service.icdCode.code} - {service.icdCode.description}
+                  {service.icdCode.description}
                 </Text>
               </View>
             )}
 
-            <View style={styles.serviceCodes}>
+            {/* <View style={styles.serviceCodes}>
               <Text style={styles.serviceCodesTitle}>Service Codes:</Text>
               {service.serviceCodes.map((code, index) => (
                 <View key={index} style={styles.serviceCode}>
@@ -300,7 +350,7 @@ const ServicesScreen = ({ navigation }: any) => {
                   <Text style={styles.codeStatus}>Status: {code.status}</Text>
                 </View>
               ))}
-            </View>
+            </View> */}
 
             {hasClaim && (
               <View style={styles.claimedBadge}>
@@ -310,10 +360,10 @@ const ServicesScreen = ({ navigation }: any) => {
               </View>
             )}
 
-            {!hasPendingStatus && !hasClaim && (
+            {!hasOpenStatus && !hasClaim && (
               <View style={styles.statusBadge}>
                 <Chip mode="flat" style={styles.nonPendingChip}>
-                  Not Pending
+                  Not Open
                 </Chip>
               </View>
             )}
@@ -329,7 +379,7 @@ const ServicesScreen = ({ navigation }: any) => {
         <View>
           <Text style={styles.headerTitle}>Services</Text>
           <Text style={styles.headerSubtitle}>
-            Only PENDING services can be selected for claims
+            Only OPEN services can be selected for claims
           </Text>
         </View>
         <TouchableOpacity
@@ -551,9 +601,17 @@ const styles = StyleSheet.create({
     color: "#1e293b",
     marginBottom: 4,
   },
+  patientDescription: {
+    fontSize: 14,
+    color: "#64748b",
+    marginBottom: 4,
+  },
   billingNumber: {
     fontSize: 14,
     color: "#64748b",
+  },
+  serviceDateContainer: {
+    alignItems: "flex-end",
   },
   serviceInfo: {
     marginBottom: 12,
@@ -561,7 +619,7 @@ const styles = StyleSheet.create({
   serviceDate: {
     fontSize: 14,
     color: "#475569",
-    marginBottom: 4,
+    fontWeight: "500",
   },
   physician: {
     fontSize: 14,
@@ -664,6 +722,20 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 16,
     fontWeight: "600",
+  },
+  actionButtons: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 12,
+    gap: 16,
+  },
+  actionButton: {
+    backgroundColor: "#f8fafc",
+    borderRadius: 20,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
   },
 });
 

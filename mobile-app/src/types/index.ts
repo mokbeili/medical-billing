@@ -208,6 +208,8 @@ export interface Service {
     lastName: string;
     middleInitial: string | null;
     billingNumber: string;
+    dateOfBirth: string;
+    sex: string;
   };
   physician: {
     id: string;

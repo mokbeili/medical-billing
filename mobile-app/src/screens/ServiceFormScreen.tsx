@@ -2698,11 +2698,6 @@ const ServiceFormScreen = ({ navigation }: any) => {
                           />
                         ) : (
                           <>
-                            <Text style={styles.debugText}>
-                              Patients: {patients?.length || 0}, Filtered:{" "}
-                              {filteredPatients.length}, Query: "
-                              {patientSearchQuery}"
-                            </Text>
                             {filteredPatients.length > 0 ? (
                               filteredPatients.map((patient) => (
                                 <TouchableOpacity
