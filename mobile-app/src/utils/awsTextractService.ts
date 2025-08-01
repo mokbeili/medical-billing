@@ -21,7 +21,7 @@ export interface PatientData {
 export class AWSTextractService {
   private accessKeyId: string = "";
   private secretAccessKey: string = "";
-  private region: string = "us-east-1";
+  private region: string = "ca-central-1";
   private isConfigured: boolean = false;
 
   constructor() {
@@ -32,21 +32,38 @@ export class AWSTextractService {
   // Load configuration from environment variables
   private loadConfiguration() {
     try {
+      console.log("🔧 Loading AWS Textract configuration...");
+
       // Try different ways to access the configuration
       let envConfig;
 
       // Method 1: Try Constants.expoConfig
       if ((Constants as any).expoConfig?.extra) {
         envConfig = (Constants as any).expoConfig.extra;
+        console.log("✅ Found config in Constants.expoConfig.extra");
       }
       // Method 2: Try Constants.manifest
       else if ((Constants as any).manifest?.extra) {
         envConfig = (Constants as any).manifest.extra;
+        console.log("✅ Found config in Constants.manifest.extra");
       }
       // Method 3: Try Constants.default
       else if ((Constants as any).default?.expoConfig?.extra) {
         envConfig = (Constants as any).default.expoConfig.extra;
+        console.log("✅ Found config in Constants.default.expoConfig.extra");
       }
+      // Method 4: Try Constants directly
+      else if ((Constants as any).extra) {
+        envConfig = (Constants as any).extra;
+        console.log("✅ Found config in Constants.extra");
+      }
+
+      console.log("🔍 Environment config:", {
+        awsConfigured: envConfig?.awsConfigured,
+        hasAccessKey: !!envConfig?.awsAccessKeyId,
+        hasSecretKey: !!envConfig?.awsSecretAccessKey,
+        region: envConfig?.awsRegion,
+      });
 
       if (
         envConfig?.awsConfigured &&
@@ -55,11 +72,20 @@ export class AWSTextractService {
       ) {
         this.accessKeyId = envConfig.awsAccessKeyId;
         this.secretAccessKey = envConfig.awsSecretAccessKey;
-        this.region = envConfig.awsRegion || "us-east-1";
+        this.region = envConfig.awsRegion || "ca-central-1";
         this.isConfigured = true;
+        console.log("✅ AWS Textract configured successfully");
+        console.log("📍 Region:", this.region);
+      } else {
+        console.log("❌ AWS Textract not configured properly");
+        console.log("Required fields:", {
+          awsConfigured: envConfig?.awsConfigured,
+          awsAccessKeyId: !!envConfig?.awsAccessKeyId,
+          awsSecretAccessKey: !!envConfig?.awsSecretAccessKey,
+        });
       }
     } catch (error) {
-      console.error("Error loading AWS configuration:", error);
+      console.error("❌ Error loading AWS configuration:", error);
     }
   }
 
