@@ -1,10 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRoute } from "@react-navigation/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -139,6 +142,8 @@ const ServiceFormScreen = ({ navigation }: any) => {
   const [selectedServiceDecade, setSelectedServiceDecade] = useState<number>(0);
   const [selectedServiceYear, setSelectedServiceYear] = useState<number>(0);
   const [selectedServiceMonth, setSelectedServiceMonth] = useState<number>(0);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const scrollViewRef = useRef<ScrollView>(null);
 
   // Billing number validation function (from web form)
   const checkDigit = (value: string): boolean => {
@@ -306,6 +311,31 @@ const ServiceFormScreen = ({ navigation }: any) => {
       }
     }
   }, [formData.physicianId, physicians, isEditing, formData.serviceLocation]);
+
+  // Keyboard event listeners
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener(
+      "keyboardDidShow",
+      () => {
+        setKeyboardVisible(true);
+        // Scroll to ensure the Create Patient button is visible
+        setTimeout(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }
+    );
+    const keyboardDidHideListener = Keyboard.addListener(
+      "keyboardDidHide",
+      () => {
+        setKeyboardVisible(false);
+      }
+    );
+
+    return () => {
+      keyboardDidShowListener?.remove();
+      keyboardDidHideListener?.remove();
+    };
+  }, []);
 
   // Filter location options based on search query
   useEffect(() => {
@@ -1343,6 +1373,13 @@ const ServiceFormScreen = ({ navigation }: any) => {
     setShowPatientDropdown(false);
   };
 
+  const handleTextInputFocus = () => {
+    // Scroll to ensure the Create Patient button is visible when focusing on text inputs
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 300);
+  };
+
   const validateForm = () => {
     if (!formData.physicianId) {
       Alert.alert("Error", "Please select a physician");
@@ -1532,741 +1569,573 @@ const ServiceFormScreen = ({ navigation }: any) => {
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView style={styles.content}>
-        {/* Physician Selection - Only show if more than one physician */}
-        {physicians && physicians.length > 1 && (
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoidingView}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+        enabled={true}
+      >
+        <ScrollView
+          ref={scrollViewRef}
+          style={styles.content}
+          keyboardShouldPersistTaps="handled"
+          onScrollBeginDrag={Keyboard.dismiss}
+          contentContainerStyle={[
+            styles.scrollContentContainer,
+            { marginBottom: keyboardVisible ? 50 : 0 },
+          ]}
+          showsVerticalScrollIndicator={true}
+        >
+          {/* Physician Selection - Only show if more than one physician */}
+          {physicians && physicians.length > 1 && (
+            <Card style={styles.card}>
+              <Card.Content>
+                <Text style={styles.sectionTitle}>Physician</Text>
+                {physiciansLoading ? (
+                  <ActivityIndicator size="small" color="#2563eb" />
+                ) : (
+                  <View style={styles.pickerContainer}>
+                    {physicians?.map((physician) => (
+                      <TouchableOpacity
+                        key={physician.id}
+                        style={[
+                          styles.pickerOption,
+                          formData.physicianId === physician.id &&
+                            styles.selectedOption,
+                        ]}
+                        onPress={() =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            physicianId: physician.id,
+                          }))
+                        }
+                      >
+                        <Text
+                          style={[
+                            styles.pickerOptionText,
+                            formData.physicianId === physician.id &&
+                              styles.selectedOptionText,
+                          ]}
+                        >
+                          {physician.firstName} {physician.lastName} (
+                          {physician.billingNumber})
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </Card.Content>
+            </Card>
+          )}
+
+          {/* Service Date */}
           <Card style={styles.card}>
             <Card.Content>
-              <Text style={styles.sectionTitle}>Physician</Text>
-              {physiciansLoading ? (
-                <ActivityIndicator size="small" color="#2563eb" />
-              ) : (
-                <View style={styles.pickerContainer}>
-                  {physicians?.map((physician) => (
-                    <TouchableOpacity
-                      key={physician.id}
-                      style={[
-                        styles.pickerOption,
-                        formData.physicianId === physician.id &&
-                          styles.selectedOption,
-                      ]}
-                      onPress={() =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          physicianId: physician.id,
-                        }))
-                      }
-                    >
-                      <Text
-                        style={[
-                          styles.pickerOptionText,
-                          formData.physicianId === physician.id &&
-                            styles.selectedOptionText,
-                        ]}
-                      >
-                        {physician.firstName} {physician.lastName} (
-                        {physician.billingNumber})
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            </Card.Content>
-          </Card>
-        )}
-
-        {/* Service Date */}
-        <Card style={styles.card}>
-          <Card.Content>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Service / Admit Date</Text>
-              <TouchableOpacity
-                onPress={() => navigation.navigate("CameraScan")}
-                style={styles.headerButton}
-              >
-                <Ionicons name="camera" size={20} color="#2563eb" />
-              </TouchableOpacity>
-            </View>
-            <TouchableOpacity
-              style={[styles.input, styles.dateInput]}
-              onPress={handleOpenServiceDatePicker}
-            >
-              <Text
-                style={
-                  formData.serviceDate
-                    ? styles.dateInputText
-                    : styles.placeholderText
-                }
-              >
-                {formData.serviceDate || "Select Service Date"}
-              </Text>
-              <Ionicons name="calendar" size={20} color="#6b7280" />
-            </TouchableOpacity>
-          </Card.Content>
-        </Card>
-
-        {/* Service Location */}
-        <Card style={styles.card}>
-          <Card.Content>
-            <Text style={styles.sectionTitle}>Service Location *</Text>
-            <View style={styles.buttonGroup}>
-              <TouchableOpacity
-                style={[
-                  styles.locationButton,
-                  formData.serviceLocation === "R" &&
-                    styles.selectedLocationButton,
-                ]}
-                onPress={() =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    serviceLocation:
-                      formData.serviceLocation === "R" ? null : "R",
-                  }))
-                }
-              >
-                <Text
-                  style={[
-                    styles.locationButtonText,
-                    formData.serviceLocation === "R" &&
-                      styles.selectedLocationButtonText,
-                  ]}
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Service / Admit Date</Text>
+                <TouchableOpacity
+                  onPress={() => navigation.navigate("CameraScan")}
+                  style={styles.headerButton}
                 >
-                  Regina
-                </Text>
-              </TouchableOpacity>
+                  <Ionicons name="camera" size={20} color="#2563eb" />
+                </TouchableOpacity>
+              </View>
               <TouchableOpacity
-                style={[
-                  styles.locationButton,
-                  formData.serviceLocation === "S" &&
-                    styles.selectedLocationButton,
-                ]}
-                onPress={() =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    serviceLocation:
-                      formData.serviceLocation === "S" ? null : "S",
-                  }))
-                }
-              >
-                <Text
-                  style={[
-                    styles.locationButtonText,
-                    formData.serviceLocation === "S" &&
-                      styles.selectedLocationButtonText,
-                  ]}
-                >
-                  Saskatoon
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.locationButton,
-                  formData.serviceLocation === "X" &&
-                    styles.selectedLocationButton,
-                ]}
-                onPress={() =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    serviceLocation:
-                      formData.serviceLocation === "X" ? null : "X",
-                  }))
-                }
-              >
-                <Text
-                  style={[
-                    styles.locationButtonText,
-                    formData.serviceLocation === "X" &&
-                      styles.selectedLocationButtonText,
-                  ]}
-                >
-                  Rural/Northern
-                </Text>
-              </TouchableOpacity>
-            </View>
-            {!formData.serviceLocation && (
-              <Text style={styles.errorText}>
-                Please select a service location
-              </Text>
-            )}
-          </Card.Content>
-        </Card>
-
-        {/* Location of Service */}
-        <Card style={styles.card}>
-          <Card.Content>
-            <Text style={styles.sectionTitle}>Location of Service *</Text>
-            <View style={styles.dropdownContainer}>
-              <TouchableOpacity
-                style={[styles.input, styles.dropdownInput]}
-                onPress={() => setShowLocationDropdown(!showLocationDropdown)}
+                style={[styles.input, styles.dateInput]}
+                onPress={handleOpenServiceDatePicker}
               >
                 <Text
                   style={
-                    formData.locationOfService
-                      ? styles.dropdownText
+                    formData.serviceDate
+                      ? styles.dateInputText
                       : styles.placeholderText
                   }
                 >
-                  {formData.locationOfService
-                    ? getLocationOfServiceText(formData.locationOfService)
-                    : "Select location of service"}
+                  {formData.serviceDate || "Select Service Date"}
                 </Text>
-                <Ionicons name="chevron-down" size={20} color="#6b7280" />
+                <Ionicons name="calendar" size={20} color="#6b7280" />
               </TouchableOpacity>
-              <Modal
-                visible={showLocationDropdown}
-                transparent={true}
-                animationType="fade"
-                onRequestClose={handleCloseLocationModal}
-              >
+            </Card.Content>
+          </Card>
+
+          {/* Service Location */}
+          <Card style={styles.card}>
+            <Card.Content>
+              <Text style={styles.sectionTitle}>Service Location *</Text>
+              <View style={styles.buttonGroup}>
                 <TouchableOpacity
-                  style={styles.modalOverlay}
-                  activeOpacity={1}
-                  onPress={handleCloseLocationModal}
+                  style={[
+                    styles.locationButton,
+                    formData.serviceLocation === "R" &&
+                      styles.selectedLocationButton,
+                  ]}
+                  onPress={() =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      serviceLocation:
+                        formData.serviceLocation === "R" ? null : "R",
+                    }))
+                  }
+                >
+                  <Text
+                    style={[
+                      styles.locationButtonText,
+                      formData.serviceLocation === "R" &&
+                        styles.selectedLocationButtonText,
+                    ]}
+                  >
+                    Regina
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.locationButton,
+                    formData.serviceLocation === "S" &&
+                      styles.selectedLocationButton,
+                  ]}
+                  onPress={() =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      serviceLocation:
+                        formData.serviceLocation === "S" ? null : "S",
+                    }))
+                  }
+                >
+                  <Text
+                    style={[
+                      styles.locationButtonText,
+                      formData.serviceLocation === "S" &&
+                        styles.selectedLocationButtonText,
+                    ]}
+                  >
+                    Saskatoon
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.locationButton,
+                    formData.serviceLocation === "X" &&
+                      styles.selectedLocationButton,
+                  ]}
+                  onPress={() =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      serviceLocation:
+                        formData.serviceLocation === "X" ? null : "X",
+                    }))
+                  }
+                >
+                  <Text
+                    style={[
+                      styles.locationButtonText,
+                      formData.serviceLocation === "X" &&
+                        styles.selectedLocationButtonText,
+                    ]}
+                  >
+                    Rural/Northern
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              {!formData.serviceLocation && (
+                <Text style={styles.errorText}>
+                  Please select a service location
+                </Text>
+              )}
+            </Card.Content>
+          </Card>
+
+          {/* Location of Service */}
+          <Card style={styles.card}>
+            <Card.Content>
+              <Text style={styles.sectionTitle}>Location of Service *</Text>
+              <View style={styles.dropdownContainer}>
+                <TouchableOpacity
+                  style={[styles.input, styles.dropdownInput]}
+                  onPress={() => setShowLocationDropdown(!showLocationDropdown)}
+                >
+                  <Text
+                    style={
+                      formData.locationOfService
+                        ? styles.dropdownText
+                        : styles.placeholderText
+                    }
+                  >
+                    {formData.locationOfService
+                      ? getLocationOfServiceText(formData.locationOfService)
+                      : "Select location of service"}
+                  </Text>
+                  <Ionicons name="chevron-down" size={20} color="#6b7280" />
+                </TouchableOpacity>
+                <Modal
+                  visible={showLocationDropdown}
+                  transparent={true}
+                  animationType="fade"
+                  onRequestClose={handleCloseLocationModal}
                 >
                   <TouchableOpacity
-                    style={styles.modalContent}
+                    style={styles.modalOverlay}
                     activeOpacity={1}
-                    onPress={() => {}} // Prevent closing when tapping inside modal
+                    onPress={handleCloseLocationModal}
                   >
-                    <View style={styles.modalHeader}>
-                      <Text style={styles.modalTitle}>
-                        Select Location of Service
-                      </Text>
-                      <TouchableOpacity onPress={handleCloseLocationModal}>
-                        <Ionicons name="close" size={24} color="#6b7280" />
-                      </TouchableOpacity>
-                    </View>
-                    <TextInput
-                      style={styles.modalSearchInput}
-                      placeholder="Search locations..."
-                      value={locationSearchQuery}
-                      onChangeText={setLocationSearchQuery}
-                      autoFocus={true}
+                    <TouchableOpacity
+                      style={styles.modalContent}
+                      activeOpacity={1}
+                      onPress={() => {}} // Prevent closing when tapping inside modal
+                    >
+                      <View style={styles.modalHeader}>
+                        <Text style={styles.modalTitle}>
+                          Select Location of Service
+                        </Text>
+                        <TouchableOpacity onPress={handleCloseLocationModal}>
+                          <Ionicons name="close" size={24} color="#6b7280" />
+                        </TouchableOpacity>
+                      </View>
+                      <TextInput
+                        style={styles.modalSearchInput}
+                        placeholder="Search locations..."
+                        value={locationSearchQuery}
+                        onChangeText={setLocationSearchQuery}
+                        autoFocus={true}
+                      />
+                      <ScrollView style={styles.modalScrollView}>
+                        <Text style={styles.debugText}>
+                          Location options: {filteredLocationOptions.length} of{" "}
+                          {locationOfServiceOptions.length}
+                        </Text>
+                        {filteredLocationOptions.length > 0 ? (
+                          filteredLocationOptions.map((option) => (
+                            <TouchableOpacity
+                              key={option.value}
+                              style={styles.modalOption}
+                              onPress={() => {
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  locationOfService: option.value,
+                                }));
+                                handleCloseLocationModal();
+                              }}
+                            >
+                              <Text style={styles.modalOptionText}>
+                                {option.label}
+                              </Text>
+                            </TouchableOpacity>
+                          ))
+                        ) : (
+                          <Text style={styles.noResultsText}>
+                            No location options available.
+                          </Text>
+                        )}
+                      </ScrollView>
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                </Modal>
+              </View>
+              {!formData.locationOfService && (
+                <Text style={styles.errorText}>
+                  Please select a location of service
+                </Text>
+              )}
+            </Card.Content>
+          </Card>
+
+          {/* ICD Code */}
+          <Card style={styles.card}>
+            <Card.Content>
+              <Text style={styles.sectionTitle}>ICD Code</Text>
+              {selectedIcdCode ? (
+                <View style={styles.selectedItem}>
+                  <Text style={styles.selectedItemText}>
+                    {selectedIcdCode.code} - {selectedIcdCode.description}
+                  </Text>
+                  <TouchableOpacity onPress={handleRemoveIcdCode}>
+                    <Ionicons name="close-circle" size={20} color="#ef4444" />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.addCodeButton}
+                  onPress={() => setShowIcdCodeModal(true)}
+                >
+                  <Ionicons name="add" size={20} color="#2563eb" />
+                  <Text style={styles.addCodeButtonText}>Add ICD Code</Text>
+                </TouchableOpacity>
+              )}
+            </Card.Content>
+          </Card>
+
+          {/* Referring Physician Modal */}
+          <Modal
+            visible={showReferringPhysicianModal}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={handleCloseReferringPhysicianModal}
+          >
+            <TouchableOpacity
+              style={styles.modalOverlay}
+              activeOpacity={1}
+              onPress={handleCloseReferringPhysicianModal}
+            >
+              <TouchableOpacity
+                style={styles.modalContent}
+                activeOpacity={1}
+                onPress={() => {}} // Prevent closing when tapping inside modal
+              >
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>
+                    Select Referring Physician
+                  </Text>
+                  <TouchableOpacity
+                    onPress={handleCloseReferringPhysicianModal}
+                  >
+                    <Ionicons name="close" size={24} color="#6b7280" />
+                  </TouchableOpacity>
+                </View>
+                <TextInput
+                  style={styles.modalSearchInput}
+                  placeholder="Search referring physicians..."
+                  value={referringPhysicianSearchQuery}
+                  onChangeText={setReferringPhysicianSearchQuery}
+                  autoFocus={true}
+                />
+                <ScrollView style={styles.modalScrollView}>
+                  {isSearchingReferringPhysician ? (
+                    <ActivityIndicator
+                      size="small"
+                      color="#2563eb"
+                      style={styles.modalLoading}
                     />
-                    <ScrollView style={styles.modalScrollView}>
+                  ) : (
+                    <>
                       <Text style={styles.debugText}>
-                        Location options: {filteredLocationOptions.length} of{" "}
-                        {locationOfServiceOptions.length}
+                        Results: {referringPhysicianSearchResults.length}
                       </Text>
-                      {filteredLocationOptions.length > 0 ? (
-                        filteredLocationOptions.map((option) => (
+                      {referringPhysicianSearchResults.length > 0 ? (
+                        referringPhysicianSearchResults.map((physician) => (
                           <TouchableOpacity
-                            key={option.value}
+                            key={physician.id}
                             style={styles.modalOption}
                             onPress={() => {
-                              setFormData((prev) => ({
-                                ...prev,
-                                locationOfService: option.value,
-                              }));
-                              handleCloseLocationModal();
+                              handleSelectReferringPhysician(physician);
+                              handleCloseReferringPhysicianModal();
                             }}
                           >
                             <Text style={styles.modalOptionText}>
-                              {option.label}
+                              {physician.name} - {physician.specialty} (
+                              {physician.code})
+                            </Text>
+                            <Text style={styles.modalOptionSubtext}>
+                              {physician.location}
                             </Text>
                           </TouchableOpacity>
                         ))
                       ) : (
                         <Text style={styles.noResultsText}>
-                          No location options available.
+                          {referringPhysicianSearchQuery.trim()
+                            ? "No referring physicians found. Try a different search term."
+                            : "Start typing to search for referring physicians."}
                         </Text>
                       )}
-                    </ScrollView>
-                  </TouchableOpacity>
-                </TouchableOpacity>
-              </Modal>
-            </View>
-            {!formData.locationOfService && (
-              <Text style={styles.errorText}>
-                Please select a location of service
-              </Text>
-            )}
-          </Card.Content>
-        </Card>
-
-        {/* ICD Code */}
-        <Card style={styles.card}>
-          <Card.Content>
-            <Text style={styles.sectionTitle}>ICD Code</Text>
-            {selectedIcdCode ? (
-              <View style={styles.selectedItem}>
-                <Text style={styles.selectedItemText}>
-                  {selectedIcdCode.code} - {selectedIcdCode.description}
-                </Text>
-                <TouchableOpacity onPress={handleRemoveIcdCode}>
-                  <Ionicons name="close-circle" size={20} color="#ef4444" />
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <TouchableOpacity
-                style={styles.addCodeButton}
-                onPress={() => setShowIcdCodeModal(true)}
-              >
-                <Ionicons name="add" size={20} color="#2563eb" />
-                <Text style={styles.addCodeButtonText}>Add ICD Code</Text>
+                    </>
+                  )}
+                </ScrollView>
               </TouchableOpacity>
-            )}
-          </Card.Content>
-        </Card>
-
-        {/* Referring Physician Modal */}
-        <Modal
-          visible={showReferringPhysicianModal}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={handleCloseReferringPhysicianModal}
-        >
-          <TouchableOpacity
-            style={styles.modalOverlay}
-            activeOpacity={1}
-            onPress={handleCloseReferringPhysicianModal}
-          >
-            <TouchableOpacity
-              style={styles.modalContent}
-              activeOpacity={1}
-              onPress={() => {}} // Prevent closing when tapping inside modal
-            >
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>
-                  Select Referring Physician
-                </Text>
-                <TouchableOpacity onPress={handleCloseReferringPhysicianModal}>
-                  <Ionicons name="close" size={24} color="#6b7280" />
-                </TouchableOpacity>
-              </View>
-              <TextInput
-                style={styles.modalSearchInput}
-                placeholder="Search referring physicians..."
-                value={referringPhysicianSearchQuery}
-                onChangeText={setReferringPhysicianSearchQuery}
-                autoFocus={true}
-              />
-              <ScrollView style={styles.modalScrollView}>
-                {isSearchingReferringPhysician ? (
-                  <ActivityIndicator
-                    size="small"
-                    color="#2563eb"
-                    style={styles.modalLoading}
-                  />
-                ) : (
-                  <>
-                    <Text style={styles.debugText}>
-                      Results: {referringPhysicianSearchResults.length}
-                    </Text>
-                    {referringPhysicianSearchResults.length > 0 ? (
-                      referringPhysicianSearchResults.map((physician) => (
-                        <TouchableOpacity
-                          key={physician.id}
-                          style={styles.modalOption}
-                          onPress={() => {
-                            handleSelectReferringPhysician(physician);
-                            handleCloseReferringPhysicianModal();
-                          }}
-                        >
-                          <Text style={styles.modalOptionText}>
-                            {physician.name} - {physician.specialty} (
-                            {physician.code})
-                          </Text>
-                          <Text style={styles.modalOptionSubtext}>
-                            {physician.location}
-                          </Text>
-                        </TouchableOpacity>
-                      ))
-                    ) : (
-                      <Text style={styles.noResultsText}>
-                        {referringPhysicianSearchQuery.trim()
-                          ? "No referring physicians found. Try a different search term."
-                          : "Start typing to search for referring physicians."}
-                      </Text>
-                    )}
-                  </>
-                )}
-              </ScrollView>
             </TouchableOpacity>
-          </TouchableOpacity>
-        </Modal>
+          </Modal>
 
-        {/* ICD Code Modal */}
-        <Modal
-          visible={showIcdCodeModal}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={handleCloseIcdCodeModal}
-        >
-          <TouchableOpacity
-            style={styles.modalOverlay}
-            activeOpacity={1}
-            onPress={handleCloseIcdCodeModal}
+          {/* ICD Code Modal */}
+          <Modal
+            visible={showIcdCodeModal}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={handleCloseIcdCodeModal}
           >
             <TouchableOpacity
-              style={styles.modalContent}
+              style={styles.modalOverlay}
               activeOpacity={1}
-              onPress={() => {}} // Prevent closing when tapping inside modal
+              onPress={handleCloseIcdCodeModal}
             >
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Select ICD Code</Text>
-                <TouchableOpacity onPress={handleCloseIcdCodeModal}>
-                  <Ionicons name="close" size={24} color="#6b7280" />
-                </TouchableOpacity>
-              </View>
-              <TextInput
-                style={styles.modalSearchInput}
-                placeholder="Search ICD codes..."
-                value={icdCodeSearchQuery}
-                onChangeText={setIcdCodeSearchQuery}
-                autoFocus={true}
-              />
-              <ScrollView style={styles.modalScrollView}>
-                {isSearchingIcdCode ? (
-                  <ActivityIndicator
-                    size="small"
-                    color="#2563eb"
-                    style={styles.modalLoading}
-                  />
-                ) : (
-                  <>
-                    <Text style={styles.debugText}>
-                      Results: {icdCodeSearchResults.length}
-                    </Text>
-                    {icdCodeSearchResults.length > 0 ? (
-                      icdCodeSearchResults.map((icdCode) => (
-                        <TouchableOpacity
-                          key={icdCode.id}
-                          style={styles.modalOption}
-                          onPress={() => {
-                            handleSelectIcdCode(icdCode);
-                            handleCloseIcdCodeModal();
-                          }}
-                        >
-                          <Text style={styles.modalOptionText}>
-                            {icdCode.code} - {icdCode.description}
-                          </Text>
-                        </TouchableOpacity>
-                      ))
-                    ) : (
-                      <Text style={styles.noResultsText}>
-                        {icdCodeSearchQuery.trim()
-                          ? "No ICD codes found. Try a different search term."
-                          : "Start typing to search for ICD codes."}
+              <TouchableOpacity
+                style={styles.modalContent}
+                activeOpacity={1}
+                onPress={() => {}} // Prevent closing when tapping inside modal
+              >
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Select ICD Code</Text>
+                  <TouchableOpacity onPress={handleCloseIcdCodeModal}>
+                    <Ionicons name="close" size={24} color="#6b7280" />
+                  </TouchableOpacity>
+                </View>
+                <TextInput
+                  style={styles.modalSearchInput}
+                  placeholder="Search ICD codes..."
+                  value={icdCodeSearchQuery}
+                  onChangeText={setIcdCodeSearchQuery}
+                  autoFocus={true}
+                />
+                <ScrollView style={styles.modalScrollView}>
+                  {isSearchingIcdCode ? (
+                    <ActivityIndicator
+                      size="small"
+                      color="#2563eb"
+                      style={styles.modalLoading}
+                    />
+                  ) : (
+                    <>
+                      <Text style={styles.debugText}>
+                        Results: {icdCodeSearchResults.length}
                       </Text>
-                    )}
-                  </>
-                )}
-              </ScrollView>
+                      {icdCodeSearchResults.length > 0 ? (
+                        icdCodeSearchResults.map((icdCode) => (
+                          <TouchableOpacity
+                            key={icdCode.id}
+                            style={styles.modalOption}
+                            onPress={() => {
+                              handleSelectIcdCode(icdCode);
+                              handleCloseIcdCodeModal();
+                            }}
+                          >
+                            <Text style={styles.modalOptionText}>
+                              {icdCode.code} - {icdCode.description}
+                            </Text>
+                          </TouchableOpacity>
+                        ))
+                      ) : (
+                        <Text style={styles.noResultsText}>
+                          {icdCodeSearchQuery.trim()
+                            ? "No ICD codes found. Try a different search term."
+                            : "Start typing to search for ICD codes."}
+                        </Text>
+                      )}
+                    </>
+                  )}
+                </ScrollView>
+              </TouchableOpacity>
             </TouchableOpacity>
-          </TouchableOpacity>
-        </Modal>
+          </Modal>
 
-        {/* Date Picker Modal */}
-        <Modal
-          visible={showDatePicker}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={() => setShowDatePicker(false)}
-        >
-          <TouchableOpacity
-            style={styles.modalOverlay}
-            activeOpacity={1}
-            onPress={() => setShowDatePicker(false)}
+          {/* Date Picker Modal */}
+          <Modal
+            visible={showDatePicker}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={() => setShowDatePicker(false)}
           >
             <TouchableOpacity
-              style={styles.modalContent}
+              style={styles.modalOverlay}
               activeOpacity={1}
-              onPress={() => {}} // Prevent closing when tapping inside modal
+              onPress={() => setShowDatePicker(false)}
             >
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Select Date of Birth</Text>
-                <TouchableOpacity onPress={() => setShowDatePicker(false)}>
-                  <Ionicons name="close" size={24} color="#6b7280" />
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.stepPickerContainer}>
-                {/* Step Header */}
-                <View style={styles.stepHeader}>
-                  {datePickerStep !== "decade" && (
-                    <TouchableOpacity onPress={handleBackToDecade}>
-                      <Ionicons name="arrow-back" size={20} color="#6b7280" />
-                    </TouchableOpacity>
-                  )}
-                  <Text style={styles.stepTitle}>
-                    {datePickerStep === "decade" && "Select Decade"}
-                    {datePickerStep === "year" &&
-                      `Select Year (${selectedDecade}s)`}
-                    {datePickerStep === "month" &&
-                      `Select Month (${selectedYear})`}
-                    {datePickerStep === "day" &&
-                      `Select Day (${
-                        generateMonths().find((m) => m.value === selectedMonth)
-                          ?.label
-                      } ${selectedYear})`}
-                  </Text>
-                  {datePickerStep !== "decade" && (
-                    <View style={{ width: 20 }} />
-                  )}
+              <TouchableOpacity
+                style={styles.modalContent}
+                activeOpacity={1}
+                onPress={() => {}} // Prevent closing when tapping inside modal
+              >
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Select Date of Birth</Text>
+                  <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                    <Ionicons name="close" size={24} color="#6b7280" />
+                  </TouchableOpacity>
                 </View>
 
-                {/* Decade Selection */}
-                {datePickerStep === "decade" && (
-                  <ScrollView style={styles.stepScrollView}>
-                    {generateDecades().map((decade) => (
-                      <TouchableOpacity
-                        key={decade}
-                        style={styles.stepOption}
-                        onPress={() => handleDecadeSelect(decade)}
-                      >
-                        <Text style={styles.stepOptionText}>
-                          {decade}s ({decade} - {decade + 9})
-                        </Text>
+                <View style={styles.stepPickerContainer}>
+                  {/* Step Header */}
+                  <View style={styles.stepHeader}>
+                    {datePickerStep !== "decade" && (
+                      <TouchableOpacity onPress={handleBackToDecade}>
+                        <Ionicons name="arrow-back" size={20} color="#6b7280" />
                       </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                )}
-
-                {/* Year Selection */}
-                {datePickerStep === "year" && (
-                  <ScrollView style={styles.stepScrollView}>
-                    {generateYearsInDecade(selectedDecade).map((year) => (
-                      <TouchableOpacity
-                        key={year}
-                        style={[
-                          styles.stepOption,
-                          selectedYear === year && styles.selectedStepOption,
-                        ]}
-                        onPress={() => handleYearSelectStep(year)}
-                      >
-                        <Text
-                          style={[
-                            styles.stepOptionText,
-                            selectedYear === year &&
-                              styles.selectedStepOptionText,
-                          ]}
-                        >
-                          {year}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                )}
-
-                {/* Month Selection */}
-                {datePickerStep === "month" && (
-                  <ScrollView style={styles.stepScrollView}>
-                    {generateMonths().map((month) => (
-                      <TouchableOpacity
-                        key={month.value}
-                        style={[
-                          styles.stepOption,
-                          selectedMonth === month.value &&
-                            styles.selectedStepOption,
-                        ]}
-                        onPress={() => handleMonthSelect(month.value)}
-                      >
-                        <Text
-                          style={[
-                            styles.stepOptionText,
-                            selectedMonth === month.value &&
-                              styles.selectedStepOptionText,
-                          ]}
-                        >
-                          {month.label}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                )}
-
-                {/* Day Selection */}
-                {datePickerStep === "day" && (
-                  <View>
-                    {/* Calendar Days Header */}
-                    <View style={styles.calendarDaysHeader}>
-                      {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
-                        (day) => (
-                          <Text key={day} style={styles.calendarDayHeader}>
-                            {day}
-                          </Text>
-                        )
-                      )}
-                    </View>
-
-                    {/* Calendar Grid */}
-                    <View style={styles.calendarGrid}>
-                      {generateCalendarDays(currentCalendarMonth).map(
-                        (dayData, index) => (
-                          <TouchableOpacity
-                            key={index}
-                            style={[
-                              styles.calendarDay,
-                              dayData &&
-                                selectedCalendarDate &&
-                                isSameDate(
-                                  dayData.date,
-                                  selectedCalendarDate
-                                ) &&
-                                styles.selectedCalendarDay,
-                              !dayData && styles.emptyCalendarDay,
-                              dayData?.isFuture && styles.futureCalendarDay,
-                            ]}
-                            onPress={() =>
-                              dayData &&
-                              !dayData.isFuture &&
-                              handleCalendarDateSelect(dayData.date)
-                            }
-                            disabled={!dayData || dayData.isFuture}
-                          >
-                            {dayData && (
-                              <Text
-                                style={[
-                                  styles.calendarDayText,
-                                  selectedCalendarDate &&
-                                    isSameDate(
-                                      dayData.date,
-                                      selectedCalendarDate
-                                    ) &&
-                                    styles.selectedCalendarDayText,
-                                  dayData.isFuture &&
-                                    styles.futureCalendarDayText,
-                                ]}
-                              >
-                                {dayData.date.getDate()}
-                              </Text>
-                            )}
-                          </TouchableOpacity>
-                        )
-                      )}
-                    </View>
-
-                    {/* Selected Date Display */}
-                    {selectedCalendarDate && (
-                      <View style={styles.selectedDateContainer}>
-                        <Text style={styles.selectedDateText}>
-                          Selected: {selectedCalendarDate.toLocaleDateString()}
-                        </Text>
-                      </View>
+                    )}
+                    <Text style={styles.stepTitle}>
+                      {datePickerStep === "decade" && "Select Decade"}
+                      {datePickerStep === "year" &&
+                        `Select Year (${selectedDecade}s)`}
+                      {datePickerStep === "month" &&
+                        `Select Month (${selectedYear})`}
+                      {datePickerStep === "day" &&
+                        `Select Day (${
+                          generateMonths().find(
+                            (m) => m.value === selectedMonth
+                          )?.label
+                        } ${selectedYear})`}
+                    </Text>
+                    {datePickerStep !== "decade" && (
+                      <View style={{ width: 20 }} />
                     )}
                   </View>
-                )}
-              </View>
 
-              <View style={styles.modalButtonContainer}>
-                <Button
-                  mode="outlined"
-                  onPress={() => setShowDatePicker(false)}
-                  style={styles.modalButton}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  mode="contained"
-                  onPress={handleCalendarConfirm}
-                  style={styles.modalButton}
-                  disabled={!selectedCalendarDate}
-                >
-                  Confirm
-                </Button>
-              </View>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        </Modal>
+                  {/* Decade Selection */}
+                  {datePickerStep === "decade" && (
+                    <ScrollView style={styles.stepScrollView}>
+                      {generateDecades().map((decade) => (
+                        <TouchableOpacity
+                          key={decade}
+                          style={styles.stepOption}
+                          onPress={() => handleDecadeSelect(decade)}
+                        >
+                          <Text style={styles.stepOptionText}>
+                            {decade}s ({decade} - {decade + 9})
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  )}
 
-        {/* Year Picker Modal */}
-        <Modal
-          visible={showYearPicker}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={() => setShowYearPicker(false)}
-        >
-          <TouchableOpacity
-            style={styles.modalOverlay}
-            activeOpacity={1}
-            onPress={() => setShowYearPicker(false)}
-          >
-            <TouchableOpacity
-              style={styles.modalContent}
-              activeOpacity={1}
-              onPress={() => {}} // Prevent closing when tapping inside modal
-            >
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Select Year</Text>
-                <TouchableOpacity onPress={() => setShowYearPicker(false)}>
-                  <Ionicons name="close" size={24} color="#6b7280" />
-                </TouchableOpacity>
-              </View>
+                  {/* Year Selection */}
+                  {datePickerStep === "year" && (
+                    <ScrollView style={styles.stepScrollView}>
+                      {generateYearsInDecade(selectedDecade).map((year) => (
+                        <TouchableOpacity
+                          key={year}
+                          style={[
+                            styles.stepOption,
+                            selectedYear === year && styles.selectedStepOption,
+                          ]}
+                          onPress={() => handleYearSelectStep(year)}
+                        >
+                          <Text
+                            style={[
+                              styles.stepOptionText,
+                              selectedYear === year &&
+                                styles.selectedStepOptionText,
+                            ]}
+                          >
+                            {year}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  )}
 
-              <ScrollView style={styles.yearPickerScrollView}>
-                {Array.from({ length: 120 }, (_, i) => {
-                  const year = new Date().getFullYear() - i;
-                  return (
-                    <TouchableOpacity
-                      key={year}
-                      style={[
-                        styles.yearPickerOption,
-                        currentCalendarMonth.getFullYear() === year &&
-                          styles.selectedYearPickerOption,
-                      ]}
-                      onPress={() => {
-                        setCurrentCalendarMonth(
-                          new Date(year, currentCalendarMonth.getMonth(), 1)
-                        );
-                        setShowYearPicker(false);
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.yearPickerOptionText,
-                          currentCalendarMonth.getFullYear() === year &&
-                            styles.selectedYearPickerOptionText,
-                        ]}
-                      >
-                        {year}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        </Modal>
+                  {/* Month Selection */}
+                  {datePickerStep === "month" && (
+                    <ScrollView style={styles.stepScrollView}>
+                      {generateMonths().map((month) => (
+                        <TouchableOpacity
+                          key={month.value}
+                          style={[
+                            styles.stepOption,
+                            selectedMonth === month.value &&
+                              styles.selectedStepOption,
+                          ]}
+                          onPress={() => handleMonthSelect(month.value)}
+                        >
+                          <Text
+                            style={[
+                              styles.stepOptionText,
+                              selectedMonth === month.value &&
+                                styles.selectedStepOptionText,
+                            ]}
+                          >
+                            {month.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  )}
 
-        {/* Service Date Picker Modal */}
-        <Modal
-          visible={showServiceDatePicker}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={() => setShowServiceDatePicker(false)}
-        >
-          <TouchableOpacity
-            style={styles.modalOverlay}
-            activeOpacity={1}
-            onPress={() => setShowServiceDatePicker(false)}
-          >
-            <TouchableOpacity
-              style={styles.modalContent}
-              activeOpacity={1}
-              onPress={() => {}} // Prevent closing when tapping inside modal
-            >
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Select Service Date</Text>
-                <TouchableOpacity
-                  onPress={() => setShowServiceDatePicker(false)}
-                >
-                  <Ionicons name="close" size={24} color="#6b7280" />
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView style={styles.serviceCalendarScrollView}>
-                {generateServiceCalendarMonths().map(
-                  (monthDate, monthIndex) => (
-                    <View key={monthIndex} style={styles.serviceMonthContainer}>
-                      <Text style={styles.serviceMonthTitle}>
-                        {monthDate.toLocaleDateString("en-US", {
-                          month: "long",
-                          year: "numeric",
-                        })}
-                      </Text>
-
+                  {/* Day Selection */}
+                  {datePickerStep === "day" && (
+                    <View>
                       {/* Calendar Days Header */}
                       <View style={styles.calendarDaysHeader}>
                         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
@@ -2280,45 +2149,39 @@ const ServiceFormScreen = ({ navigation }: any) => {
 
                       {/* Calendar Grid */}
                       <View style={styles.calendarGrid}>
-                        {generateServiceCalendarDays(monthDate).map(
+                        {generateCalendarDays(currentCalendarMonth).map(
                           (dayData, index) => (
                             <TouchableOpacity
                               key={index}
                               style={[
                                 styles.calendarDay,
                                 dayData &&
-                                  selectedServiceCalendarDate &&
+                                  selectedCalendarDate &&
                                   isSameDate(
                                     dayData.date,
-                                    selectedServiceCalendarDate
+                                    selectedCalendarDate
                                   ) &&
                                   styles.selectedCalendarDay,
                                 !dayData && styles.emptyCalendarDay,
-                                dayData?.isTooOld && styles.tooOldCalendarDay,
                                 dayData?.isFuture && styles.futureCalendarDay,
                               ]}
                               onPress={() =>
                                 dayData &&
-                                !dayData.isTooOld &&
                                 !dayData.isFuture &&
-                                handleServiceCalendarDateSelect(dayData.date)
+                                handleCalendarDateSelect(dayData.date)
                               }
-                              disabled={
-                                !dayData || dayData.isTooOld || dayData.isFuture
-                              }
+                              disabled={!dayData || dayData.isFuture}
                             >
                               {dayData && (
                                 <Text
                                   style={[
                                     styles.calendarDayText,
-                                    selectedServiceCalendarDate &&
+                                    selectedCalendarDate &&
                                       isSameDate(
                                         dayData.date,
-                                        selectedServiceCalendarDate
+                                        selectedCalendarDate
                                       ) &&
                                       styles.selectedCalendarDayText,
-                                    dayData.isTooOld &&
-                                      styles.tooOldCalendarDayText,
                                     dayData.isFuture &&
                                       styles.futureCalendarDayText,
                                   ]}
@@ -2330,43 +2193,249 @@ const ServiceFormScreen = ({ navigation }: any) => {
                           )
                         )}
                       </View>
+
+                      {/* Selected Date Display */}
+                      {selectedCalendarDate && (
+                        <View style={styles.selectedDateContainer}>
+                          <Text style={styles.selectedDateText}>
+                            Selected:{" "}
+                            {selectedCalendarDate.toLocaleDateString()}
+                          </Text>
+                        </View>
+                      )}
                     </View>
-                  )
-                )}
-              </ScrollView>
-
-              {/* Selected Date Display */}
-              {selectedServiceCalendarDate && (
-                <View style={styles.selectedDateContainer}>
-                  <Text style={styles.selectedDateText}>
-                    Selected: {selectedServiceCalendarDate.toLocaleDateString()}
-                  </Text>
+                  )}
                 </View>
-              )}
 
-              <View style={styles.modalButtonContainer}>
-                <Button
-                  mode="outlined"
-                  onPress={() => setShowServiceDatePicker(false)}
-                  style={styles.modalButton}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  mode="contained"
-                  onPress={handleServiceCalendarConfirm}
-                  style={styles.modalButton}
-                  disabled={!selectedServiceCalendarDate}
-                >
-                  Confirm
-                </Button>
-              </View>
+                <View style={styles.modalButtonContainer}>
+                  <Button
+                    mode="outlined"
+                    onPress={() => setShowDatePicker(false)}
+                    style={styles.modalButton}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    mode="contained"
+                    onPress={handleCalendarConfirm}
+                    style={styles.modalButton}
+                    disabled={!selectedCalendarDate}
+                  >
+                    Confirm
+                  </Button>
+                </View>
+              </TouchableOpacity>
             </TouchableOpacity>
-          </TouchableOpacity>
-        </Modal>
+          </Modal>
 
-        {/* Health Institution - Commented out */}
-        {/* <Card style={styles.card}>
+          {/* Year Picker Modal */}
+          <Modal
+            visible={showYearPicker}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={() => setShowYearPicker(false)}
+          >
+            <TouchableOpacity
+              style={styles.modalOverlay}
+              activeOpacity={1}
+              onPress={() => setShowYearPicker(false)}
+            >
+              <TouchableOpacity
+                style={styles.modalContent}
+                activeOpacity={1}
+                onPress={() => {}} // Prevent closing when tapping inside modal
+              >
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Select Year</Text>
+                  <TouchableOpacity onPress={() => setShowYearPicker(false)}>
+                    <Ionicons name="close" size={24} color="#6b7280" />
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView style={styles.yearPickerScrollView}>
+                  {Array.from({ length: 120 }, (_, i) => {
+                    const year = new Date().getFullYear() - i;
+                    return (
+                      <TouchableOpacity
+                        key={year}
+                        style={[
+                          styles.yearPickerOption,
+                          currentCalendarMonth.getFullYear() === year &&
+                            styles.selectedYearPickerOption,
+                        ]}
+                        onPress={() => {
+                          setCurrentCalendarMonth(
+                            new Date(year, currentCalendarMonth.getMonth(), 1)
+                          );
+                          setShowYearPicker(false);
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.yearPickerOptionText,
+                            currentCalendarMonth.getFullYear() === year &&
+                              styles.selectedYearPickerOptionText,
+                          ]}
+                        >
+                          {year}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </TouchableOpacity>
+            </TouchableOpacity>
+          </Modal>
+
+          {/* Service Date Picker Modal */}
+          <Modal
+            visible={showServiceDatePicker}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={() => setShowServiceDatePicker(false)}
+          >
+            <TouchableOpacity
+              style={styles.modalOverlay}
+              activeOpacity={1}
+              onPress={() => setShowServiceDatePicker(false)}
+            >
+              <TouchableOpacity
+                style={styles.modalContent}
+                activeOpacity={1}
+                onPress={() => {}} // Prevent closing when tapping inside modal
+              >
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Select Service Date</Text>
+                  <TouchableOpacity
+                    onPress={() => setShowServiceDatePicker(false)}
+                  >
+                    <Ionicons name="close" size={24} color="#6b7280" />
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView style={styles.serviceCalendarScrollView}>
+                  {generateServiceCalendarMonths().map(
+                    (monthDate, monthIndex) => (
+                      <View
+                        key={monthIndex}
+                        style={styles.serviceMonthContainer}
+                      >
+                        <Text style={styles.serviceMonthTitle}>
+                          {monthDate.toLocaleDateString("en-US", {
+                            month: "long",
+                            year: "numeric",
+                          })}
+                        </Text>
+
+                        {/* Calendar Days Header */}
+                        <View style={styles.calendarDaysHeader}>
+                          {[
+                            "Sun",
+                            "Mon",
+                            "Tue",
+                            "Wed",
+                            "Thu",
+                            "Fri",
+                            "Sat",
+                          ].map((day) => (
+                            <Text key={day} style={styles.calendarDayHeader}>
+                              {day}
+                            </Text>
+                          ))}
+                        </View>
+
+                        {/* Calendar Grid */}
+                        <View style={styles.calendarGrid}>
+                          {generateServiceCalendarDays(monthDate).map(
+                            (dayData, index) => (
+                              <TouchableOpacity
+                                key={index}
+                                style={[
+                                  styles.calendarDay,
+                                  dayData &&
+                                    selectedServiceCalendarDate &&
+                                    isSameDate(
+                                      dayData.date,
+                                      selectedServiceCalendarDate
+                                    ) &&
+                                    styles.selectedCalendarDay,
+                                  !dayData && styles.emptyCalendarDay,
+                                  dayData?.isTooOld && styles.tooOldCalendarDay,
+                                  dayData?.isFuture && styles.futureCalendarDay,
+                                ]}
+                                onPress={() =>
+                                  dayData &&
+                                  !dayData.isTooOld &&
+                                  !dayData.isFuture &&
+                                  handleServiceCalendarDateSelect(dayData.date)
+                                }
+                                disabled={
+                                  !dayData ||
+                                  dayData.isTooOld ||
+                                  dayData.isFuture
+                                }
+                              >
+                                {dayData && (
+                                  <Text
+                                    style={[
+                                      styles.calendarDayText,
+                                      selectedServiceCalendarDate &&
+                                        isSameDate(
+                                          dayData.date,
+                                          selectedServiceCalendarDate
+                                        ) &&
+                                        styles.selectedCalendarDayText,
+                                      dayData.isTooOld &&
+                                        styles.tooOldCalendarDayText,
+                                      dayData.isFuture &&
+                                        styles.futureCalendarDayText,
+                                    ]}
+                                  >
+                                    {dayData.date.getDate()}
+                                  </Text>
+                                )}
+                              </TouchableOpacity>
+                            )
+                          )}
+                        </View>
+                      </View>
+                    )
+                  )}
+                </ScrollView>
+
+                {/* Selected Date Display */}
+                {selectedServiceCalendarDate && (
+                  <View style={styles.selectedDateContainer}>
+                    <Text style={styles.selectedDateText}>
+                      Selected:{" "}
+                      {selectedServiceCalendarDate.toLocaleDateString()}
+                    </Text>
+                  </View>
+                )}
+
+                <View style={styles.modalButtonContainer}>
+                  <Button
+                    mode="outlined"
+                    onPress={() => setShowServiceDatePicker(false)}
+                    style={styles.modalButton}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    mode="contained"
+                    onPress={handleServiceCalendarConfirm}
+                    style={styles.modalButton}
+                    disabled={!selectedServiceCalendarDate}
+                  >
+                    Confirm
+                  </Button>
+                </View>
+              </TouchableOpacity>
+            </TouchableOpacity>
+          </Modal>
+
+          {/* Health Institution - Commented out */}
+          {/* <Card style={styles.card}>
           <Card.Content>
             <Text style={styles.sectionTitle}>
               Health Institution (Optional)
@@ -2429,375 +2498,391 @@ const ServiceFormScreen = ({ navigation }: any) => {
           </Card.Content>
         </Card> */}
 
-        {/* Summary - Removed */}
+          {/* Summary - Removed */}
 
-        {/* Billing Codes */}
-        <Card style={styles.card}>
-          <Card.Content>
-            <Text style={styles.sectionTitle}>Billing Codes</Text>
-            {selectedCodes.map((code) => (
-              <View key={code.id} style={styles.selectedCode}>
-                <View style={styles.codeInfo}>
-                  <Chip mode="flat" style={styles.codeChip}>
-                    {code.code}
-                  </Chip>
-                  <Text style={styles.codeTitle}>{code.title}</Text>
-                </View>
-                <TouchableOpacity onPress={() => handleRemoveCode(code.id)}>
-                  <Ionicons name="close-circle" size={20} color="#ef4444" />
-                </TouchableOpacity>
-              </View>
-            ))}
-            <TouchableOpacity
-              style={styles.addCodeButton}
-              onPress={() =>
-                navigation.navigate("BillingCodeSearch", {
-                  onSelect: handleAddCodes,
-                  existingCodes: selectedCodes,
-                  serviceDate: formData.serviceDate,
-                })
-              }
-            >
-              <Ionicons name="add" size={20} color="#2563eb" />
-              <Text style={styles.addCodeButtonText}>Add Billing Code</Text>
-            </TouchableOpacity>
-          </Card.Content>
-        </Card>
-
-        {/* Patient Selection */}
-        <Card style={styles.card}>
-          <Card.Content>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Patient</Text>
-              {!isEditing && (
-                <View style={styles.headerButtons}>
-                  <TouchableOpacity
-                    onPress={() => navigation.navigate("CameraScan")}
-                    style={styles.headerButton}
-                  >
-                    <Ionicons name="camera" size={24} color="#2563eb" />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => setIsCreatingPatient(!isCreatingPatient)}
-                    style={styles.headerButton}
-                  >
-                    <Ionicons name="add-circle" size={24} color="#2563eb" />
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-
-            {!isEditing && isCreatingPatient ? (
-              <View style={styles.newPatientForm}>
-                <View style={styles.newPatientHeader}>
-                  <Text style={styles.newPatientTitle}>Create New Patient</Text>
-                  <TouchableOpacity onPress={() => setIsCreatingPatient(false)}>
-                    <Ionicons name="close-circle" size={24} color="#6b7280" />
-                  </TouchableOpacity>
-                </View>
-
-                <TextInput
-                  style={styles.input}
-                  placeholder="First Name *"
-                  value={newPatient.firstName}
-                  onChangeText={(text) =>
-                    setNewPatient((prev) => ({ ...prev, firstName: text }))
-                  }
-                />
-
-                <TextInput
-                  style={styles.input}
-                  placeholder="Last Name *"
-                  value={newPatient.lastName}
-                  onChangeText={(text) =>
-                    setNewPatient((prev) => ({ ...prev, lastName: text }))
-                  }
-                />
-
-                <TextInput
-                  style={[
-                    styles.input,
-                    newPatientErrors.billingNumber && styles.inputError,
-                  ]}
-                  placeholder="Billing Number (9 digits) *"
-                  value={newPatient.billingNumber}
-                  onChangeText={(text) => {
-                    // Only allow digits and limit to 9 characters
-                    const numericText = text.replace(/[^0-9]/g, "").slice(0, 9);
-                    setNewPatient((prev) => ({
-                      ...prev,
-                      billingNumber: numericText,
-                    }));
-                    // Clear error when user starts typing
-                    if (newPatientErrors.billingNumber) {
-                      setNewPatientErrors((prev) => ({
-                        ...prev,
-                        billingNumber: false,
-                      }));
-                    }
-                  }}
-                  keyboardType="numeric"
-                />
-                {newPatientErrors.billingNumber && (
-                  <Text style={styles.errorText}>
-                    Billing number is required
-                  </Text>
-                )}
-                {newPatientErrors.billingNumberCheckDigit && (
-                  <Text style={styles.errorText}>
-                    Invalid billing number check digit
-                  </Text>
-                )}
-
-                <TouchableOpacity
-                  style={[
-                    styles.input,
-                    styles.dateInput,
-                    newPatientErrors.dateOfBirth && styles.inputError,
-                  ]}
-                  onPress={handleOpenDatePicker}
-                >
-                  <Text
-                    style={
-                      newPatient.dateOfBirth
-                        ? styles.dateInputText
-                        : styles.placeholderText
-                    }
-                  >
-                    {newPatient.dateOfBirth || "Date of Birth *"}
-                  </Text>
-                  <Ionicons name="calendar" size={20} color="#6b7280" />
-                </TouchableOpacity>
-                {newPatientErrors.dateOfBirth && (
-                  <Text style={styles.errorText}>
-                    Date of birth is required
-                  </Text>
-                )}
-
-                <Text style={styles.genderLabel}>Gender *</Text>
-                <View style={styles.genderButtons}>
-                  <TouchableOpacity
-                    style={[
-                      styles.genderButton,
-                      newPatient.sex === "M" && styles.selectedGenderButton,
-                      newPatientErrors.sex && styles.inputError,
-                    ]}
-                    onPress={() => {
-                      setNewPatient((prev) => ({ ...prev, sex: "M" }));
-                      if (newPatientErrors.sex) {
-                        setNewPatientErrors((prev) => ({
-                          ...prev,
-                          sex: false,
-                        }));
-                      }
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.genderButtonText,
-                        newPatient.sex === "M" &&
-                          styles.selectedGenderButtonText,
-                      ]}
-                    >
-                      Male
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.genderButton,
-                      newPatient.sex === "F" && styles.selectedGenderButton,
-                      newPatientErrors.sex && styles.inputError,
-                    ]}
-                    onPress={() => {
-                      setNewPatient((prev) => ({ ...prev, sex: "F" }));
-                      if (newPatientErrors.sex) {
-                        setNewPatientErrors((prev) => ({
-                          ...prev,
-                          sex: false,
-                        }));
-                      }
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.genderButtonText,
-                        newPatient.sex === "F" &&
-                          styles.selectedGenderButtonText,
-                      ]}
-                    >
-                      Female
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                {newPatientErrors.sex && (
-                  <Text style={styles.errorText}>Please select a gender</Text>
-                )}
-
-                <Button
-                  mode="contained"
-                  onPress={handleCreatePatient}
-                  loading={createPatientMutation.isPending}
-                  style={[
-                    styles.createPatientButton,
-                    !isNewPatientFormValid() && styles.disabledButton,
-                  ]}
-                  disabled={
-                    !isNewPatientFormValid() || createPatientMutation.isPending
-                  }
-                >
-                  Create Patient
-                </Button>
-              </View>
-            ) : (
-              <View style={styles.dropdownContainer}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Search patients by name or billing number..."
-                  value={patientSearchQuery}
-                  onChangeText={(text) => {
-                    setPatientSearchQuery(text);
-                    setShowPatientDropdown(true);
-                  }}
-                  onFocus={() => setShowPatientDropdown(true)}
-                />
-                <Modal
-                  visible={showPatientDropdown}
-                  transparent={true}
-                  animationType="fade"
-                  onRequestClose={handleClosePatientModal}
-                >
-                  <TouchableOpacity
-                    style={styles.modalOverlay}
-                    activeOpacity={1}
-                    onPress={handleClosePatientModal}
-                  >
-                    <TouchableOpacity
-                      style={styles.modalContent}
-                      activeOpacity={1}
-                      onPress={() => {}} // Prevent closing when tapping inside modal
-                    >
-                      <View style={styles.modalHeader}>
-                        <Text style={styles.modalTitle}>Select Patient</Text>
-                        <TouchableOpacity onPress={handleClosePatientModal}>
-                          <Ionicons name="close" size={24} color="#6b7280" />
-                        </TouchableOpacity>
-                      </View>
-                      <TextInput
-                        style={styles.modalSearchInput}
-                        placeholder="Search patients..."
-                        value={patientSearchQuery}
-                        onChangeText={setPatientSearchQuery}
-                        autoFocus={true}
-                      />
-                      <ScrollView style={styles.modalScrollView}>
-                        {patientsLoading ? (
-                          <ActivityIndicator
-                            size="small"
-                            color="#2563eb"
-                            style={styles.modalLoading}
-                          />
-                        ) : (
-                          <>
-                            {filteredPatients.length > 0 ? (
-                              filteredPatients.map((patient) => (
-                                <TouchableOpacity
-                                  key={patient.id}
-                                  style={styles.modalOption}
-                                  onPress={() => {
-                                    handleSelectPatient(patient);
-                                    handleClosePatientModal();
-                                  }}
-                                >
-                                  <Text style={styles.modalOptionText}>
-                                    {patient.firstName} {patient.lastName} (#
-                                    {patient.billingNumber})
-                                  </Text>
-                                </TouchableOpacity>
-                              ))
-                            ) : (
-                              <Text style={styles.noResultsText}>
-                                No patients found. Try a different search term.
-                              </Text>
-                            )}
-                          </>
-                        )}
-                      </ScrollView>
-                    </TouchableOpacity>
-                  </TouchableOpacity>
-                </Modal>
-              </View>
-            )}
-          </Card.Content>
-        </Card>
-
-        {/* Referring Physician - Only show when required by billing codes */}
-        {requiresReferringPhysician && (
+          {/* Billing Codes */}
           <Card style={styles.card}>
             <Card.Content>
-              <Text style={styles.sectionTitle}>
-                Referring Physician (Required)
-              </Text>
-              {selectedReferringPhysician ? (
-                <View style={styles.selectedItem}>
-                  <View style={styles.selectedItemContent}>
-                    <Text style={styles.selectedItemText}>
-                      {selectedReferringPhysician.name} -{" "}
-                      {selectedReferringPhysician.specialty} (
-                      {selectedReferringPhysician.code})
-                    </Text>
-                    <Text style={styles.selectedItemSubtext}>
-                      {selectedReferringPhysician.location}
-                    </Text>
+              <Text style={styles.sectionTitle}>Billing Codes</Text>
+              {selectedCodes.map((code) => (
+                <View key={code.id} style={styles.selectedCode}>
+                  <View style={styles.codeInfo}>
+                    <Chip mode="flat" style={styles.codeChip}>
+                      {code.code}
+                    </Chip>
+                    <Text style={styles.codeTitle}>{code.title}</Text>
                   </View>
-                  <TouchableOpacity onPress={handleRemoveReferringPhysician}>
+                  <TouchableOpacity onPress={() => handleRemoveCode(code.id)}>
                     <Ionicons name="close-circle" size={20} color="#ef4444" />
                   </TouchableOpacity>
                 </View>
+              ))}
+              <TouchableOpacity
+                style={styles.addCodeButton}
+                onPress={() =>
+                  navigation.navigate("BillingCodeSearch", {
+                    onSelect: handleAddCodes,
+                    existingCodes: selectedCodes,
+                    serviceDate: formData.serviceDate,
+                  })
+                }
+              >
+                <Ionicons name="add" size={20} color="#2563eb" />
+                <Text style={styles.addCodeButtonText}>Add Billing Code</Text>
+              </TouchableOpacity>
+            </Card.Content>
+          </Card>
+
+          {requiresReferringPhysician && (
+            <Card style={styles.card}>
+              <Card.Content>
+                <Text style={styles.sectionTitle}>
+                  Referring Physician (Required)
+                </Text>
+                {selectedReferringPhysician ? (
+                  <View style={styles.selectedItem}>
+                    <View style={styles.selectedItemContent}>
+                      <Text style={styles.selectedItemText}>
+                        {selectedReferringPhysician.name} -{" "}
+                        {selectedReferringPhysician.specialty} (
+                        {selectedReferringPhysician.code})
+                      </Text>
+                      <Text style={styles.selectedItemSubtext}>
+                        {selectedReferringPhysician.location}
+                      </Text>
+                    </View>
+                    <TouchableOpacity onPress={handleRemoveReferringPhysician}>
+                      <Ionicons name="close-circle" size={20} color="#ef4444" />
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.addCodeButton}
+                    onPress={() => setShowReferringPhysicianModal(true)}
+                  >
+                    <Ionicons name="add" size={20} color="#2563eb" />
+                    <Text style={styles.addCodeButtonText}>
+                      Add Referring Physician
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </Card.Content>
+            </Card>
+          )}
+
+          {/* Patient Selection */}
+          <Card style={styles.card}>
+            <Card.Content>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Patient</Text>
+                {!isEditing && (
+                  <View style={styles.headerButtons}>
+                    <TouchableOpacity
+                      onPress={() => navigation.navigate("CameraScan")}
+                      style={styles.headerButton}
+                    >
+                      <Ionicons name="camera" size={20} color="#2563eb" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setIsCreatingPatient(!isCreatingPatient)}
+                      style={styles.headerButton}
+                    >
+                      <Ionicons
+                        name={isCreatingPatient ? "close-circle" : "add-circle"}
+                        size={24}
+                        color="#2563eb"
+                      />
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+
+              {!isEditing && isCreatingPatient ? (
+                <View style={styles.newPatientForm}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="First Name *"
+                    value={newPatient.firstName}
+                    onChangeText={(text) =>
+                      setNewPatient((prev) => ({ ...prev, firstName: text }))
+                    }
+                    onFocus={handleTextInputFocus}
+                  />
+
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Last Name *"
+                    value={newPatient.lastName}
+                    onChangeText={(text) =>
+                      setNewPatient((prev) => ({ ...prev, lastName: text }))
+                    }
+                    onFocus={handleTextInputFocus}
+                  />
+
+                  <View style={styles.dateGenderRow}>
+                    <View style={styles.dateInputContainer}>
+                      <TouchableOpacity
+                        style={[
+                          styles.input,
+                          styles.dateInput,
+                          newPatientErrors.dateOfBirth && styles.inputError,
+                        ]}
+                        onPress={handleOpenDatePicker}
+                      >
+                        <Text
+                          style={
+                            newPatient.dateOfBirth
+                              ? styles.dateInputText
+                              : styles.placeholderText
+                          }
+                        >
+                          {newPatient.dateOfBirth || "Date of Birth *"}
+                        </Text>
+                        <Ionicons name="calendar" size={20} color="#6b7280" />
+                      </TouchableOpacity>
+                      {newPatientErrors.dateOfBirth && (
+                        <Text style={styles.errorText}>
+                          Date of birth is required
+                        </Text>
+                      )}
+                    </View>
+
+                    <View style={styles.genderContainer}>
+                      <View style={styles.genderButtons}>
+                        <TouchableOpacity
+                          style={[
+                            styles.genderCircleButton,
+                            newPatient.sex === "M" &&
+                              styles.selectedGenderCircleButton,
+                            newPatientErrors.sex && styles.inputError,
+                          ]}
+                          onPress={() => {
+                            setNewPatient((prev) => ({ ...prev, sex: "M" }));
+                            if (newPatientErrors.sex) {
+                              setNewPatientErrors((prev) => ({
+                                ...prev,
+                                sex: false,
+                              }));
+                            }
+                          }}
+                        >
+                          <Ionicons
+                            name="male"
+                            size={24}
+                            color={
+                              newPatient.sex === "M" ? "#ffffff" : "#6b7280"
+                            }
+                          />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[
+                            styles.genderCircleButton,
+                            newPatient.sex === "F" &&
+                              styles.selectedGenderCircleButton,
+                            newPatientErrors.sex && styles.inputError,
+                          ]}
+                          onPress={() => {
+                            setNewPatient((prev) => ({ ...prev, sex: "F" }));
+                            if (newPatientErrors.sex) {
+                              setNewPatientErrors((prev) => ({
+                                ...prev,
+                                sex: false,
+                              }));
+                            }
+                          }}
+                        >
+                          <Ionicons
+                            name="female"
+                            size={24}
+                            color={
+                              newPatient.sex === "F" ? "#ffffff" : "#6b7280"
+                            }
+                          />
+                        </TouchableOpacity>
+                      </View>
+                      {newPatientErrors.sex && (
+                        <Text style={styles.errorText}>
+                          Please select a gender
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+
+                  <TextInput
+                    style={[
+                      styles.input,
+                      newPatientErrors.billingNumber && styles.inputError,
+                    ]}
+                    placeholder="Billing Number (9 digits) *"
+                    value={newPatient.billingNumber}
+                    onChangeText={(text) => {
+                      // Only allow digits and limit to 9 characters
+                      const numericText = text
+                        .replace(/[^0-9]/g, "")
+                        .slice(0, 9);
+                      setNewPatient((prev) => ({
+                        ...prev,
+                        billingNumber: numericText,
+                      }));
+                      // Clear error when user starts typing
+                      if (newPatientErrors.billingNumber) {
+                        setNewPatientErrors((prev) => ({
+                          ...prev,
+                          billingNumber: false,
+                        }));
+                      }
+                    }}
+                    keyboardType="numeric"
+                    onFocus={handleTextInputFocus}
+                  />
+                  {newPatientErrors.billingNumber && (
+                    <Text style={styles.errorText}>
+                      Billing number is required
+                    </Text>
+                  )}
+                  {newPatientErrors.billingNumberCheckDigit && (
+                    <Text style={styles.errorText}>
+                      Invalid billing number check digit
+                    </Text>
+                  )}
+
+                  <Button
+                    mode="contained"
+                    onPress={handleCreatePatient}
+                    loading={createPatientMutation.isPending}
+                    style={[
+                      styles.createPatientButton,
+                      !isNewPatientFormValid() && styles.disabledButton,
+                    ]}
+                    disabled={
+                      !isNewPatientFormValid() ||
+                      createPatientMutation.isPending
+                    }
+                  >
+                    Create Patient
+                  </Button>
+                </View>
               ) : (
-                <TouchableOpacity
-                  style={styles.addCodeButton}
-                  onPress={() => setShowReferringPhysicianModal(true)}
-                >
-                  <Ionicons name="add" size={20} color="#2563eb" />
-                  <Text style={styles.addCodeButtonText}>
-                    Add Referring Physician
-                  </Text>
-                </TouchableOpacity>
+                <View style={styles.dropdownContainer}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Search patients by name or billing number..."
+                    value={patientSearchQuery}
+                    onChangeText={(text) => {
+                      setPatientSearchQuery(text);
+                      setShowPatientDropdown(true);
+                    }}
+                    onFocus={() => {
+                      setShowPatientDropdown(true);
+                      handleTextInputFocus();
+                    }}
+                  />
+                  <Modal
+                    visible={showPatientDropdown}
+                    transparent={true}
+                    animationType="fade"
+                    onRequestClose={handleClosePatientModal}
+                  >
+                    <TouchableOpacity
+                      style={styles.modalOverlay}
+                      activeOpacity={1}
+                      onPress={handleClosePatientModal}
+                    >
+                      <TouchableOpacity
+                        style={styles.modalContent}
+                        activeOpacity={1}
+                        onPress={() => {}} // Prevent closing when tapping inside modal
+                      >
+                        <View style={styles.modalHeader}>
+                          <Text style={styles.modalTitle}>Select Patient</Text>
+                          <TouchableOpacity onPress={handleClosePatientModal}>
+                            <Ionicons name="close" size={24} color="#6b7280" />
+                          </TouchableOpacity>
+                        </View>
+                        <TextInput
+                          style={styles.modalSearchInput}
+                          placeholder="Search patients..."
+                          value={patientSearchQuery}
+                          onChangeText={setPatientSearchQuery}
+                          autoFocus={true}
+                        />
+                        <ScrollView style={styles.modalScrollView}>
+                          {patientsLoading ? (
+                            <ActivityIndicator
+                              size="small"
+                              color="#2563eb"
+                              style={styles.modalLoading}
+                            />
+                          ) : (
+                            <>
+                              {filteredPatients.length > 0 ? (
+                                filteredPatients.map((patient) => (
+                                  <TouchableOpacity
+                                    key={patient.id}
+                                    style={styles.modalOption}
+                                    onPress={() => {
+                                      handleSelectPatient(patient);
+                                      handleClosePatientModal();
+                                    }}
+                                  >
+                                    <Text style={styles.modalOptionText}>
+                                      {patient.firstName} {patient.lastName} (#
+                                      {patient.billingNumber})
+                                    </Text>
+                                  </TouchableOpacity>
+                                ))
+                              ) : (
+                                <Text style={styles.noResultsText}>
+                                  No patients found. Try a different search
+                                  term.
+                                </Text>
+                              )}
+                            </>
+                          )}
+                        </ScrollView>
+                      </TouchableOpacity>
+                    </TouchableOpacity>
+                  </Modal>
+                </View>
               )}
             </Card.Content>
           </Card>
-        )}
 
-        {/* Submit Buttons */}
-        <View style={styles.submitButtonsContainer}>
-          <Button
-            mode="outlined"
-            onPress={handleSave}
-            loading={
-              createServiceMutation.isPending || updateServiceMutation.isPending
-            }
-            style={[styles.submitButton, styles.saveButton]}
-            disabled={
-              createServiceMutation.isPending || updateServiceMutation.isPending
-            }
-          >
-            Save
-          </Button>
-          <Button
-            mode="contained"
-            onPress={handleApproveAndFinish}
-            loading={
-              createServiceMutation.isPending || updateServiceMutation.isPending
-            }
-            style={[styles.submitButton, styles.approveButton]}
-            disabled={
-              createServiceMutation.isPending || updateServiceMutation.isPending
-            }
-          >
-            Approve & Finish
-          </Button>
-        </View>
-      </ScrollView>
+          {/* Submit Buttons */}
+          <View style={styles.submitButtonsContainer}>
+            <Button
+              mode="outlined"
+              onPress={handleSave}
+              loading={
+                createServiceMutation.isPending ||
+                updateServiceMutation.isPending
+              }
+              style={[styles.submitButton, styles.saveButton]}
+              disabled={
+                createServiceMutation.isPending ||
+                updateServiceMutation.isPending
+              }
+            >
+              Save
+            </Button>
+            <Button
+              mode="contained"
+              onPress={handleApproveAndFinish}
+              loading={
+                createServiceMutation.isPending ||
+                updateServiceMutation.isPending
+              }
+              style={[styles.submitButton, styles.approveButton]}
+              disabled={
+                createServiceMutation.isPending ||
+                updateServiceMutation.isPending
+              }
+            >
+              Approve & Finish
+            </Button>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Discharge Date Modal */}
       <Modal
@@ -2900,6 +2985,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f8fafc",
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
+  scrollContentContainer: {
+    paddingBottom: 20, // Minimal padding when keyboard is not visible
+    flexGrow: 1, // Allow content to grow and fill available space
   },
   header: {
     flexDirection: "row",
@@ -3080,9 +3172,7 @@ const styles = StyleSheet.create({
   },
   submitButtonsContainer: {
     flexDirection: "row",
-    gap: 12,
-    marginTop: 16,
-    marginBottom: 32,
+    gap: 8,
   },
   submitButton: {
     flex: 1,
@@ -3248,10 +3338,23 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginTop: 8,
   },
+  dateGenderRow: {
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "flex-start",
+  },
+  dateInputContainer: {
+    flex: 3,
+  },
+  genderContainer: {
+    flex: 1,
+    alignItems: "center",
+  },
   genderButtons: {
     flexDirection: "row",
-    gap: 8,
-    marginBottom: 8,
+    gap: 12,
+    marginTop: 8,
+    justifyContent: "center",
   },
   genderButton: {
     flex: 1,
@@ -3261,6 +3364,20 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: "#ffffff",
     alignItems: "center",
+  },
+  genderCircleButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: "#d1d5db",
+    backgroundColor: "#ffffff",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  selectedGenderCircleButton: {
+    borderColor: "#2563eb",
+    backgroundColor: "#2563eb",
   },
   selectedGenderButton: {
     borderColor: "#2563eb",
