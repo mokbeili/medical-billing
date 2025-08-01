@@ -6,7 +6,12 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "build:preview": "chmod +x scripts/build-preview.sh && ./scripts/build-preview.sh",
+    "build:preview:ios": "eas build --platform ios --profile preview",
+    "build:preview:android": "eas build --platform android --profile preview",
+    "build:production": "eas build --platform all --profile production",
+    "setup:env": "cp .env.example .env && echo 'Please edit .env with your AWS credentials'"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.10.0",

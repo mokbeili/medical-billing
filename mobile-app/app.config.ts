@@ -72,5 +72,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY
         ? true
         : false,
+    // API Configuration
+    apiBaseUrl: process.env.API_BASE_URL || "https://your-backend-api.com",
+    // App Environment
+    appEnv: process.env.APP_ENV || "development",
   },
 });
