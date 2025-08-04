@@ -27,15 +27,32 @@ export default function Home() {
         </div>
 
         <div className="pt-8">
-          <div className="inline-flex items-center justify-center px-6 py-3 text-lg font-medium text-white bg-blue-600 rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-            Coming Soon
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <a
+              href="/physician-search"
+              className="inline-flex items-center justify-center px-6 py-3 text-lg font-medium text-white bg-blue-600 rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
+            >
+              Search Physicians
+            </a>
+            <a
+              href="/search"
+              className="inline-flex items-center justify-center px-6 py-3 text-lg font-medium text-blue-600 bg-white border border-blue-600 rounded-md shadow-sm hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
+            >
+              AI Code Search
+            </a>
+            <a
+              href="/register"
+              className="inline-flex items-center justify-center px-6 py-3 text-lg font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md shadow-sm hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors duration-200"
+            >
+              Get Started
+            </a>
           </div>
         </div>
 
         <div className="pt-8 text-sm text-gray-500">
           <p>
-            Stay tuned for our launch. We're working hard to bring you the best
-            medical billing solution.
+            Try our physician search and AI code search features today. Register
+            to access our full medical billing platform.
           </p>
         </div>
       </div>

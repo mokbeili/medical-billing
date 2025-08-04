@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -42,62 +44,6 @@ export async function GET(request: Request) {
     console.error("Error fetching health institutions:", error);
     return NextResponse.json(
       { error: "Failed to fetch health institutions" },
-      { status: 500 }
-    );
-  }
-}
-
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const {
-      name,
-      street,
-      city,
-      state,
-      postalCode,
-      country,
-      phoneNumber,
-      number,
-    } = body;
-
-    // Validate required fields
-    if (
-      !name ||
-      !street ||
-      !city ||
-      !state ||
-      !postalCode ||
-      !country ||
-      !phoneNumber
-    ) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 }
-      );
-    }
-
-    // Create new health institution
-    const institution = await prisma.healthInstitution.create({
-      data: {
-        name,
-        street,
-        city,
-        state,
-        postalCode,
-        country,
-        phoneNumber,
-        number,
-        latitude: 0, // Default values - these could be enhanced with geocoding
-        longitude: 0,
-      },
-    });
-
-    return NextResponse.json(institution, { status: 201 });
-  } catch (error) {
-    console.error("Error creating health institution:", error);
-    return NextResponse.json(
-      { error: "Failed to create health institution" },
       { status: 500 }
     );
   }

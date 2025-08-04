@@ -75,6 +75,28 @@ interface FormData {
     postalCode: string;
     country: string;
   };
+  // Physician-specific fields
+  group_number: string;
+  clinic_info: {
+    name: string;
+    clinicNumber: string;
+    phoneNumber: string;
+    existing_clinic: boolean;
+    clinic_id?: number;
+    address: {
+      street: string;
+      unit: string;
+      city: string;
+      state: string;
+      postalCode: string;
+      country: string;
+    };
+    same_as_above: boolean;
+  };
+  physician_confirmation: {
+    billing_code: string;
+    confirmed: boolean;
+  };
 }
 
 export default function RegisterPage() {
@@ -93,15 +115,50 @@ export default function RegisterPage() {
       postalCode: "",
       country: "Canada",
     },
+    // Physician-specific fields
+    group_number: "",
+    clinic_info: {
+      name: "",
+      clinicNumber: "",
+      phoneNumber: "",
+      existing_clinic: false,
+      address: {
+        street: "",
+        unit: "",
+        city: "",
+        state: "",
+        postalCode: "",
+        country: "Canada",
+      },
+      same_as_above: false,
+    },
+    physician_confirmation: {
+      billing_code: "",
+      confirmed: false,
+    },
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [postalCodeError, setPostalCodeError] = useState("");
+  const [clinicPostalCodeError, setClinicPostalCodeError] = useState("");
   const [open, setOpen] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [provinceSearch, setProvinceSearch] = useState("");
   const provinceDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Physician search states
+  const [physicianSearchQuery, setPhysicianSearchQuery] = useState("");
+  const [physicianSearchResults, setPhysicianSearchResults] = useState<any[]>(
+    []
+  );
+  const [isSearchingPhysician, setIsSearchingPhysician] = useState(false);
+  const [selectedPhysician, setSelectedPhysician] = useState<any>(null);
+
+  // Clinic search states
+  const [clinicSearchResults, setClinicSearchResults] = useState<any[]>([]);
+  const [isSearchingClinic, setIsSearchingClinic] = useState(false);
+  const [selectedClinic, setSelectedClinic] = useState<any>(null);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -122,13 +179,137 @@ export default function RegisterPage() {
     };
   }, []);
 
+  // Prevent form submission when dropdown is open
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && open) {
+        setOpen(false);
+        setProvinceSearch("");
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
   // Calculate password strength
-  const passwordStrength = validatePasswordStrength(formData.password);
+  const [passwordStrength, setPasswordStrength] = useState(
+    validatePasswordStrength("")
+  );
+
+  // Update password strength when password changes
+  useEffect(() => {
+    const newStrength = validatePasswordStrength(formData.password);
+    console.log("Password strength updated:", newStrength);
+    setPasswordStrength(newStrength);
+  }, [formData.password]);
 
   // Debug dropdown state
   useEffect(() => {
     console.log("Dropdown open state changed:", open);
-  }, [open]);
+    console.log("Province search:", provinceSearch);
+  }, [open, provinceSearch]);
+
+  // Set default physician search query when user checks "Register as a physician"
+  useEffect(() => {
+    if (formData.is_physician && formData.firstName && formData.lastName) {
+      const fullName = `${formData.firstName} ${formData.lastName}`.trim();
+      if (fullName && !physicianSearchQuery && !selectedPhysician) {
+        setPhysicianSearchQuery(fullName);
+      }
+    }
+  }, [
+    formData.is_physician,
+    formData.firstName,
+    formData.lastName,
+    physicianSearchQuery,
+    selectedPhysician,
+  ]);
+
+  // Physician search effect
+  useEffect(() => {
+    const searchPhysicians = async () => {
+      if (physicianSearchQuery.length < 2) {
+        setPhysicianSearchResults([]);
+        return;
+      }
+      setIsSearchingPhysician(true);
+      try {
+        const response = await fetch(
+          `/api/referring-physicians/public?search=${encodeURIComponent(
+            physicianSearchQuery
+          )}`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setPhysicianSearchResults(data);
+        }
+      } catch (error) {
+        console.error("Error searching physicians:", error);
+      } finally {
+        setIsSearchingPhysician(false);
+      }
+    };
+
+    const debounceTimer = setTimeout(searchPhysicians, 300);
+    return () => clearTimeout(debounceTimer);
+  }, [physicianSearchQuery]);
+
+  // Clinic search effect
+  useEffect(() => {
+    const searchClinic = async () => {
+      if (
+        !formData.clinic_info.clinicNumber ||
+        formData.clinic_info.clinicNumber.length < 2
+      ) {
+        setClinicSearchResults([]);
+        return;
+      }
+      setIsSearchingClinic(true);
+      try {
+        const response = await fetch(
+          `/api/health-institutions/public?clinicNumber=${encodeURIComponent(
+            formData.clinic_info.clinicNumber
+          )}`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setClinicSearchResults(data);
+          if (data.length > 0) {
+            setSelectedClinic(data[0]);
+            // Prefill clinic information
+            setFormData((prev) => ({
+              ...prev,
+              clinic_info: {
+                ...prev.clinic_info,
+                name: data[0].name,
+                phoneNumber: data[0].phoneNumber,
+                existing_clinic: true,
+                clinic_id: data[0].id,
+                address: {
+                  street: data[0].street,
+                  unit: "",
+                  city: data[0].city,
+                  state: data[0].state,
+                  postalCode: data[0].postalCode,
+                  country: data[0].country,
+                },
+              },
+            }));
+          }
+        }
+      } catch (error) {
+        console.error("Error searching clinic:", error);
+      } finally {
+        setIsSearchingClinic(false);
+      }
+    };
+
+    const debounceTimer = setTimeout(searchClinic, 300);
+    return () => clearTimeout(debounceTimer);
+  }, [formData.clinic_info.clinicNumber]);
 
   // Check if all required fields are filled
   const isFormValid = () => {
@@ -153,8 +334,33 @@ export default function RegisterPage() {
       formData.address.postalCode
     );
 
+    // Physician-specific validation
+    let physicianFieldsValid = true;
+    if (formData.is_physician) {
+      const clinicAddressValid =
+        formData.clinic_info.existing_clinic ||
+        (formData.clinic_info.address.street.trim() !== "" &&
+          formData.clinic_info.address.city.trim() !== "" &&
+          formData.clinic_info.address.state.trim() !== "" &&
+          formData.clinic_info.address.postalCode.trim() !== "" &&
+          validateCanadianPostalCode(formData.clinic_info.address.postalCode));
+
+      physicianFieldsValid =
+        formData.group_number.trim() !== "" &&
+        formData.clinic_info.name.trim() !== "" &&
+        formData.clinic_info.clinicNumber.trim() !== "" &&
+        formData.clinic_info.phoneNumber.trim() !== "" &&
+        formData.physician_confirmation.billing_code.trim() !== "" &&
+        formData.physician_confirmation.confirmed &&
+        clinicAddressValid;
+    }
+
     return (
-      allFieldsFilled && passwordsMatch && passwordStrong && postalCodeValid
+      allFieldsFilled &&
+      passwordsMatch &&
+      passwordStrong &&
+      postalCodeValid &&
+      physicianFieldsValid
     );
   };
 
@@ -162,6 +368,7 @@ export default function RegisterPage() {
     e.preventDefault();
     setError("");
     setPostalCodeError("");
+    setClinicPostalCodeError("");
     setLoading(true);
 
     if (formData.password !== formData.confirmPassword) {
@@ -185,6 +392,19 @@ export default function RegisterPage() {
       return;
     }
 
+    // Validate clinic postal code if physician registration
+    if (
+      formData.is_physician &&
+      !formData.clinic_info.existing_clinic &&
+      !validateCanadianPostalCode(formData.clinic_info.address.postalCode)
+    ) {
+      setClinicPostalCodeError(
+        "Please enter a valid Canadian postal code for the clinic (e.g., A1A 1A1)"
+      );
+      setLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST",
@@ -196,6 +416,9 @@ export default function RegisterPage() {
           password: formData.password,
           is_physician: formData.is_physician,
           address: formData.address,
+          group_number: formData.group_number,
+          clinic_info: formData.clinic_info,
+          physician_confirmation: formData.physician_confirmation,
         }),
       });
 
@@ -232,10 +455,35 @@ export default function RegisterPage() {
     }
   };
 
+  const updateClinicAddress = (
+    field: keyof typeof formData.clinic_info.address,
+    value: string
+  ) => {
+    setFormData((prev) => ({
+      ...prev,
+      clinic_info: {
+        ...prev.clinic_info,
+        address: {
+          ...prev.clinic_info.address,
+          [field]: value,
+        },
+      },
+    }));
+  };
+
   const handlePostalCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.toUpperCase();
     const formatted = formatPostalCode(value);
     updateAddress("postalCode", formatted);
+  };
+
+  const handleClinicPostalCodeChange = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const value = e.target.value.toUpperCase();
+    const formatted = formatPostalCode(value);
+    updateClinicAddress("postalCode", formatted);
+    setClinicPostalCodeError(""); // Clear error when user starts typing
   };
 
   const getPasswordStrengthColor = () => {
@@ -503,25 +751,6 @@ export default function RegisterPage() {
                   : "Passwords do not match"}
               </div>
             )}
-
-            {/* Physician Registration Checkbox */}
-            <div className="flex items-center">
-              <input
-                id="is_physician"
-                type="checkbox"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                checked={formData.is_physician}
-                onChange={(e) =>
-                  setFormData({ ...formData, is_physician: e.target.checked })
-                }
-              />
-              <label
-                htmlFor="is_physician"
-                className="ml-2 block text-sm text-gray-900"
-              >
-                Register as a physician
-              </label>
-            </div>
           </div>
 
           {/* Address Section */}
@@ -560,7 +789,9 @@ export default function RegisterPage() {
                 >
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
                       console.log(
                         "Dropdown clicked, current open state:",
                         open
@@ -578,7 +809,10 @@ export default function RegisterPage() {
                   </button>
 
                   {open && (
-                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto top-full left-0">
+                    <div
+                      className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto top-full left-0"
+                      style={{ position: "absolute", zIndex: 9999 }}
+                    >
                       <div className="p-2">
                         <input
                           type="text"
@@ -659,6 +893,350 @@ export default function RegisterPage() {
               </div>
             </div>
           </div>
+
+          {/* Physician Registration Checkbox */}
+          <div className="flex items-center">
+            <input
+              id="is_physician"
+              type="checkbox"
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              checked={formData.is_physician}
+              onChange={(e) =>
+                setFormData({ ...formData, is_physician: e.target.checked })
+              }
+            />
+            <label
+              htmlFor="is_physician"
+              className="ml-2 block text-sm text-gray-900"
+            >
+              Register as a physician
+            </label>
+          </div>
+
+          {/* Physician Information Section */}
+          {formData.is_physician && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium text-gray-900">
+                Physician Information
+              </h3>
+
+              {/* Group Number */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Group Number *
+                </label>
+                <input
+                  type="text"
+                  required
+                  className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  placeholder="Enter your group number"
+                  value={formData.group_number}
+                  onChange={(e) =>
+                    setFormData({ ...formData, group_number: e.target.value })
+                  }
+                />
+              </div>
+
+              {/* Physician Search and Confirmation */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Confirm Your Information *
+                </label>
+                <div className="space-y-2">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm pr-20"
+                      placeholder="Search for your name in the referring physicians database"
+                      value={physicianSearchQuery}
+                      onChange={(e) => setPhysicianSearchQuery(e.target.value)}
+                    />
+                    {physicianSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPhysicianSearchQuery("");
+                          setPhysicianSearchResults([]);
+                          setSelectedPhysician(null);
+                          setFormData((prev) => ({
+                            ...prev,
+                            physician_confirmation: {
+                              billing_code: "",
+                              confirmed: false,
+                            },
+                          }));
+                        }}
+                        className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+
+                  {isSearchingPhysician && (
+                    <div className="text-sm text-gray-500 flex items-center">
+                      <svg
+                        className="animate-spin -ml-1 mr-3 h-4 w-4 text-gray-500"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                      Searching...
+                    </div>
+                  )}
+
+                  {physicianSearchResults.length > 0 && (
+                    <div className="border border-gray-300 rounded-md max-h-40 overflow-auto">
+                      {physicianSearchResults.map((physician) => (
+                        <button
+                          key={physician.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedPhysician(physician);
+                            setFormData((prev) => ({
+                              ...prev,
+                              physician_confirmation: {
+                                billing_code: physician.code,
+                                confirmed: true,
+                              },
+                            }));
+                            setPhysicianSearchQuery(physician.name);
+                            setPhysicianSearchResults([]);
+                          }}
+                          className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 border-b border-gray-200 last:border-b-0"
+                        >
+                          <div className="font-medium">{physician.name}</div>
+                          <div className="text-gray-600">
+                            Code: {physician.code}
+                          </div>
+                          <div className="text-gray-600">
+                            {physician.specialty}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {selectedPhysician && (
+                    <div className="bg-green-50 border border-green-200 rounded-md p-3">
+                      <div className="text-sm text-green-800">
+                        <div className="font-medium flex items-center justify-between">
+                          <span>Selected: {selectedPhysician.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedPhysician(null);
+                              setFormData((prev) => ({
+                                ...prev,
+                                physician_confirmation: {
+                                  billing_code: "",
+                                  confirmed: false,
+                                },
+                              }));
+                            }}
+                            className="text-red-600 hover:text-red-800 text-xs"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                        <div>Billing Code: {selectedPhysician.code}</div>
+                        <div>Specialty: {selectedPhysician.specialty}</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {physicianSearchQuery &&
+                    !isSearchingPhysician &&
+                    physicianSearchResults.length === 0 && (
+                      <div className="text-sm text-gray-500">
+                        No physicians found. Please try a different search term.
+                      </div>
+                    )}
+                </div>
+              </div>
+
+              {/* Clinic Information */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Clinic Information *
+                </label>
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    required
+                    className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    placeholder="Clinic Name"
+                    value={formData.clinic_info.name}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        clinic_info: {
+                          ...prev.clinic_info,
+                          name: e.target.value,
+                        },
+                      }))
+                    }
+                  />
+
+                  <input
+                    type="text"
+                    required
+                    className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    placeholder="Clinic Number"
+                    value={formData.clinic_info.clinicNumber}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        clinic_info: {
+                          ...prev.clinic_info,
+                          clinicNumber: e.target.value,
+                        },
+                      }))
+                    }
+                  />
+
+                  <input
+                    type="text"
+                    required
+                    className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    placeholder="Phone Number"
+                    value={formData.clinic_info.phoneNumber}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        clinic_info: {
+                          ...prev.clinic_info,
+                          phoneNumber: e.target.value,
+                        },
+                      }))
+                    }
+                  />
+
+                  {formData.clinic_info.existing_clinic ? (
+                    <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                      <div className="text-sm text-blue-800">
+                        Clinic found in database. Address will be pre-filled.
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="flex items-center mb-2">
+                        <input
+                          id="same_as_above"
+                          type="checkbox"
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          checked={formData.clinic_info.same_as_above}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              clinic_info: {
+                                ...prev.clinic_info,
+                                same_as_above: e.target.checked,
+                                address: e.target.checked
+                                  ? formData.address
+                                  : prev.clinic_info.address,
+                              },
+                            }))
+                          }
+                        />
+                        <label
+                          htmlFor="same_as_above"
+                          className="ml-2 block text-sm text-gray-900"
+                        >
+                          Clinic address is the same as above
+                        </label>
+                      </div>
+
+                      {!formData.clinic_info.same_as_above && (
+                        <div className="space-y-3">
+                          <input
+                            type="text"
+                            required
+                            className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                            placeholder="Clinic Street Address"
+                            value={formData.clinic_info.address.street}
+                            onChange={(e) =>
+                              updateClinicAddress("street", e.target.value)
+                            }
+                          />
+
+                          <input
+                            type="text"
+                            className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                            placeholder="Clinic Unit (optional)"
+                            value={formData.clinic_info.address.unit}
+                            onChange={(e) =>
+                              updateClinicAddress("unit", e.target.value)
+                            }
+                          />
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <input
+                              type="text"
+                              required
+                              className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                              placeholder="Clinic City"
+                              value={formData.clinic_info.address.city}
+                              onChange={(e) =>
+                                updateClinicAddress("city", e.target.value)
+                              }
+                            />
+
+                            <input
+                              type="text"
+                              required
+                              className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                              placeholder="Clinic Province"
+                              value={formData.clinic_info.address.state}
+                              onChange={(e) =>
+                                updateClinicAddress("state", e.target.value)
+                              }
+                            />
+                          </div>
+
+                          <div>
+                            <input
+                              type="text"
+                              required
+                              className={cn(
+                                "appearance-none rounded-md relative block w-full px-3 py-2 border placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm",
+                                clinicPostalCodeError
+                                  ? "border-red-300 focus:border-red-500 focus:ring-red-500"
+                                  : "border-gray-300 focus:border-blue-500"
+                              )}
+                              placeholder="Clinic Postal Code (A1A 1A1)"
+                              value={formData.clinic_info.address.postalCode}
+                              onChange={handleClinicPostalCodeChange}
+                              maxLength={7}
+                            />
+                            {clinicPostalCodeError && (
+                              <p className="mt-1 text-sm text-red-600">
+                                {clinicPostalCodeError}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           <div>
             <button
