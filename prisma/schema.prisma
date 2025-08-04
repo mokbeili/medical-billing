@@ -145,6 +145,8 @@ model User {
   updated_at            DateTime         @updatedAt
   reset_token           String?
   reset_token_expires   DateTime?
+  encrypted_first_name  String?
+  encrypted_last_name   String?
   encrypted_city        String?
   encrypted_country     String?
   encrypted_postal_code String?

@@ -61,9 +61,12 @@ const validatePasswordStrength = (password: string) => {
 };
 
 interface FormData {
+  firstName: string;
+  lastName: string;
   email: string;
   password: string;
   confirmPassword: string;
+  is_physician: boolean;
   address: {
     street: string;
     unit: string;
@@ -76,9 +79,12 @@ interface FormData {
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState<FormData>({
+    firstName: "",
+    lastName: "",
     email: "",
     password: "",
     confirmPassword: "",
+    is_physician: false,
     address: {
       street: "",
       unit: "",
@@ -104,6 +110,7 @@ export default function RegisterPage() {
         provinceDropdownRef.current &&
         !provinceDropdownRef.current.contains(event.target as Node)
       ) {
+        console.log("Clicking outside, closing dropdown");
         setOpen(false);
         setProvinceSearch("");
       }
@@ -118,9 +125,16 @@ export default function RegisterPage() {
   // Calculate password strength
   const passwordStrength = validatePasswordStrength(formData.password);
 
+  // Debug dropdown state
+  useEffect(() => {
+    console.log("Dropdown open state changed:", open);
+  }, [open]);
+
   // Check if all required fields are filled
   const isFormValid = () => {
     const requiredFields = [
+      formData.firstName,
+      formData.lastName,
       formData.email,
       formData.password,
       formData.confirmPassword,
@@ -176,8 +190,11 @@ export default function RegisterPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          first_name: formData.firstName,
+          last_name: formData.lastName,
           email: formData.email,
           password: formData.password,
+          is_physician: formData.is_physician,
           address: formData.address,
         }),
       });
@@ -257,9 +274,29 @@ export default function RegisterPage() {
             </h3>
             <div className="rounded-md shadow-sm -space-y-px">
               <input
-                type="email"
+                type="text"
                 required
                 className="appearance-none rounded-t-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                placeholder="First Name"
+                value={formData.firstName}
+                onChange={(e) =>
+                  setFormData({ ...formData, firstName: e.target.value })
+                }
+              />
+              <input
+                type="text"
+                required
+                className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                placeholder="Last Name"
+                value={formData.lastName}
+                onChange={(e) =>
+                  setFormData({ ...formData, lastName: e.target.value })
+                }
+              />
+              <input
+                type="email"
+                required
+                className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
                 placeholder="Email address"
                 value={formData.email}
                 onChange={(e) =>
@@ -270,7 +307,7 @@ export default function RegisterPage() {
                 <input
                   type={showPassword ? "text" : "password"}
                   required
-                  className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm pr-10"
+                  className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm pr-10"
                   placeholder="Password"
                   value={formData.password}
                   onChange={(e) =>
@@ -466,6 +503,25 @@ export default function RegisterPage() {
                   : "Passwords do not match"}
               </div>
             )}
+
+            {/* Physician Registration Checkbox */}
+            <div className="flex items-center">
+              <input
+                id="is_physician"
+                type="checkbox"
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                checked={formData.is_physician}
+                onChange={(e) =>
+                  setFormData({ ...formData, is_physician: e.target.checked })
+                }
+              />
+              <label
+                htmlFor="is_physician"
+                className="ml-2 block text-sm text-gray-900"
+              >
+                Register as a physician
+              </label>
+            </div>
           </div>
 
           {/* Address Section */}
@@ -489,7 +545,7 @@ export default function RegisterPage() {
                 value={formData.address.unit}
                 onChange={(e) => updateAddress("unit", e.target.value)}
               />
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4 overflow-visible">
                 <input
                   type="text"
                   required
@@ -498,10 +554,19 @@ export default function RegisterPage() {
                   value={formData.address.city}
                   onChange={(e) => updateAddress("city", e.target.value)}
                 />
-                <div className="relative" ref={provinceDropdownRef}>
+                <div
+                  className="relative z-10 overflow-visible"
+                  ref={provinceDropdownRef}
+                >
                   <button
                     type="button"
-                    onClick={() => setOpen(!open)}
+                    onClick={() => {
+                      console.log(
+                        "Dropdown clicked, current open state:",
+                        open
+                      );
+                      setOpen(!open);
+                    }}
                     className="flex h-10 w-full items-center justify-between rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 hover:bg-gray-50"
                   >
                     {formData.address.state
@@ -513,7 +578,7 @@ export default function RegisterPage() {
                   </button>
 
                   {open && (
-                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto top-full left-0">
                       <div className="p-2">
                         <input
                           type="text"
@@ -537,6 +602,7 @@ export default function RegisterPage() {
                             key={province.code}
                             type="button"
                             onClick={() => {
+                              console.log("Province selected:", province.name);
                               updateAddress("state", province.code);
                               setOpen(false);
                               setProvinceSearch("");

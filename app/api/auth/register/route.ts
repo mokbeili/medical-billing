@@ -1,4 +1,4 @@
-import { encryptAddress } from "@/utils/encryption";
+import { encrypt, encryptAddress } from "@/utils/encryption";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
 import { NextResponse } from "next/server";
@@ -11,10 +11,19 @@ export async function POST(request: Request) {
       throw new Error("ENCRYPTION_KEY is not set");
     }
 
-    const { email, password, address } = await request.json();
+    const { email, password, address, first_name, last_name, is_physician } =
+      await request.json();
 
     // Validate input
-    if (!email || !password || !address) {
+    if (!email || !password || !address || !first_name || !last_name) {
+      console.log(
+        "Missing required fields",
+        email,
+        password,
+        address,
+        first_name,
+        last_name
+      );
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
@@ -42,7 +51,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Hash password and encrypt address
+    // Hash password and encrypt address and names
     const hashedPassword = await bcrypt.hash(password, 12);
     const encryptedAddressFields = encryptAddress({
       street,
@@ -53,12 +62,19 @@ export async function POST(request: Request) {
       unit: unit || null,
     });
 
+    // Determine roles based on is_physician parameter
+    const roles = is_physician
+      ? ["PATIENT" as const, "PHYSICIAN" as const]
+      : ["PATIENT" as const];
+
     // Create user
     const user = await prisma.user.create({
       data: {
         email,
         password_hash: hashedPassword,
-        roles: ["PATIENT"],
+        roles,
+        encrypted_first_name: encrypt(first_name),
+        encrypted_last_name: encrypt(last_name),
         ...encryptedAddressFields,
       },
       select: {
