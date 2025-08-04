@@ -38,15 +38,16 @@ model Jurisdiction {
 }
 
 model Section {
-  id             Int           @id @default(autoincrement())
-  code           String
-  title          String
-  description    String?
-  jurisdictionId Int           @map("jurisdiction_id")
-  createdAt      DateTime      @default(now()) @map("created_at")
-  updatedAt      DateTime      @updatedAt @map("updated_at")
-  billingCodes   BillingCode[]
-  jurisdiction   Jurisdiction  @relation(fields: [jurisdictionId], references: [id])
+  id                Int                @id @default(autoincrement())
+  code              String
+  title             String
+  description       String?
+  jurisdictionId    Int                @map("jurisdiction_id")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+  billingCodes      BillingCode[]
+  jurisdiction      Jurisdiction       @relation(fields: [jurisdictionId], references: [id])
+  preferredSections PreferredSection[]
 
   @@map("sections")
 }
@@ -212,6 +213,7 @@ model Physician {
   referringPhysicians   ReferringPhysician[]
   SearchQueryLog        SearchQueryLog[]
   Service               Service[]
+  preferredSections     PreferredSection[]
 
   @@map("physicians")
 }
@@ -385,6 +387,22 @@ model search_query_embeddings {
 
   @@index([search_query_log_id], map: "idx_search_query_embeddings_log_id")
   @@index([vector_embeddings], map: "idx_search_query_embeddings_vector")
+}
+
+model PreferredSection {
+  id          Int      @id @default(autoincrement())
+  physicianId String   @map("physician_id")
+  sectionId   Int      @map("section_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  physician Physician @relation(fields: [physicianId], references: [id], onDelete: Cascade)
+  section   Section   @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@unique([physicianId, sectionId])
+  @@index([physicianId])
+  @@index([sectionId])
+  @@map("preferred_sections")
 }
 
 enum Role {
