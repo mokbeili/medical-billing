@@ -62,12 +62,12 @@ export async function POST(request: Request) {
     }
 
     // Validate billing codes
-    if (!billingCodes || billingCodes.length === 0) {
-      return NextResponse.json(
-        { error: "At least one billing code is required" },
-        { status: 400 }
-      );
-    }
+    // if (!billingCodes || billingCodes.length === 0) {
+    //   return NextResponse.json(
+    //     { error: "At least one billing code is required" },
+    //     { status: 400 }
+    //   );
+    // }
 
     // Validate and prepare billing codes data
     const preparedBillingCodes =

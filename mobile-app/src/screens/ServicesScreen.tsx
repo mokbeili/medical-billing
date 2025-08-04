@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useQuery } from "@tanstack/react-query";
 import React, { useEffect, useState } from "react";
 import {
@@ -13,7 +14,7 @@ import {
 } from "react-native";
 import { ActivityIndicator, Button, Card, Chip } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { servicesAPI } from "../services/api";
+import { patientsAPI, physiciansAPI, servicesAPI } from "../services/api";
 import { Service } from "../types";
 
 const ServicesScreen = ({ navigation }: any) => {
@@ -29,6 +30,18 @@ const ServicesScreen = ({ navigation }: any) => {
   } = useQuery({
     queryKey: ["services"],
     queryFn: servicesAPI.getAll,
+    retry: 1,
+  });
+
+  const { data: patients, refetch: refetchPatients } = useQuery({
+    queryKey: ["patients"],
+    queryFn: patientsAPI.getAll,
+    retry: 1,
+  });
+
+  const { data: physicians, refetch: refetchPhysicians } = useQuery({
+    queryKey: ["physicians"],
+    queryFn: physiciansAPI.getAll,
     retry: 1,
   });
 
@@ -72,6 +85,144 @@ const ServicesScreen = ({ navigation }: any) => {
       setFilteredServices(filtered);
     }
   }, [services, searchQuery]);
+
+  const handleCameraScan = () => {
+    navigation.navigate("CameraScan");
+  };
+
+  const handleScannedPatientData = async (scannedData: any) => {
+    try {
+      // Validate that all required patient information is present
+      if (
+        !scannedData.firstName ||
+        !scannedData.lastName ||
+        !scannedData.dateOfBirth ||
+        !scannedData.billingNumber
+      ) {
+        Alert.alert(
+          "Incomplete Patient Data",
+          "Please ensure all patient information (full name, date of birth, and billing number) is present before proceeding."
+        );
+        return;
+      }
+
+      // Get current physician (assuming first physician for now)
+      const currentPhysician = physicians?.[0];
+      if (!currentPhysician) {
+        Alert.alert("Error", "No physician found. Please contact support.");
+        return;
+      }
+
+      // Check if patient exists in physician's list
+      const existingPatient = patients?.find(
+        (patient) =>
+          patient.billingNumber === scannedData.billingNumber &&
+          patient.firstName.toLowerCase() ===
+            scannedData.firstName.toLowerCase() &&
+          patient.lastName.toLowerCase() === scannedData.lastName.toLowerCase()
+      );
+
+      let patientId: string;
+
+      if (!existingPatient) {
+        // Create new patient
+        try {
+          const newPatient = await patientsAPI.create({
+            firstName: scannedData.firstName,
+            lastName: scannedData.lastName,
+            billingNumber: scannedData.billingNumber,
+            dateOfBirth: scannedData.dateOfBirth,
+            sex: scannedData.gender === "M" ? "M" : "F",
+            physicianId: currentPhysician.id,
+          });
+          patientId = newPatient.id;
+          await refetchPatients();
+          Alert.alert("Success", "New patient created successfully!");
+        } catch (error) {
+          console.error("Error creating patient:", error);
+          Alert.alert(
+            "Error",
+            "Failed to create new patient. Please try again."
+          );
+          return;
+        }
+      } else {
+        patientId = existingPatient.id;
+      }
+
+      // Check if there are open services for this physician/patient combination
+      const openServices = services?.filter(
+        (service) =>
+          service.patient.id === patientId &&
+          service.physician.id === currentPhysician.id &&
+          service.status === "OPEN"
+      );
+
+      if (!openServices || openServices.length === 0) {
+        // Create a new service for the patient
+        try {
+          const serviceData = {
+            physicianId: currentPhysician.id,
+            patientId: patientId,
+            serviceDate:
+              scannedData.serviceDate || new Date().toISOString().split("T")[0],
+            referringPhysicianId: null,
+            icdCodeId: null,
+            healthInstitutionId: null,
+            summary: "",
+            serviceLocation: null,
+            locationOfService: null,
+            serviceStatus: "OPEN",
+            billingCodes: [],
+          };
+
+          const newService = await servicesAPI.create(serviceData);
+          await refetch();
+          Alert.alert("Success", "New service created for patient!");
+
+          // Navigate to service form to add billing codes
+          navigation.navigate("ServiceForm", { serviceId: newService.id });
+        } catch (error) {
+          console.error("Error creating service:", error);
+          Alert.alert(
+            "Error",
+            "Failed to create new service. Please try again."
+          );
+          return;
+        }
+      }
+
+      // Set search query to patient's full name
+      const fullName = `${scannedData.firstName} ${scannedData.lastName}`;
+      setSearchQuery(fullName);
+    } catch (error) {
+      console.error("Error handling scanned patient data:", error);
+      Alert.alert(
+        "Error",
+        "Failed to process scanned patient data. Please try again."
+      );
+    }
+  };
+
+  // Listen for navigation events to handle scanned data
+  React.useEffect(() => {
+    const unsubscribe = navigation.addListener("focus", async () => {
+      // Check if we have scanned data from CameraScanScreen in AsyncStorage
+      try {
+        const scannedDataStr = await AsyncStorage.getItem("scannedPatientData");
+        if (scannedDataStr) {
+          const scannedData = JSON.parse(scannedDataStr);
+          // Clear the stored data to avoid processing again
+          await AsyncStorage.removeItem("scannedPatientData");
+          handleScannedPatientData(scannedData);
+        }
+      } catch (error) {
+        console.error("Error reading scanned data from AsyncStorage:", error);
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation, patients, physicians, services]);
 
   const handleServiceSelect = (serviceId: string) => {
     // Don't allow selection of services without patient data
@@ -342,12 +493,20 @@ const ServicesScreen = ({ navigation }: any) => {
         <View>
           <Text style={styles.headerTitle}>Services</Text>
         </View>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => navigation.navigate("ServiceForm")}
-        >
-          <Ionicons name="add" size={24} color="#ffffff" />
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity
+            style={styles.cameraButton}
+            onPress={handleCameraScan}
+          >
+            <Ionicons name="camera" size={24} color="#ffffff" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => navigation.navigate("ServiceForm")}
+          >
+            <Ionicons name="add" size={24} color="#ffffff" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.searchContainer}>
@@ -433,6 +592,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#64748b",
     marginTop: 2,
+  },
+  headerButtons: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  cameraButton: {
+    backgroundColor: "#059669",
+    borderRadius: 8,
+    padding: 8,
   },
   addButton: {
     backgroundColor: "#2563eb",

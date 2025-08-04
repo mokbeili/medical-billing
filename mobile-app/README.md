@@ -43,7 +43,7 @@ Update the `API_BASE_URL` in `src/services/api.ts` to point to your Next.js back
 
 ```typescript
 const API_BASE_URL = __DEV__
-  ? "http://localhost:3000"
+  ? "http://172.16.1.172:3000"
   : "https://www.myonhealth.ca";
 ```
 

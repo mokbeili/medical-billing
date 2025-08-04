@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
 import React, { useState } from "react";
 import {
@@ -153,10 +154,14 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
           [
             {
               text: "Use This Data",
-              onPress: () => {
-                navigation.navigate("ServiceForm", {
-                  scannedPatientData: parsedData,
-                });
+              onPress: async () => {
+                // Store scanned data in AsyncStorage
+                await AsyncStorage.setItem(
+                  "scannedPatientData",
+                  JSON.stringify(parsedData)
+                );
+                // Go back to the previous screen
+                navigation.goBack();
               },
             },
             {
@@ -294,11 +299,15 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
             <>
               <Button
                 mode="contained"
-                onPress={() => {
+                onPress={async () => {
                   if (scannedData) {
-                    navigation.navigate("ServiceForm", {
-                      scannedPatientData: scannedData,
-                    });
+                    // Store scanned data in AsyncStorage
+                    await AsyncStorage.setItem(
+                      "scannedPatientData",
+                      JSON.stringify(scannedData)
+                    );
+                    // Go back to the previous screen
+                    navigation.goBack();
                   }
                 }}
                 style={styles.button}
