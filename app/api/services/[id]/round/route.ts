@@ -123,6 +123,77 @@ export async function POST(
     const serviceLocation = existingServiceCode?.serviceLocation || "";
     const locationOfService = existingServiceCode?.locationOfService || "";
 
+    // Helper function to calculate the next start date based on existing codes and presumed type 57 codes
+    const calculateNextStartDate = (
+      existingCodes: any[],
+      type57Codes: any[]
+    ) => {
+      if (existingCodes.length === 0) {
+        // No existing codes, work forward from service date using type 57 codes
+        let currentDate = new Date(serviceDate);
+
+        // Work through the type 57 codes to find where we should be today
+        for (const code of type57Codes) {
+          if (code.day_range && code.day_range > 0) {
+            const endDate = new Date(currentDate);
+            endDate.setDate(endDate.getDate() + code.day_range - 1);
+
+            // Check if today falls within this code's range
+            if (today >= currentDate && today <= endDate) {
+              // Today is within this code's range, so this should be our start date
+              return currentDate;
+            }
+
+            // Move to the next code's start date
+            currentDate = new Date(endDate);
+            currentDate.setDate(currentDate.getDate() + 1);
+          }
+        }
+
+        // If we've gone through all codes and today is beyond, use the last calculated date
+        // or fall back to today if no codes have day ranges
+        return currentDate;
+      }
+
+      // Sort existing codes by service date to find the latest one
+      const sortedCodes = existingCodes.sort(
+        (a, b) =>
+          new Date(a.serviceDate).getTime() - new Date(b.serviceDate).getTime()
+      );
+
+      const latestCode = sortedCodes[sortedCodes.length - 1];
+      const latestStartDate = new Date(latestCode.serviceDate);
+
+      // Find the billing code for the latest code
+      const latestBillingCode = type57Codes.find(
+        (code) => code.id === latestCode.codeId
+      );
+
+      if (
+        latestBillingCode &&
+        latestBillingCode.day_range &&
+        latestBillingCode.day_range > 0
+      ) {
+        // Calculate the end date of the latest code
+        const latestEndDate = new Date(latestStartDate);
+        latestEndDate.setDate(
+          latestEndDate.getDate() + latestBillingCode.day_range - 1
+        );
+
+        // Next start date is the day after the latest code's end date
+        const nextStartDate = new Date(latestEndDate);
+        nextStartDate.setDate(nextStartDate.getDate() + 1);
+
+        return nextStartDate;
+      }
+
+      // If no day range, start the next day after the latest code
+      const nextStartDate = new Date(latestStartDate);
+      nextStartDate.setDate(nextStartDate.getDate() + 1);
+
+      return nextStartDate;
+    };
+
     let newServiceCodes: any[] = [];
 
     if (existingType57Codes.length === 0) {
@@ -153,13 +224,19 @@ export async function POST(
         selectedCode = type57Codes[type57Codes.length - 1] || type57Codes[0];
       }
 
+      // Calculate the appropriate start date based on existing codes and presumed type 57 codes
+      const calculatedStartDate = calculateNextStartDate(
+        existingType57Codes,
+        type57Codes
+      );
+
       // Create the new service code
       const newServiceCode = await prisma.serviceCodes.create({
         data: {
           serviceId: service.id,
           codeId: selectedCode.id,
           numberOfUnits: 1,
-          serviceDate: today,
+          serviceDate: calculatedStartDate,
           serviceEndDate: null, // Type 57 codes don't have end dates initially
           serviceLocation: serviceLocation,
           locationOfService: locationOfService,
@@ -222,12 +299,18 @@ export async function POST(
             }
 
             if (selectedCode) {
+              // Calculate the appropriate start date based on existing codes
+              const calculatedStartDate = calculateNextStartDate(
+                existingType57Codes,
+                type57Codes
+              );
+
               const newServiceCode = await prisma.serviceCodes.create({
                 data: {
                   serviceId: service.id,
                   codeId: selectedCode.id,
                   numberOfUnits: 1,
-                  serviceDate: today,
+                  serviceDate: calculatedStartDate,
                   serviceEndDate: null,
                   serviceLocation: serviceLocation,
                   locationOfService: locationOfService,
