@@ -5,9 +5,35 @@ import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return new NextResponse("Unauthorized", { status: 401 });
+    // Check for mobile app authentication first
+    const userHeader = request.headers.get("x-user");
+    const userId = request.headers.get("x-user-id");
+    const userEmail = request.headers.get("x-user-email");
+    const userRoles = request.headers.get("x-user-roles");
+    let user = null;
+
+    if (userHeader) {
+      try {
+        user = JSON.parse(userHeader);
+      } catch (error) {
+        console.error("Error parsing user header:", error);
+      }
+    } else if (userId && userEmail && userRoles) {
+      // Handle individual headers from mobile app
+      user = {
+        id: userId,
+        email: userEmail,
+        roles: userRoles.split(","),
+      };
+    }
+
+    // If no mobile user, try NextAuth session
+    if (!user) {
+      const session = await getServerSession(authOptions);
+      if (!session?.user) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      user = session.user;
     }
 
     const body = await request.json();
@@ -23,6 +49,87 @@ export async function POST(request: Request) {
       return new NextResponse("Missing required fields", { status: 400 });
     }
 
+    // Helper function to get service location from city
+    const getServiceLocationFromCity = (city: string): string => {
+      const cityLower = city.toLowerCase();
+      if (cityLower.includes("saskatoon")) {
+        return "S";
+      } else if (cityLower.includes("regina")) {
+        return "R";
+      } else {
+        return "X"; // Rural/Northern Premium for other cities
+      }
+    };
+
+    // Helper function to get default serviceLocation and locationOfService for a service
+    const getDefaultServiceLocationAndLocationOfService = async (
+      serviceId: string
+    ) => {
+      // First, try to get existing service codes from the same service
+      const existingServiceCodes = await prisma.serviceCodes.findMany({
+        where: { serviceId: parseInt(serviceId) },
+        select: { serviceLocation: true, locationOfService: true },
+        take: 1,
+      });
+
+      if (existingServiceCodes.length > 0) {
+        // Rule 1: Default to existing service codes in the service
+        return {
+          serviceLocation: existingServiceCodes[0].serviceLocation,
+          locationOfService: existingServiceCodes[0].locationOfService,
+        };
+      }
+
+      // Rule 2a: Use physician's clinic city for serviceLocation
+      const service = await prisma.service.findUnique({
+        where: { id: parseInt(serviceId) },
+        include: {
+          physician: {
+            include: {
+              healthInstitution: true,
+            },
+          },
+        },
+      });
+
+      if (!service) {
+        throw new Error(`Service ${serviceId} not found`);
+      }
+
+      let serviceLocation = "X"; // Default to Rural/Northern
+      if (service.physician.healthInstitution?.city) {
+        serviceLocation = getServiceLocationFromCity(
+          service.physician.healthInstitution.city
+        );
+      }
+
+      // Rule 2b: Use physician's last service locationOfService, or default to '2' Hospital In-Patient
+      const lastService = await prisma.service.findFirst({
+        where: {
+          physicianId: service.physicianId,
+          id: { not: parseInt(serviceId) }, // Exclude current service
+        },
+        include: {
+          serviceCodes: {
+            select: { locationOfService: true },
+            take: 1,
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+
+      let locationOfService = "2"; // Default to Hospital In-Patient
+      if (
+        lastService &&
+        lastService.serviceCodes &&
+        lastService.serviceCodes.length > 0
+      ) {
+        locationOfService = lastService.serviceCodes[0].locationOfService;
+      }
+
+      return { serviceLocation, locationOfService };
+    };
+
     // Create service codes
     const serviceCodes = await Promise.all(
       serviceCodesToCreate.map(async (code) => {
@@ -35,10 +142,23 @@ export async function POST(request: Request) {
           throw new Error(`Billing code ${code.codeId} not found`);
         }
 
+        // Get default serviceLocation and locationOfService according to the rules
+        const defaults = await getDefaultServiceLocationAndLocationOfService(
+          code.serviceId
+        );
+
         return prisma.serviceCodes.create({
           data: {
-            serviceId: code.serviceId,
-            codeId: code.codeId,
+            service: {
+              connect: {
+                id: code.serviceId,
+              },
+            },
+            billingCode: {
+              connect: {
+                id: code.codeId,
+              },
+            },
             serviceStartTime: code.serviceStartTime
               ? new Date(code.serviceStartTime)
               : null,
@@ -52,8 +172,9 @@ export async function POST(request: Request) {
             bilateralIndicator: code.bilateralIndicator,
             numberOfUnits: code.numberOfUnits || 1,
             specialCircumstances: code.specialCircumstances,
-            serviceLocation: code.serviceLocation,
-            locationOfService: code.locationOfService,
+            serviceLocation: code.serviceLocation || defaults.serviceLocation,
+            locationOfService:
+              code.locationOfService || defaults.locationOfService,
           },
           include: {
             service: true,
@@ -74,11 +195,37 @@ export async function POST(request: Request) {
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return new NextResponse("Unauthorized", { status: 401 });
+    // Check for mobile app authentication first
+    const userHeader = request.headers.get("x-user");
+    const userId = request.headers.get("x-user-id");
+    const userEmail = request.headers.get("x-user-email");
+    const userRoles = request.headers.get("x-user-roles");
+    let user = null;
+
+    if (userHeader) {
+      try {
+        user = JSON.parse(userHeader);
+      } catch (error) {
+        console.error("Error parsing user header:", error);
+      }
+    } else if (userId && userEmail && userRoles) {
+      // Handle individual headers from mobile app
+      user = {
+        id: userId,
+        email: userEmail,
+        roles: userRoles.split(","),
+      };
+    }
+
+    // If no mobile user, try NextAuth session
+    if (!user) {
+      const session = await getServerSession(authOptions);
+      if (!session?.user) {
+        return new NextResponse("Unauthorized", { status: 401 });
+      }
+      user = session.user;
     }
 
     const serviceCodes = await prisma.serviceCodes.findMany({
@@ -87,7 +234,7 @@ export async function GET() {
           patient: {
             physician: {
               user: {
-                id: parseInt(session.user.id),
+                id: parseInt(user.id),
               },
             },
           },
@@ -123,9 +270,35 @@ export async function GET() {
 
 export async function DELETE(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return new NextResponse("Unauthorized", { status: 401 });
+    // Check for mobile app authentication first
+    const userHeader = request.headers.get("x-user");
+    const userId = request.headers.get("x-user-id");
+    const userEmail = request.headers.get("x-user-email");
+    const userRoles = request.headers.get("x-user-roles");
+    let user = null;
+
+    if (userHeader) {
+      try {
+        user = JSON.parse(userHeader);
+      } catch (error) {
+        console.error("Error parsing user header:", error);
+      }
+    } else if (userId && userEmail && userRoles) {
+      // Handle individual headers from mobile app
+      user = {
+        id: userId,
+        email: userEmail,
+        roles: userRoles.split(","),
+      };
+    }
+
+    // If no mobile user, try NextAuth session
+    if (!user) {
+      const session = await getServerSession(authOptions);
+      if (!session?.user) {
+        return new NextResponse("Unauthorized", { status: 401 });
+      }
+      user = session.user;
     }
 
     const { searchParams } = new URL(request.url);
@@ -149,7 +322,7 @@ export async function DELETE(request: Request) {
           patient: {
             physician: {
               user: {
-                id: parseInt(session.user.id),
+                id: parseInt(user.id),
               },
             },
           },

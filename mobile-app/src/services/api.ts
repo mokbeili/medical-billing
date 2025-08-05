@@ -232,6 +232,29 @@ export const servicesAPI = {
     const response = await api.post(`/api/services/${id}/round`);
     return response.data;
   },
+
+  addServiceCodes: async (
+    serviceId: string,
+    billingCodes: Array<{
+      codeId: number;
+      serviceStartTime: string | null;
+      serviceEndTime: string | null;
+      serviceDate: string | null;
+      serviceEndDate: string | null;
+      bilateralIndicator: string | null;
+      numberOfUnits: number | null;
+      specialCircumstances: string | null;
+      // serviceLocation and locationOfService are determined by the backend
+    }>
+  ): Promise<any[]> => {
+    const serviceCodesData = billingCodes.map((code) => ({
+      ...code,
+      serviceId: serviceId,
+    }));
+
+    const response = await api.post("/api/service-codes", serviceCodesData);
+    return response.data;
+  },
 };
 
 export const physiciansAPI = {

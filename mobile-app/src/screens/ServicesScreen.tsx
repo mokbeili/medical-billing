@@ -15,7 +15,7 @@ import {
 import { ActivityIndicator, Button, Card, Chip } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { patientsAPI, physiciansAPI, servicesAPI } from "../services/api";
-import { Service } from "../types";
+import { BillingCode, Service } from "../types";
 
 const ServicesScreen = ({ navigation }: any) => {
   const [filteredServices, setFilteredServices] = useState<Service[]>([]);
@@ -278,6 +278,97 @@ const ServicesScreen = ({ navigation }: any) => {
     }
   };
 
+  const handleAddServiceCode = (service: Service) => {
+    // Get today's date in YYYY-MM-DD format
+    const today = new Date().toISOString().split("T")[0];
+
+    // Check for existing codes for today
+    const todaysCodes = service.serviceCodes.filter((code) => {
+      const codeDate = code.serviceDate
+        ? new Date(code.serviceDate).toISOString().split("T")[0]
+        : null;
+      return codeDate === today;
+    });
+
+    // Navigate to billing code search screen
+    navigation.navigate("BillingCodeSearch", {
+      onSelect: async (selectedCodes: BillingCode[], subSelections?: any[]) => {
+        try {
+          // Check for duplicates
+          const duplicateCodes = selectedCodes.filter((selectedCode) =>
+            todaysCodes.some(
+              (existingCode) => existingCode.billingCode.id === selectedCode.id
+            )
+          );
+
+          if (duplicateCodes.length > 0) {
+            const duplicateNames = duplicateCodes
+              .map((code) => code.code)
+              .join(", ");
+            Alert.alert(
+              "Duplicate Codes Detected",
+              `The following codes have already been added today: ${duplicateNames}. Do you want to continue?`,
+              [
+                {
+                  text: "Cancel",
+                  style: "cancel",
+                },
+                {
+                  text: "Continue",
+                  onPress: () =>
+                    addCodesToService(service, selectedCodes, subSelections),
+                },
+              ]
+            );
+          } else {
+            await addCodesToService(service, selectedCodes, subSelections);
+          }
+        } catch (error) {
+          console.error("Error adding service codes:", error);
+          Alert.alert(
+            "Error",
+            "Failed to add service codes. Please try again."
+          );
+        }
+      },
+      existingCodes: todaysCodes.map((code) => code.billingCode),
+      serviceDate: today,
+    });
+  };
+
+  const addCodesToService = async (
+    service: Service,
+    selectedCodes: BillingCode[],
+    subSelections?: any[]
+  ) => {
+    try {
+      const today = new Date().toISOString().split("T")[0];
+
+      const billingCodesData = selectedCodes.map((code) => {
+        const subSelection = subSelections?.find((s) => s.codeId === code.id);
+        return {
+          codeId: code.id,
+          serviceStartTime: subSelection?.serviceStartTime || null,
+          serviceEndTime: subSelection?.serviceEndTime || null,
+          serviceDate: subSelection?.serviceDate || today,
+          serviceEndDate: subSelection?.serviceEndDate || null,
+          bilateralIndicator: subSelection?.bilateralIndicator || null,
+          numberOfUnits: subSelection?.numberOfUnits || 1,
+          specialCircumstances: subSelection?.specialCircumstances || null,
+          // serviceLocation and locationOfService will be determined by the backend according to the rules
+        };
+      });
+
+      await servicesAPI.addServiceCodes(service.id, billingCodesData);
+
+      Alert.alert("Success", "Service codes added successfully!");
+      refetch(); // Refresh the services list
+    } catch (error) {
+      console.error("Error adding service codes:", error);
+      Alert.alert("Error", "Failed to add service codes. Please try again.");
+    }
+  };
+
   const handleCreateClaim = async () => {
     if (selectedServices.length === 0) return;
 
@@ -421,11 +512,7 @@ const ServicesScreen = ({ navigation }: any) => {
                   <TouchableOpacity
                     style={styles.actionButton}
                     onPress={() => {
-                      // TODO: Add service code functionality
-                      console.log(
-                        "Add service code pressed for service:",
-                        service.id
-                      );
+                      handleAddServiceCode(service);
                     }}
                   >
                     <Ionicons name="add" size={20} color="#059669" />
@@ -491,6 +578,28 @@ const ServicesScreen = ({ navigation }: any) => {
                 </Chip>
               </View>
             )}
+
+            {/* Show badge for codes added today */}
+            {(() => {
+              const today = new Date().toISOString().split("T")[0];
+              const todaysCodes = service.serviceCodes.filter((code) => {
+                const codeDate = code.serviceDate
+                  ? new Date(code.serviceDate).toISOString().split("T")[0]
+                  : null;
+                return codeDate === today;
+              });
+
+              if (todaysCodes.length > 0) {
+                return (
+                  <View style={styles.todayBadge}>
+                    <Chip mode="flat" style={styles.todayChip}>
+                      {todaysCodes.length} Today
+                    </Chip>
+                  </View>
+                );
+              }
+              return null;
+            })()}
           </Card.Content>
         </Card>
       </TouchableOpacity>
@@ -768,6 +877,14 @@ const styles = StyleSheet.create({
   },
   nonPendingChip: {
     backgroundColor: "#fee2e2",
+  },
+  todayBadge: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+  },
+  todayChip: {
+    backgroundColor: "#dcfce7",
   },
   emptyContainer: {
     flex: 1,
