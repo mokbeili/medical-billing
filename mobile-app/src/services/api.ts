@@ -255,6 +255,16 @@ export const servicesAPI = {
     const response = await api.post("/api/service-codes", serviceCodesData);
     return response.data;
   },
+
+  discharge: async (
+    serviceId: string,
+    dischargeDate: string
+  ): Promise<Service> => {
+    const response = await api.post(`/api/services/${serviceId}/discharge`, {
+      dischargeDate,
+    });
+    return response.data;
+  },
 };
 
 export const physiciansAPI = {

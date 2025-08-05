@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import React, { useEffect, useState } from "react";
 import {
   Alert,
+  Modal,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -21,6 +22,10 @@ const ServicesScreen = ({ navigation }: any) => {
   const [filteredServices, setFilteredServices] = useState<Service[]>([]);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [showDischargeModal, setShowDischargeModal] = useState(false);
+  const [dischargeDate, setDischargeDate] = useState("");
+  const [pendingDischargeService, setPendingDischargeService] =
+    useState<Service | null>(null);
 
   const {
     data: services,
@@ -396,6 +401,46 @@ const ServicesScreen = ({ navigation }: any) => {
     }
   };
 
+  const handleDischarge = async (service: Service) => {
+    // Check if service has type 57 codes
+    const type57Codes = service.serviceCodes.filter(
+      (code) => code.billingCode.billing_record_type === 57
+    );
+
+    if (type57Codes.length === 0) {
+      Alert.alert(
+        "No Type 57 Codes",
+        "This service does not contain any type 57 codes that require discharge."
+      );
+      return;
+    }
+
+    // Set today's date as default discharge date
+    const today = new Date().toISOString().split("T")[0];
+    setDischargeDate(today);
+    setPendingDischargeService(service);
+    setShowDischargeModal(true);
+  };
+
+  const handleConfirmDischarge = async () => {
+    if (!pendingDischargeService || !dischargeDate) {
+      Alert.alert("Error", "Missing discharge information");
+      return;
+    }
+
+    try {
+      await servicesAPI.discharge(pendingDischargeService.id, dischargeDate);
+      Alert.alert("Success", "Service discharged successfully!");
+      setShowDischargeModal(false);
+      setDischargeDate("");
+      setPendingDischargeService(null);
+      refetch(); // Refresh the services list
+    } catch (error) {
+      console.error("Error discharging service:", error);
+      Alert.alert("Error", "Failed to discharge service. Please try again.");
+    }
+  };
+
   const handleSelectAll = () => {
     if (filteredServices.length === 0) return;
 
@@ -520,13 +565,7 @@ const ServicesScreen = ({ navigation }: any) => {
 
                   <TouchableOpacity
                     style={styles.actionButton}
-                    onPress={() => {
-                      // TODO: Add discharge patient functionality
-                      console.log(
-                        "Discharge patient pressed for service:",
-                        service.id
-                      );
-                    }}
+                    onPress={() => handleDischarge(service)}
                   >
                     <Ionicons name="exit-outline" size={20} color="#dc2626" />
                   </TouchableOpacity>
@@ -684,6 +723,76 @@ const ServicesScreen = ({ navigation }: any) => {
           </View>
         )}
       </ScrollView>
+
+      {/* Discharge Date Modal */}
+      <Modal
+        visible={showDischargeModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setShowDischargeModal(false);
+          setDischargeDate("");
+          setPendingDischargeService(null);
+        }}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => {
+            setShowDischargeModal(false);
+            setDischargeDate("");
+            setPendingDischargeService(null);
+          }}
+        >
+          <TouchableOpacity
+            style={styles.modalContent}
+            activeOpacity={1}
+            onPress={() => {}} // Prevent closing when tapping inside modal
+          >
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Set Discharge Date</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowDischargeModal(false);
+                  setDischargeDate("");
+                  setPendingDischargeService(null);
+                }}
+              >
+                <Ionicons name="close" size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalDescription}>
+              Please set the discharge date for the last type 57 code in the
+              service.
+            </Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="YYYY-MM-DD"
+              value={dischargeDate}
+              onChangeText={setDischargeDate}
+              keyboardType="default"
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setShowDischargeModal(false);
+                  setDischargeDate("");
+                  setPendingDischargeService(null);
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.confirmButton]}
+                onPress={handleConfirmDischarge}
+              >
+                <Text style={styles.confirmButtonText}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -937,6 +1046,74 @@ const styles = StyleSheet.create({
     padding: 8,
     borderWidth: 1,
     borderColor: "#e2e8f0",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContent: {
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    padding: 24,
+    margin: 20,
+    width: "90%",
+    maxWidth: 400,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#1e293b",
+  },
+  modalDescription: {
+    fontSize: 14,
+    color: "#64748b",
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    backgroundColor: "#ffffff",
+    marginBottom: 20,
+  },
+  modalButtons: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 12,
+  },
+  modalButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    minWidth: 80,
+    alignItems: "center",
+  },
+  cancelButton: {
+    backgroundColor: "#f3f4f6",
+  },
+  confirmButton: {
+    backgroundColor: "#dc2626",
+  },
+  cancelButtonText: {
+    color: "#374151",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  confirmButtonText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "600",
   },
 });
 

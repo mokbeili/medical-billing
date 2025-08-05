@@ -167,7 +167,6 @@ export default function RegisterPage() {
         provinceDropdownRef.current &&
         !provinceDropdownRef.current.contains(event.target as Node)
       ) {
-        console.log("Clicking outside, closing dropdown");
         setOpen(false);
         setProvinceSearch("");
       }
@@ -202,14 +201,12 @@ export default function RegisterPage() {
   // Update password strength when password changes
   useEffect(() => {
     const newStrength = validatePasswordStrength(formData.password);
-    console.log("Password strength updated:", newStrength);
     setPasswordStrength(newStrength);
   }, [formData.password]);
 
   // Debug dropdown state
   useEffect(() => {
-    console.log("Dropdown open state changed:", open);
-    console.log("Province search:", provinceSearch);
+    // Dropdown state tracking removed
   }, [open, provinceSearch]);
 
   // Set default physician search query when user checks "Register as a physician"
@@ -792,10 +789,6 @@ export default function RegisterPage() {
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      console.log(
-                        "Dropdown clicked, current open state:",
-                        open
-                      );
                       setOpen(!open);
                     }}
                     className="flex h-10 w-full items-center justify-between rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 hover:bg-gray-50"
@@ -836,7 +829,6 @@ export default function RegisterPage() {
                             key={province.code}
                             type="button"
                             onClick={() => {
-                              console.log("Province selected:", province.name);
                               updateAddress("state", province.code);
                               setOpen(false);
                               setProvinceSearch("");
