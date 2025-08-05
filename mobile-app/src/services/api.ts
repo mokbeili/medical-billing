@@ -225,6 +225,13 @@ export const servicesAPI = {
   delete: async (id: string): Promise<void> => {
     await api.delete(`/api/services/${id}`);
   },
+
+  round: async (
+    id: string
+  ): Promise<{ service: Service; newServiceCodes: any[]; message: string }> => {
+    const response = await api.post(`/api/services/${id}/round`);
+    return response.data;
+  },
 };
 
 export const physiciansAPI = {

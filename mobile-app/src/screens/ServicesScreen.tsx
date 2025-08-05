@@ -400,9 +400,19 @@ const ServicesScreen = ({ navigation }: any) => {
                 <View style={styles.actionButtons}>
                   <TouchableOpacity
                     style={styles.actionButton}
-                    onPress={() => {
-                      // TODO: Add rounding functionality
-                      console.log("Rounding pressed for service:", service.id);
+                    onPress={async () => {
+                      try {
+                        const result = await servicesAPI.round(service.id);
+                        Alert.alert("Success", result.message);
+                        // Refresh the services list
+                        refetch();
+                      } catch (error) {
+                        console.error("Error performing rounding:", error);
+                        Alert.alert(
+                          "Error",
+                          "Failed to perform rounding. Please try again."
+                        );
+                      }
                     }}
                   >
                     <Ionicons name="repeat" size={20} color="#2563eb" />
