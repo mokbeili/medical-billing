@@ -146,7 +146,7 @@ export async function POST(request: Request) {
       }
 
       // Create physician record
-      await prisma.physician.create({
+      const physician = await prisma.physician.create({
         data: {
           id: `PHY_${user.id}_${Date.now()}`, // Generate unique ID
           firstName: first_name,
@@ -160,6 +160,17 @@ export async function POST(request: Request) {
           city: city,
           province: state,
           postalCode: postalCode,
+        },
+      });
+
+      // Update referring physician's physician ID where the billing code matches
+      await prisma.referringPhysician.updateMany({
+        where: {
+          code: physician_confirmation.billing_code,
+          physicianId: null, // Only update if physicianId is not already set
+        },
+        data: {
+          physicianId: physician.id,
         },
       });
     }
