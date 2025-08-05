@@ -305,6 +305,25 @@ export async function POST(
                 type57Codes
               );
 
+              // Set the end date of the previous type 57 code
+              if (
+                existingCode.serviceEndDate === null &&
+                billingCode.day_range &&
+                billingCode.day_range > 0
+              ) {
+                const previousEndDate = new Date(existingCode.serviceDate!);
+                previousEndDate.setDate(
+                  previousEndDate.getDate() + billingCode.day_range - 1
+                );
+
+                await prisma.serviceCodes.update({
+                  where: { id: existingCode.id },
+                  data: {
+                    serviceEndDate: previousEndDate,
+                  },
+                });
+              }
+
               const newServiceCode = await prisma.serviceCodes.create({
                 data: {
                   serviceId: service.id,
