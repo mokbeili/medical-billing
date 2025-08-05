@@ -25,14 +25,6 @@ export async function POST(request: Request) {
 
     // Validate input
     if (!email || !password || !address || !first_name || !last_name) {
-      console.log(
-        "Missing required fields",
-        email,
-        password,
-        address,
-        first_name,
-        last_name
-      );
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }

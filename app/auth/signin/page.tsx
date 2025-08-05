@@ -43,19 +43,11 @@ function SignInForm() {
     try {
       const callbackUrl = searchParams?.get("callbackUrl") || "/search";
 
-      if (process.env.NODE_ENV === "development") {
-        console.log("Attempting sign in with:", { email, callbackUrl });
-      }
-
       const result = await signIn("credentials", {
         email,
         password,
         redirect: false,
       });
-
-      if (process.env.NODE_ENV === "development") {
-        console.log("Sign in result:", result);
-      }
 
       if (result?.error) {
         setError(result.error);

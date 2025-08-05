@@ -9,17 +9,6 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   const apiBaseUrl = process.env.API_BASE_URL || "https://www.myonhealth.ca";
   const appEnv = process.env.APP_ENV || "development";
 
-  // Debug logging
-  console.log("🔧 Environment Configuration:");
-  console.log("AWS_ACCESS_KEY_ID:", awsAccessKeyId ? "✅ Set" : "❌ Not set");
-  console.log(
-    "AWS_SECRET_ACCESS_KEY:",
-    awsSecretAccessKey ? "✅ Set" : "❌ Not set"
-  );
-  console.log("AWS_REGION:", awsRegion);
-  console.log("API_BASE_URL:", apiBaseUrl);
-  console.log("APP_ENV:", appEnv);
-
   return {
     ...config,
     name: "Myon Health",

@@ -13,7 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { ActivityIndicator, Button, Card, Chip } from "react-native-paper";
+import { ActivityIndicator, Button, Card } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { patientsAPI, physiciansAPI, servicesAPI } from "../services/api";
 import { BillingCode, Service } from "../types";
@@ -22,6 +22,8 @@ const ServicesScreen = ({ navigation }: any) => {
   const [filteredServices, setFilteredServices] = useState<Service[]>([]);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"OPEN" | "PENDING">("OPEN");
+  const [showSearch, setShowSearch] = useState(false);
   const [showDischargeModal, setShowDischargeModal] = useState(false);
   const [dischargeDate, setDischargeDate] = useState("");
   const [pendingDischargeService, setPendingDischargeService] =
@@ -60,8 +62,8 @@ const ServicesScreen = ({ navigation }: any) => {
       // Filter out services without patient data
       filtered = filtered.filter((service) => service.patient != null);
 
-      // Only show services with OPEN status by default
-      filtered = filtered.filter((service) => service.status === "OPEN");
+      // Filter by status based on statusFilter
+      filtered = filtered.filter((service) => service.status === statusFilter);
 
       // Apply search filter
       if (searchQuery.trim()) {
@@ -89,7 +91,7 @@ const ServicesScreen = ({ navigation }: any) => {
 
       setFilteredServices(filtered);
     }
-  }, [services, searchQuery]);
+  }, [services, searchQuery, statusFilter]);
 
   const handleCameraScan = () => {
     navigation.navigate("CameraScan");
@@ -237,12 +239,12 @@ const ServicesScreen = ({ navigation }: any) => {
       return;
     }
 
-    // Don't allow selection of services that are not OPEN
-    const hasOpenStatus = service.serviceCodes.some(
-      (code) => code.status === "OPEN"
-    );
-    if (!hasOpenStatus) {
-      Alert.alert("Error", "Cannot select service that is not in OPEN status");
+    // Don't allow selection of services that don't match the current status filter
+    if (service.status !== statusFilter) {
+      Alert.alert(
+        "Error",
+        `Cannot select service that is not in ${statusFilter} status`
+      );
       return;
     }
 
@@ -456,16 +458,14 @@ const ServicesScreen = ({ navigation }: any) => {
     const firstService = filteredServices[0];
     const firstServiceCode = firstService.serviceCodes[0];
 
-    // Only select services that match the first service's physician and jurisdiction and have OPEN status
+    // Only select services that match the first service's physician and jurisdiction and have the current status filter
     const validServices = filteredServices.filter((service) => {
       const serviceCode = service.serviceCodes[0];
-      const hasOpenStatus = service.serviceCodes.some(
-        (code) => code.status === "OPEN"
-      );
+      const hasMatchingStatus = service.status === statusFilter;
       return (
         serviceCode &&
         firstServiceCode &&
-        hasOpenStatus &&
+        hasMatchingStatus &&
         service.physician?.id === firstService.physician?.id &&
         serviceCode.billingCode.section.code ===
           firstServiceCode.billingCode.section.code
@@ -478,7 +478,7 @@ const ServicesScreen = ({ navigation }: any) => {
   const renderService = (service: Service) => {
     const isSelected = selectedServices.includes(service.id);
     const hasClaim = service.claimId !== null;
-    const hasOpenStatus = service.status === "OPEN";
+    const hasPendingStatus = service.status === "PENDING";
 
     // Generate patient description
     const getPatientDescription = () => {
@@ -535,8 +535,12 @@ const ServicesScreen = ({ navigation }: any) => {
                 </Text>
                 <View style={styles.actionButtons}>
                   <TouchableOpacity
-                    style={styles.actionButton}
+                    style={[
+                      styles.actionButton,
+                      hasPendingStatus && styles.actionButtonDisabled,
+                    ]}
                     onPress={async () => {
+                      if (hasPendingStatus) return;
                       try {
                         const result = await servicesAPI.round(service.id);
                         Alert.alert("Success", result.message);
@@ -551,34 +555,48 @@ const ServicesScreen = ({ navigation }: any) => {
                       }
                     }}
                   >
-                    <Ionicons name="repeat" size={20} color="#2563eb" />
+                    <Ionicons
+                      name="repeat"
+                      size={20}
+                      color={hasPendingStatus ? "#9ca3af" : "#2563eb"}
+                    />
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={styles.actionButton}
+                    style={[
+                      styles.actionButton,
+                      hasPendingStatus && styles.actionButtonDisabled,
+                    ]}
                     onPress={() => {
+                      if (hasPendingStatus) return;
                       handleAddServiceCode(service);
                     }}
                   >
-                    <Ionicons name="add" size={20} color="#059669" />
+                    <Ionicons
+                      name="add"
+                      size={20}
+                      color={hasPendingStatus ? "#9ca3af" : "#059669"}
+                    />
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() => handleDischarge(service)}
+                    style={[
+                      styles.actionButton,
+                      hasPendingStatus && styles.actionButtonDisabled,
+                    ]}
+                    onPress={() => {
+                      if (hasPendingStatus) return;
+                      handleDischarge(service);
+                    }}
                   >
-                    <Ionicons name="exit-outline" size={20} color="#dc2626" />
+                    <Ionicons
+                      name="exit-outline"
+                      size={20}
+                      color={hasPendingStatus ? "#9ca3af" : "#dc2626"}
+                    />
                   </TouchableOpacity>
                 </View>
               </View>
-              {/* <Checkbox
-                status={isSelected ? "checked" : "unchecked"}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  handleServiceSelect(service.id);
-                }}
-                disabled={hasClaim || !hasOpenStatus}
-              /> */}
             </View>
 
             {service.icdCode && (
@@ -588,57 +606,6 @@ const ServicesScreen = ({ navigation }: any) => {
                 </Text>
               </View>
             )}
-
-            {/* <View style={styles.serviceCodes}>
-              <Text style={styles.serviceCodesTitle}>Service Codes:</Text>
-              {service.serviceCodes.map((code, index) => (
-                <View key={index} style={styles.serviceCode}>
-                  <Chip mode="flat" style={styles.codeChip}>
-                    {code.billingCode.code}
-                  </Chip>
-                  <Text style={styles.codeTitle}>{code.billingCode.title}</Text>
-                  <Text style={styles.codeStatus}>Status: {code.status}</Text>
-                </View>
-              ))}
-            </View> */}
-
-            {hasClaim && (
-              <View style={styles.claimedBadge}>
-                <Chip mode="flat" style={styles.claimedChip}>
-                  Claimed
-                </Chip>
-              </View>
-            )}
-
-            {!hasOpenStatus && !hasClaim && (
-              <View style={styles.statusBadge}>
-                <Chip mode="flat" style={styles.nonPendingChip}>
-                  Not Open
-                </Chip>
-              </View>
-            )}
-
-            {/* Show badge for codes added today */}
-            {(() => {
-              const today = new Date().toISOString().split("T")[0];
-              const todaysCodes = service.serviceCodes.filter((code) => {
-                const codeDate = code.serviceDate
-                  ? new Date(code.serviceDate).toISOString().split("T")[0]
-                  : null;
-                return codeDate === today;
-              });
-
-              if (todaysCodes.length > 0) {
-                return (
-                  <View style={styles.todayBadge}>
-                    <Chip mode="flat" style={styles.todayChip}>
-                      {todaysCodes.length} Today
-                    </Chip>
-                  </View>
-                );
-              }
-              return null;
-            })()}
           </Card.Content>
         </Card>
       </TouchableOpacity>
@@ -668,12 +635,72 @@ const ServicesScreen = ({ navigation }: any) => {
       </View>
 
       <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search by patient name, billing number, or ICD description..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
+        <View style={styles.searchHeader}>
+          <TouchableOpacity
+            style={styles.searchToggle}
+            onPress={() => {
+              setShowSearch(!showSearch);
+              if (showSearch) {
+                setSearchQuery(""); // Clear search when hiding
+              }
+            }}
+          >
+            <Ionicons
+              name={showSearch ? "chevron-up" : "search"}
+              size={20}
+              color="#64748b"
+            />
+            <Text style={styles.searchToggleText}>
+              {showSearch ? "Hide Search" : "Search"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {showSearch && (
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search by patient name, billing number, or ICD description..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        )}
+      </View>
+
+      <View style={styles.filterContainer}>
+        <View style={styles.filterToggle}>
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              statusFilter === "OPEN" && styles.filterButtonActive,
+            ]}
+            onPress={() => setStatusFilter("OPEN")}
+          >
+            <Text
+              style={[
+                styles.filterButtonText,
+                statusFilter === "OPEN" && styles.filterButtonTextActive,
+              ]}
+            >
+              Open
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              statusFilter === "PENDING" && styles.filterButtonActive,
+            ]}
+            onPress={() => setStatusFilter("PENDING")}
+          >
+            <Text
+              style={[
+                styles.filterButtonText,
+                statusFilter === "PENDING" && styles.filterButtonTextActive,
+              ]}
+            >
+              Done
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {selectedServices.length > 0 && (
@@ -848,6 +875,67 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 16,
     backgroundColor: "#ffffff",
+    marginTop: 12,
+  },
+  searchHeader: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  searchToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    backgroundColor: "#f8fafc",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  searchToggleText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#64748b",
+    marginLeft: 6,
+  },
+  filterContainer: {
+    padding: 16,
+    backgroundColor: "#ffffff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+  },
+  filterToggle: {
+    flexDirection: "row",
+    backgroundColor: "#f1f5f9",
+    borderRadius: 8,
+    padding: 4,
+  },
+  filterButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    alignItems: "center",
+  },
+  filterButtonActive: {
+    backgroundColor: "#ffffff",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  filterButtonText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#64748b",
+  },
+  filterButtonTextActive: {
+    color: "#2563eb",
+    fontWeight: "600",
   },
 
   actionBar: {
@@ -987,6 +1075,9 @@ const styles = StyleSheet.create({
   nonPendingChip: {
     backgroundColor: "#fee2e2",
   },
+  pendingChip: {
+    backgroundColor: "#dbeafe",
+  },
   todayBadge: {
     position: "absolute",
     top: 8,
@@ -1046,6 +1137,10 @@ const styles = StyleSheet.create({
     padding: 8,
     borderWidth: 1,
     borderColor: "#e2e8f0",
+  },
+  actionButtonDisabled: {
+    backgroundColor: "#f3f4f6",
+    borderColor: "#d1d5db",
   },
   modalOverlay: {
     flex: 1,
