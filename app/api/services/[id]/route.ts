@@ -198,13 +198,19 @@ export async function PUT(
           data: billingCodes.map((code: any) => ({
             serviceId: parseInt(params.id),
             codeId: code.codeId,
-            serviceStartTime: code.serviceStartTime,
-            serviceEndTime: code.serviceEndTime,
+            serviceStartTime: code.serviceStartTime
+              ? new Date(code.serviceStartTime)
+              : null,
+            serviceEndTime: code.serviceEndTime
+              ? new Date(code.serviceEndTime)
+              : null,
             numberOfUnits: code.numberOfUnits || 1,
             bilateralIndicator: code.bilateralIndicator,
             specialCircumstances: code.specialCircumstances,
-            serviceDate: code.serviceDate,
-            serviceEndDate: code.serviceEndDate,
+            serviceDate: code.serviceDate ? new Date(code.serviceDate) : null,
+            serviceEndDate: code.serviceEndDate
+              ? new Date(code.serviceEndDate)
+              : null,
             serviceLocation: serviceLocation,
             locationOfService: locationOfService,
           })),
