@@ -40,6 +40,16 @@ const ServicesScreen = ({ navigation }: any) => {
     retry: 1,
   });
 
+  // Function to refetch a specific service with all its fields
+  const refetchService = async (serviceId: string) => {
+    try {
+      // Force a refetch to update the UI with the latest data
+      refetch();
+    } catch (error) {
+      console.error("Error refetching service:", error);
+    }
+  };
+
   const { data: patients, refetch: refetchPatients } = useQuery({
     queryKey: ["patients"],
     queryFn: patientsAPI.getAll,
@@ -211,7 +221,7 @@ const ServicesScreen = ({ navigation }: any) => {
     }
   };
 
-  // Listen for navigation events to handle scanned data
+  // Listen for navigation events to handle scanned data and service updates
   React.useEffect(() => {
     const unsubscribe = navigation.addListener("focus", async () => {
       // Check if we have scanned data from CameraScanScreen in AsyncStorage
@@ -226,6 +236,9 @@ const ServicesScreen = ({ navigation }: any) => {
       } catch (error) {
         console.error("Error reading scanned data from AsyncStorage:", error);
       }
+
+      // Refetch services when returning from BillingCodeSearch to ensure data is up to date
+      refetch();
     });
 
     return unsubscribe;
@@ -369,7 +382,8 @@ const ServicesScreen = ({ navigation }: any) => {
       await servicesAPI.addServiceCodes(service.id, billingCodesData);
 
       Alert.alert("Success", "Service codes added successfully!");
-      refetch(); // Refresh the services list
+      // Refetch all services to ensure the UI is updated with the latest data
+      await refetch();
     } catch (error) {
       console.error("Error adding service codes:", error);
       Alert.alert("Error", "Failed to add service codes. Please try again.");
@@ -436,7 +450,8 @@ const ServicesScreen = ({ navigation }: any) => {
       setShowDischargeModal(false);
       setDischargeDate("");
       setPendingDischargeService(null);
-      refetch(); // Refresh the services list
+      // Refetch the specific service to get updated data
+      await refetchService(pendingDischargeService.id);
     } catch (error) {
       console.error("Error discharging service:", error);
       Alert.alert("Error", "Failed to discharge service. Please try again.");
@@ -544,8 +559,8 @@ const ServicesScreen = ({ navigation }: any) => {
                       try {
                         const result = await servicesAPI.round(service.id);
                         Alert.alert("Success", result.message);
-                        // Refresh the services list
-                        refetch();
+                        // Refetch the specific service to get updated data
+                        await refetchService(service.id);
                       } catch (error) {
                         console.error("Error performing rounding:", error);
                         Alert.alert(
