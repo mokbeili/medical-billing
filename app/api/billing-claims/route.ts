@@ -174,7 +174,7 @@ export async function POST(request: Request) {
       practitionerNumber: firstServiceCode.patient.physician.billingNumber,
       groupNumber: firstServiceCode.patient.physician.groupNumber || "000",
       clinicNumber: physician.healthInstitution?.number || "000",
-      name: `${firstServiceCode.patient.physician.lastName},${firstServiceCode.patient.physician.firstName}`,
+      name: `${firstServiceCode.patient.physician.firstName} ${firstServiceCode.patient.physician.lastName}`,
       address: firstServiceCode.patient.physician.streetAddress || "",
       cityProvince: `${firstServiceCode.patient.physician.city || ""},${
         firstServiceCode.patient.physician.province || ""
