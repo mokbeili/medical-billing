@@ -26,7 +26,7 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="pt-8">
+        {/* <div className="pt-8">
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <a
               href="/physician-search"
@@ -47,14 +47,14 @@ export default function Home() {
               Get Started
             </a>
           </div>
-        </div>
+        </div> */}
 
-        <div className="pt-8 text-sm text-gray-500">
+        {/* <div className="pt-8 text-sm text-gray-500">
           <p>
             Try our physician search and AI code search features today. Register
             to access our full medical billing platform.
           </p>
-        </div>
+        </div> */}
       </div>
     </main>
   );
