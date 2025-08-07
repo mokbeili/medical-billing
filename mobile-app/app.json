@@ -2,7 +2,7 @@
   "expo": {
     "name": "Myon Health",
     "slug": "myon-health-mobile",
-    "version": "1.0.0",
+    "version": "1.0.5",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.myonhealth.mobile",
-      "buildNumber": "1",
+      "buildNumber": "6",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "This app needs access to camera to scan patient information from documents.",
@@ -29,6 +29,7 @@
       },
       "package": "com.myonhealth.mobile",
       "usesCleartextTraffic": true,
+      "versionCode": 6,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",

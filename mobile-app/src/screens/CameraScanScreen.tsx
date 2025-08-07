@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { ActivityIndicator, Button, Card } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
-import textractService from "../utils/awsTextractService";
+import textRecognitionService from "../utils/expoTextRecognitionService";
 
 interface ScannedPatientData {
   billingNumber: string;
@@ -102,10 +102,10 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
   const processImage = async (imageUri: string) => {
     setIsProcessing(true);
     try {
-      if (!textractService.configured) {
+      if (!textRecognitionService.configured) {
         Alert.alert(
-          "AWS Textract Not Configured",
-          "Please configure AWS Textract credentials using environment variables. See the documentation for setup instructions.",
+          "Text Recognition Not Available",
+          "Text recognition service is not available. Please try again.",
           [
             {
               text: "OK",
@@ -117,17 +117,19 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
         return;
       }
 
-      // Use AWS Textract
-      const textractResult = await textractService.extractText(imageUri);
+      // Use expo-text-recognition
+      const textRecognitionResult = await textRecognitionService.extractText(
+        imageUri
+      );
       await processExtractedText(
-        textractResult.text,
-        textractResult.confidence
+        textRecognitionResult.text,
+        textRecognitionResult.confidence
       );
     } catch (error) {
-      console.error("AWS Textract error:", error);
+      console.error("Text recognition error:", error);
       Alert.alert(
-        "AWS Textract Error",
-        "Failed to process image with AWS Textract. Please check your environment configuration and try again.",
+        "Text Recognition Error",
+        "Failed to process image with text recognition. Please try again with a clearer image.",
         [
           {
             text: "OK",
@@ -142,7 +144,7 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
 
   const processExtractedText = async (text: string, confidence: number) => {
     try {
-      const parsedData = textractService.parsePatientData(text);
+      const parsedData = textRecognitionService.parsePatientData(text);
 
       if (parsedData) {
         setScannedData(parsedData);
@@ -211,8 +213,8 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
 
             <View style={styles.ocrStatusContainer}>
               <View style={styles.ocrStatus}>
-                <Ionicons name="cloud" size={20} color="#059669" />
-                <Text style={styles.ocrStatusText}>AWS Textract</Text>
+                <Ionicons name="phone-portrait" size={20} color="#059669" />
+                <Text style={styles.ocrStatusText}>Local Text Recognition</Text>
               </View>
             </View>
           </Card.Content>
@@ -227,7 +229,7 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
                 <View style={styles.processingContainer}>
                   <ActivityIndicator size="large" color="#2563eb" />
                   <Text style={styles.processingText}>
-                    Processing image with AWS Textract...
+                    Processing image with text recognition...
                   </Text>
                 </View>
               )}

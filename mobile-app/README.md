@@ -1,124 +1,154 @@
 # Myon Health Mobile App
 
-A React Native mobile application that mirrors the Myon Health web application for medical billing in Saskatchewan. This mobile app provides AI-powered search functionality for medical billing codes and administrative features.
+A React Native mobile application for the Myon Health medical billing platform, featuring AI-powered search, document scanning, and service management.
 
 ## Features
 
-- **AI-Powered Search**: Search medical billing codes using natural language or code numbers
-- **Dashboard**: Admin interface for managing billing codes and AI prompts
-- **User Authentication**: Sign in/sign up functionality
-- **Profile Management**: User profile and settings
-- **Responsive Design**: Optimized for mobile devices
+### 1. Document Scanning & OCR
+
+- Camera integration for document capture
+- AWS Textract integration for accurate OCR
+- Automatic patient information extraction
+- Support for multiple document formats
+
+### 2. Service Management
+
+- Create and edit medical services
+- Patient and physician selection
+- ICD code integration
+- Health institution management
+- Billing code search and selection
+
+### 3. AI-Powered Search
+
+- Natural language billing code search
+- Real-time search results
+- Search history tracking
+- Offline search capabilities
+
+### 4. User Features
+
+- Secure authentication
+- Profile management
+- Dashboard with key metrics
+- Settings customization
 
 ## Tech Stack
 
 - **React Native** with Expo
 - **TypeScript** for type safety
-- **React Navigation** for navigation
-- **React Native Paper** for UI components
-- **TanStack Query** for data fetching
+- **React Navigation** for routing
+- **React Native Paper** for UI
+- **TanStack Query** for data management
+- **AWS Textract** for OCR
 - **Axios** for API communication
 
-## Prerequisites
+## Setup
 
-- Node.js (v16 or higher)
+### Prerequisites
+
+- Node.js v16 or higher
 - npm or yarn
 - Expo CLI (`npm install -g @expo/cli`)
-- iOS Simulator (for iOS development) - requires Xcode on macOS
-- Android Studio (for Android development) - requires Android SDK and emulator
+- iOS Simulator (macOS) or Android Studio
 
-## Local Development Setup
+### Installation
 
-This app is configured to run locally on iOS and Android emulators without requiring development builds from Expo/EAS.
+1. Install dependencies:
 
-### 1. Install Dependencies
+   ```bash
+   npm install
+   ```
 
-```bash
-npm install
-```
+2. Configure environment:
 
-### 2. Configure API Endpoint
+   ```bash
+   cp .env.example .env
+   # Update API endpoint and AWS credentials
+   ```
 
-Update the `API_BASE_URL` in `src/services/api.ts` to point to your Next.js backend:
+3. Start development server:
 
-```typescript
-const API_BASE_URL = __DEV__
-  ? "http://172.16.1.172:3000"
-  : "https://www.myonhealth.ca";
-```
+   ```bash
+   npm start
+   ```
 
-### 3. Start the Development Server
+4. Run on device/emulator:
+   - iOS: `npm run ios`
+   - Android: `npm run android`
+   - Physical device: Scan QR code with Expo Go
 
-```bash
-npm start
-```
+## AWS Textract Setup
 
-### 4. Run on Emulators
-
-- **iOS Simulator**: Press `i` in the terminal or run `npm run ios`
-- **Android Emulator**: Press `a` in the terminal or run `npm run android`
-- **Physical Device**: Scan the QR code with the Expo Go app
-
-### 5. Development Workflow
-
-The app will automatically reload when you make changes to the code. You can:
-
-- Use the Expo DevTools in your browser for debugging
-- Enable React Native Debugger for better debugging experience
-- Use the React Native Flipper plugin for advanced debugging
+1. Create AWS account or use existing one
+2. Create IAM user with Textract permissions
+3. Add credentials to .env:
+   ```
+   AWS_ACCESS_KEY_ID=your_key
+   AWS_SECRET_ACCESS_KEY=your_secret
+   AWS_REGION=us-east-1
+   ```
 
 ## Project Structure
 
 ```
 src/
 ├── components/          # Reusable UI components
-├── navigation/          # Navigation configuration
 ├── screens/            # Screen components
-│   ├── HomeScreen.tsx
-│   ├── SearchScreen.tsx
-│   ├── DashboardScreen.tsx
-│   ├── ProfileScreen.tsx
-│   ├── SignInScreen.tsx
-│   └── SignUpScreen.tsx
-├── services/           # API services
-│   └── api.ts
-├── types/              # TypeScript type definitions
-│   └── index.ts
-├── utils/              # Utility functions
-│   └── theme.ts
-└── hooks/              # Custom React hooks
+├── navigation/         # Navigation config
+├── services/          # API services
+├── utils/             # Utilities
+│   ├── awsTextractService.ts
+│   └── expoTextRecognitionService.ts
+├── contexts/          # React contexts
+└── types/            # TypeScript types
 ```
 
-## API Integration
+## Key Features Detail
 
-The mobile app communicates with the Next.js backend through REST API endpoints:
+### 1. Document Scanning
 
-- **Search**: `/api/search` - AI-powered billing code search
-- **Authentication**: `/api/auth/*` - User authentication endpoints
-- **Billing Codes**: `/api/billing-codes` - Billing code management
-- **AI Prompts**: `/api/ai-prompts` - AI prompt management
+- High-quality image capture
+- Document format detection
+- Text extraction and parsing
+- Data validation
+
+### 2. Service Management
+
+- Create/edit services
+- Patient selection/creation
+- Billing code search
+- Service status tracking
+
+### 3. OCR Processing
+
+- AWS Textract integration
+- High accuracy text extraction
+- Error handling
+- Retry mechanisms
+
+### 4. Data Extraction
+
+- Patient information parsing
+- Service date detection
+- Form auto-population
+- Data validation
 
 ## Development
 
-### Adding New Screens
+### Adding New Features
 
-1. Create a new screen component in `src/screens/`
-2. Add the screen to the navigation in `src/navigation/AppNavigator.tsx`
-3. Update types if needed in `src/types/index.ts`
+1. Create components in appropriate directories
+2. Update navigation if needed
+3. Add types and services
+4. Test thoroughly
 
-### Styling
+### Styling Guidelines
 
-The app uses a consistent design system with:
-
-- Primary color: `#2563eb` (blue)
-- Background: `#f8fafc` (light gray)
-- Text colors: `#1e293b` (dark), `#64748b` (medium), `#94a3b8` (light)
-
-### State Management
-
-- **TanStack Query**: For server state management
-- **React State**: For local component state
-- **Navigation State**: Managed by React Navigation
+- Use theme constants
+- Follow design system
+- Maintain responsive layouts
+- Support dark mode
 
 ## Building for Production
 
@@ -128,18 +158,21 @@ The app uses a consistent design system with:
 # Install EAS CLI
 npm install -g @expo/eas-cli
 
-# Login to Expo
-eas login
+# Configure
+eas configure
 
-# Build for production
+# Build
 eas build --platform ios
 eas build --platform android
 ```
 
-### Using Expo Classic Build (Deprecated)
+### Manual Builds
 
 ```bash
+# iOS
 npx expo build:ios
+
+# Android
 npx expo build:android
 ```
 
@@ -147,26 +180,63 @@ npx expo build:android
 
 ### Common Issues
 
-1. **API Connection Error**: Ensure the Next.js backend is running and the API_BASE_URL is correct
-2. **Navigation Issues**: Check that all screen components are properly exported
-3. **TypeScript Errors**: Run `npx tsc --noEmit` to check for type errors
-4. **Emulator Not Found**: Make sure you have Xcode (iOS) or Android Studio (Android) properly installed
-5. **Metro Bundler Issues**: Try clearing the cache with `npx expo start --clear`
+1. **Camera/OCR Issues**
 
-### Development Tips
+   - Check permissions
+   - Verify AWS credentials
+   - Test with sample documents
 
-- Use Expo DevTools for debugging
-- Enable React Native Debugger for better debugging experience
-- Use the React Native Flipper plugin for advanced debugging
-- Keep your Expo CLI updated: `npm install -g @expo/cli@latest`
+2. **API Connection**
+
+   - Verify API endpoint
+   - Check network connection
+   - Validate authentication
+
+3. **Build Issues**
+   - Clear Metro cache
+   - Rebuild node_modules
+   - Update Expo SDK
+
+## Performance
+
+### Optimization Tips
+
+- Optimize images before OCR
+- Use caching strategies
+- Implement offline support
+- Monitor AWS usage
+
+### AWS Textract Costs
+
+- Free tier: 1,000 pages/month
+- Standard pricing: $1.50/1,000 pages
+- Monitor usage for cost control
+
+## Security
+
+### Best Practices
+
+- Secure credential storage
+- Data encryption
+- Permission management
+- Regular security updates
+
+## Support
+
+For technical issues:
+
+1. Check documentation
+2. Review error messages
+3. Test with sample data
+4. Contact development team
 
 ## Contributing
 
-1. Follow the existing code style and patterns
-2. Add TypeScript types for new features
-3. Test on both iOS and Android
-4. Update documentation as needed
+1. Follow code style guide
+2. Write clear commit messages
+3. Test thoroughly
+4. Submit detailed PRs
 
 ## License
 
-This project is part of the Myon Health medical billing platform.
+This project is proprietary software of Myon Health.
