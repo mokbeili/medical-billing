@@ -212,8 +212,8 @@ export async function POST(request: Request) {
           })()
         : "";
       const sex = (service.patient?.sex || "M") as "M" | "F";
-      const name = `${decryptedPatient.lastName || ""},${
-        decryptedPatient.firstName || ""
+      const name = `${decryptedPatient.firstName || ""}, ${
+        decryptedPatient.lastName || ""
       }`;
       const diagnosticCode = service.icdCode?.code?.substring(0, 3) || "";
       const refPractitioner = service.referringPhysician?.code;
