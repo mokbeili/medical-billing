@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
+import Constants from "expo-constants";
 import {
   AIPrompt,
   BillingCode,
@@ -14,11 +15,19 @@ import {
   User,
 } from "../types";
 
-// Configure axios base URL to point to your Next.js app
-// For physical devices on same WiFi, use computer's local IP
-// For Android emulator, use 10.0.2.2 to access localhost services
-const API_BASE_URL = __DEV__
-  ? "http://172.16.1.215:3000"
+// Resolve API base URL in priority: Expo constants extra -> env -> defaults
+const EXTRA_API_BASE_URL = (Constants?.expoConfig as any)?.extra?.apiBaseUrl as
+  | string
+  | undefined;
+const ENV_API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_BASE_URL || process.env.API_BASE_URL;
+
+const API_BASE_URL = EXTRA_API_BASE_URL
+  ? EXTRA_API_BASE_URL
+  : ENV_API_BASE_URL
+  ? ENV_API_BASE_URL
+  : __DEV__
+  ? "http://192.168.0.149:3000"
   : "https://www.myonhealth.ca"; // Update this with your actual domain
 
 const api = axios.create({
@@ -62,6 +71,7 @@ api.interceptors.response.use(
       status: error.response?.status,
       url: error.config?.url,
       method: error.config?.method,
+      baseURL: error.config?.baseURL,
     });
     return Promise.reject(error);
   }

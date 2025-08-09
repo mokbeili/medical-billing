@@ -1,18 +1,19 @@
 import { Ionicons } from "@expo/vector-icons";
+import { scanOCR } from "@ismaelmoreiraa/vision-camera-ocr";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as ImagePicker from "expo-image-picker";
 import React, { useState } from "react";
-import {
-  Alert,
-  Image,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
-import { ActivityIndicator, Button, Card } from "react-native-paper";
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Button, Card } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  Camera,
+  runAtTargetFps,
+  useCameraDevice,
+  useCameraPermission,
+  useFrameProcessor,
+} from "react-native-vision-camera";
+import { Worklets } from "react-native-worklets-core";
+
 import textRecognitionService from "../utils/expoTextRecognitionService";
 
 interface ScannedPatientData {
@@ -33,164 +34,155 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
   navigation,
   route,
 }) => {
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const device = useCameraDevice("back");
+  const { hasPermission, requestPermission } = useCameraPermission();
+  const [liveText, setLiveText] = useState<string>("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [scannedData, setScannedData] = useState<ScannedPatientData | null>(
     null
   );
+  const [isScanning, setIsScanning] = useState(true);
+  const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
 
-  const handleTakePhoto = async () => {
-    try {
-      const permissionResult =
-        await ImagePicker.requestCameraPermissionsAsync();
+  React.useEffect(() => {
+    if (!hasPermission) {
+      requestPermission();
+    }
+  }, [hasPermission]);
 
-      if (permissionResult.granted === false) {
-        Alert.alert(
-          "Camera Permission Required",
-          "Please grant camera permission to scan patient documents."
-        );
-        return;
+  const autoSubmit = React.useCallback(
+    async (text: string) => {
+      if (hasSubmitted) return;
+      try {
+        const parsed = textRecognitionService.parsePatientData(text);
+        if (parsed) {
+          setHasSubmitted(true);
+          setIsScanning(false); // stop scanning
+          setIsClosing(true); // show closing state & unmount camera
+          await AsyncStorage.setItem(
+            "scannedPatientData",
+            JSON.stringify(parsed)
+          );
+          // Allow UI to update (unmount Camera) before navigating back
+          setTimeout(() => {
+            navigation.goBack();
+          }, 50);
+        }
+      } catch (e) {
+        // ignore and keep scanning
       }
+    },
+    [hasSubmitted, navigation]
+  );
 
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
+  // Create runOnJS callbacks compatible with VisionCamera's Worklets runtime
+  const onSetLiveText = React.useMemo(
+    () => Worklets.createRunOnJS(setLiveText),
+    []
+  );
+  const onAutoSubmit = React.useMemo(
+    () => Worklets.createRunOnJS(autoSubmit),
+    [autoSubmit]
+  );
+
+  const frameProcessor = useFrameProcessor(
+    (frame) => {
+      "worklet";
+      if (!isScanning) return;
+
+      runAtTargetFps(5, () => {
+        "worklet";
+        const ocr = scanOCR(frame);
+        if (ocr?.result?.text?.length > 3) {
+          onSetLiveText(ocr.result.text);
+          onAutoSubmit(ocr.result.text);
+        }
       });
+    },
+    [isScanning, onSetLiveText, onAutoSubmit]
+  );
 
-      if (!result.canceled && result.assets[0]) {
-        setSelectedImage(result.assets[0].uri);
-        await processImage(result.assets[0].uri);
-      }
-    } catch (error) {
-      console.error("Error taking photo:", error);
-      Alert.alert("Error", "Failed to take photo. Please try again.");
-    }
-  };
-
-  const handlePickImage = async () => {
-    try {
-      const permissionResult =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-      if (permissionResult.granted === false) {
-        Alert.alert(
-          "Photo Library Permission Required",
-          "Please grant photo library permission to select patient documents."
-        );
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets[0]) {
-        setSelectedImage(result.assets[0].uri);
-        await processImage(result.assets[0].uri);
-      }
-    } catch (error) {
-      console.error("Error picking image:", error);
-      Alert.alert("Error", "Failed to pick image. Please try again.");
-    }
-  };
-
-  const processImage = async (imageUri: string) => {
-    setIsProcessing(true);
-    try {
-      if (!textRecognitionService.configured) {
-        Alert.alert(
-          "Text Recognition Not Available",
-          "Text recognition service is not available. Please try again.",
-          [
-            {
-              text: "OK",
-              style: "cancel",
-            },
-          ]
-        );
-        setIsProcessing(false);
-        return;
-      }
-
-      // Use expo-text-recognition
-      const textRecognitionResult = await textRecognitionService.extractText(
-        imageUri
-      );
-      await processExtractedText(
-        textRecognitionResult.text,
-        textRecognitionResult.confidence
-      );
-    } catch (error) {
-      console.error("Text recognition error:", error);
-      Alert.alert(
-        "Text Recognition Error",
-        "Failed to process image with text recognition. Please try again with a clearer image.",
-        [
-          {
-            text: "OK",
-            style: "cancel",
-          },
-        ]
-      );
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const processExtractedText = async (text: string, confidence: number) => {
+  const processExtractedText = async (text: string) => {
     try {
       const parsedData = textRecognitionService.parsePatientData(text);
 
       if (parsedData) {
         setScannedData(parsedData);
-        Alert.alert(
-          "Success",
-          `Patient information extracted successfully! (Confidence: ${Math.round(
-            confidence * 100
-          )}%)`,
-          [
-            {
-              text: "Use This Data",
-              onPress: async () => {
-                // Store scanned data in AsyncStorage
-                await AsyncStorage.setItem(
-                  "scannedPatientData",
-                  JSON.stringify(parsedData)
-                );
-                // Go back to the previous screen
-                navigation.goBack();
-              },
+        setIsScanning(false);
+        Alert.alert("Success", "Patient information extracted successfully!", [
+          {
+            text: "Use This Data",
+            onPress: async () => {
+              // Store scanned data in AsyncStorage
+              await AsyncStorage.setItem(
+                "scannedPatientData",
+                JSON.stringify(parsedData)
+              );
+              // Go back to the previous screen
+              navigation.goBack();
             },
-            {
-              text: "Try Again",
-              style: "cancel",
+          },
+          {
+            text: "Continue Scanning",
+            onPress: () => {
+              setIsScanning(true);
+              setScannedData(null);
             },
-          ]
-        );
-      } else {
-        Alert.alert(
-          "No Data Found",
-          "Could not extract patient information from this image. Please try again with a clearer image."
-        );
+          },
+        ]);
       }
     } catch (error) {
       console.error("Error processing extracted text:", error);
-      Alert.alert(
-        "Error",
-        "Failed to process extracted text. Please try again."
-      );
+    }
+  };
+
+  const handleProcessCurrentText = async () => {
+    if (liveText.length > 0) {
+      setIsProcessing(true);
+      try {
+        await processExtractedText(liveText);
+      } catch (error) {
+        console.error("Error processing text:", error);
+        Alert.alert("Error", "Failed to process text. Please try again.");
+      } finally {
+        setIsProcessing(false);
+      }
     }
   };
 
   const handleRetry = () => {
-    setSelectedImage(null);
+    setLiveText("");
     setScannedData(null);
+    setIsScanning(true);
+    setHasSubmitted(false);
   };
+
+  const handleToggleScanning = () => {
+    setIsScanning(!isScanning);
+  };
+
+  if (device == null || !hasPermission) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={24} color="#1e293b" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Live Document Scanner</Text>
+          <View style={{ width: 24 }} />
+        </View>
+        <View style={styles.permissionContainer}>
+          <Text style={styles.permissionText}>
+            Camera permission is required for live scanning.
+          </Text>
+          <Button mode="contained" onPress={requestPermission}>
+            Grant Permission
+          </Button>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -198,122 +190,120 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color="#1e293b" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Scan Patient Document</Text>
-        <View style={{ width: 24 }} />
+        <Text style={styles.headerTitle}>Live Document Scanner</Text>
+        <TouchableOpacity onPress={handleToggleScanning}>
+          <Ionicons
+            name={isScanning ? "pause" : "play"}
+            size={24}
+            color="#1e293b"
+          />
+        </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content}>
-        <Card style={styles.card}>
-          <Card.Content>
-            <Text style={styles.sectionTitle}>Scan Patient Information</Text>
-            <Text style={styles.description}>
-              Take a photo or select an image of a patient document to
-              automatically extract patient information and service date.
-            </Text>
+      <View style={styles.cameraContainer}>
+        {isScanning && !hasSubmitted ? (
+          <Camera
+            style={StyleSheet.absoluteFill}
+            device={device}
+            isActive={isScanning}
+            frameProcessor={frameProcessor}
+            pixelFormat="yuv"
+          />
+        ) : (
+          <View
+            style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }]}
+          />
+        )}
 
-            <View style={styles.ocrStatusContainer}>
-              <View style={styles.ocrStatus}>
-                <Ionicons name="phone-portrait" size={20} color="#059669" />
-                <Text style={styles.ocrStatusText}>Local Text Recognition</Text>
-              </View>
+        {/* Overlay for scanning guidance */}
+        {!isClosing && (
+          <View style={styles.overlay}>
+            <View style={styles.scanFrame}>
+              <View style={styles.corner} />
+              <View style={[styles.corner, styles.cornerTopRight]} />
+              <View style={[styles.corner, styles.cornerBottomLeft]} />
+              <View style={[styles.corner, styles.cornerBottomRight]} />
             </View>
-          </Card.Content>
-        </Card>
+            <Text style={styles.scanText}>
+              Position document within the frame
+            </Text>
+          </View>
+        )}
 
-        {selectedImage && (
-          <Card style={styles.card}>
-            <Card.Content>
-              <Text style={styles.sectionTitle}>Selected Image</Text>
-              <Image source={{ uri: selectedImage }} style={styles.image} />
-              {isProcessing && (
-                <View style={styles.processingContainer}>
-                  <ActivityIndicator size="large" color="#2563eb" />
-                  <Text style={styles.processingText}>
-                    Processing image with text recognition...
+        {/* Live text display */}
+        {!isClosing && liveText.length > 0 && (
+          <View style={styles.liveTextContainer}>
+            <Text style={styles.liveTextLabel}>Detected Text:</Text>
+            <Text style={styles.liveText} numberOfLines={3}>
+              {liveText}
+            </Text>
+            <Button
+              mode="contained"
+              onPress={handleProcessCurrentText}
+              disabled={isProcessing}
+              style={styles.processButton}
+            >
+              {isProcessing ? "Processing..." : "Process Text"}
+            </Button>
+          </View>
+        )}
+      </View>
+
+      {/* Optional: small closing hint */}
+      {isClosing && (
+        <View style={{ padding: 16 }}>
+          <Text style={{ color: "#fff", textAlign: "center" }}>
+            Processing…
+          </Text>
+        </View>
+      )}
+
+      {/* Extracted data display (fallback manual flow) */}
+      {scannedData && (
+        <Card style={styles.dataCard}>
+          <Card.Content>
+            <Text style={styles.sectionTitle}>Extracted Information</Text>
+            <View style={styles.dataContainer}>
+              <View style={styles.dataRow}>
+                <Text style={styles.dataLabel}>Billing Number:</Text>
+                <Text style={styles.dataValue}>
+                  {scannedData.billingNumber}
+                </Text>
+              </View>
+              <View style={styles.dataRow}>
+                <Text style={styles.dataLabel}>Name:</Text>
+                <Text style={styles.dataValue}>
+                  {scannedData.firstName} {scannedData.lastName}
+                </Text>
+              </View>
+              <View style={styles.dataRow}>
+                <Text style={styles.dataLabel}>Date of Birth:</Text>
+                <Text style={styles.dataValue}>{scannedData.dateOfBirth}</Text>
+              </View>
+              <View style={styles.dataRow}>
+                <Text style={styles.dataLabel}>Gender:</Text>
+                <Text style={styles.dataValue}>{scannedData.gender}</Text>
+              </View>
+              {scannedData.serviceDate && (
+                <View style={styles.dataRow}>
+                  <Text style={styles.dataLabel}>Service Date:</Text>
+                  <Text style={styles.dataValue}>
+                    {scannedData.serviceDate}
                   </Text>
                 </View>
               )}
-            </Card.Content>
-          </Card>
-        )}
-
-        {scannedData && (
-          <Card style={styles.card}>
-            <Card.Content>
-              <Text style={styles.sectionTitle}>Extracted Information</Text>
-              <View style={styles.dataContainer}>
-                <View style={styles.dataRow}>
-                  <Text style={styles.dataLabel}>Billing Number:</Text>
-                  <Text style={styles.dataValue}>
-                    {scannedData.billingNumber}
-                  </Text>
-                </View>
-                <View style={styles.dataRow}>
-                  <Text style={styles.dataLabel}>Name:</Text>
-                  <Text style={styles.dataValue}>
-                    {scannedData.firstName} {scannedData.lastName}
-                  </Text>
-                </View>
-                <View style={styles.dataRow}>
-                  <Text style={styles.dataLabel}>Date of Birth:</Text>
-                  <Text style={styles.dataValue}>
-                    {scannedData.dateOfBirth}
-                  </Text>
-                </View>
-                <View style={styles.dataRow}>
-                  <Text style={styles.dataLabel}>Gender:</Text>
-                  <Text style={styles.dataValue}>{scannedData.gender}</Text>
-                </View>
-                {scannedData.serviceDate && (
-                  <View style={styles.dataRow}>
-                    <Text style={styles.dataLabel}>Service Date:</Text>
-                    <Text style={styles.dataValue}>
-                      {scannedData.serviceDate}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </Card.Content>
-          </Card>
-        )}
-
-        <View style={styles.buttonContainer}>
-          {!selectedImage ? (
-            <>
-              <Button
-                mode="contained"
-                onPress={handleTakePhoto}
-                style={styles.button}
-                icon="camera"
-              >
-                Take Photo
-              </Button>
-              <Button
-                mode="outlined"
-                onPress={handlePickImage}
-                style={styles.button}
-                icon="image"
-              >
-                Select from Gallery
-              </Button>
-            </>
-          ) : (
-            <>
+            </View>
+            <View style={styles.buttonContainer}>
               <Button
                 mode="contained"
                 onPress={async () => {
-                  if (scannedData) {
-                    // Store scanned data in AsyncStorage
-                    await AsyncStorage.setItem(
-                      "scannedPatientData",
-                      JSON.stringify(scannedData)
-                    );
-                    // Go back to the previous screen
-                    navigation.goBack();
-                  }
+                  await AsyncStorage.setItem(
+                    "scannedPatientData",
+                    JSON.stringify(scannedData)
+                  );
+                  navigation.goBack();
                 }}
                 style={styles.button}
-                disabled={!scannedData || isProcessing}
                 icon="check"
               >
                 Use This Data
@@ -326,10 +316,10 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
               >
                 Try Again
               </Button>
-            </>
-          )}
-        </View>
-      </ScrollView>
+            </View>
+          </Card.Content>
+        </Card>
+      )}
     </SafeAreaView>
   );
 };
@@ -337,28 +327,112 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f8fafc",
+    backgroundColor: "#000000",
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     padding: 16,
-    backgroundColor: "#ffffff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
+    backgroundColor: "rgba(0,0,0,0.8)",
+    zIndex: 1000,
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#1e293b",
+    color: "#ffffff",
   },
-  content: {
+  permissionContainer: {
     flex: 1,
-    padding: 16,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
   },
-  card: {
-    marginBottom: 16,
+  permissionText: {
+    fontSize: 16,
+    color: "#ffffff",
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  cameraContainer: {
+    flex: 1,
+    position: "relative",
+  },
+  overlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  scanFrame: {
+    width: 280,
+    height: 200,
+    borderWidth: 2,
+    borderColor: "transparent",
+    position: "relative",
+  },
+  corner: {
+    position: "absolute",
+    width: 20,
+    height: 20,
+    borderColor: "#00ff00",
+    borderWidth: 3,
+    top: -2,
+    left: -2,
+  },
+  cornerTopRight: {
+    top: -2,
+    right: -2,
+    left: "auto",
+  },
+  cornerBottomLeft: {
+    bottom: -2,
+    top: "auto",
+  },
+  cornerBottomRight: {
+    bottom: -2,
+    right: -2,
+    top: "auto",
+    left: "auto",
+  },
+  scanText: {
+    color: "#ffffff",
+    fontSize: 16,
+    marginTop: 20,
+    textAlign: "center",
+    backgroundColor: "rgba(0,0,0,0.7)",
+    padding: 10,
+    borderRadius: 8,
+  },
+  liveTextContainer: {
+    position: "absolute",
+    bottom: 20,
+    left: 16,
+    right: 16,
+    backgroundColor: "rgba(0,0,0,0.8)",
+    padding: 16,
+    borderRadius: 8,
+  },
+  liveTextLabel: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 8,
+  },
+  liveText: {
+    color: "#ffffff",
+    fontSize: 14,
+    marginBottom: 12,
+    lineHeight: 20,
+  },
+  processButton: {
+    marginTop: 8,
+  },
+  dataCard: {
+    margin: 16,
     backgroundColor: "#ffffff",
   },
   sectionTitle: {
@@ -366,47 +440,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#374151",
     marginBottom: 12,
-  },
-  description: {
-    fontSize: 14,
-    color: "#6b7280",
-    lineHeight: 20,
-    marginBottom: 16,
-  },
-  ocrStatusContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 12,
-    backgroundColor: "#f8fafc",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
-  ocrStatus: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  ocrStatusText: {
-    marginLeft: 8,
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#374151",
-  },
-  image: {
-    width: "100%",
-    height: 200,
-    borderRadius: 8,
-    marginTop: 8,
-  },
-  processingContainer: {
-    alignItems: "center",
-    marginTop: 16,
-  },
-  processingText: {
-    marginTop: 8,
-    fontSize: 14,
-    color: "#6b7280",
   },
   dataContainer: {
     marginTop: 8,

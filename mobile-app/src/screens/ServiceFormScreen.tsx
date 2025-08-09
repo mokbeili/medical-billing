@@ -589,12 +589,12 @@ const ServiceFormScreen = ({ navigation }: any) => {
   // Create service mutation
   const createServiceMutation = useMutation({
     mutationFn: servicesAPI.create,
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       const status =
         data.status === "PENDING" ? "approved and finished" : "saved";
       Alert.alert("Success", `Service ${status} successfully!`);
+      await queryClient.invalidateQueries({ queryKey: ["services"] });
       navigation.goBack();
-      queryClient.invalidateQueries({ queryKey: ["services"] });
     },
     onError: (error) => {
       console.error("Error creating service:", error);
@@ -605,13 +605,13 @@ const ServiceFormScreen = ({ navigation }: any) => {
   // Update service mutation
   const updateServiceMutation = useMutation({
     mutationFn: (data: ServiceFormData) => servicesAPI.update(serviceId!, data),
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       const status =
         data.status === "PENDING" ? "approved and finished" : "saved";
       Alert.alert("Success", `Service ${status} successfully!`);
-      navigation.goBack();
-      queryClient.invalidateQueries({ queryKey: ["services"] });
+      await queryClient.invalidateQueries({ queryKey: ["services"] });
       queryClient.invalidateQueries({ queryKey: ["service", serviceId] });
+      navigation.goBack();
     },
     onError: (error) => {
       console.error("Error updating service:", error);
@@ -2602,6 +2602,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
                   <TextInput
                     style={styles.input}
                     placeholder="First Name *"
+                    placeholderTextColor="#6b7280"
                     value={newPatient.firstName}
                     onChangeText={(text) =>
                       setNewPatient((prev) => ({ ...prev, firstName: text }))
@@ -2612,6 +2613,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
                   <TextInput
                     style={styles.input}
                     placeholder="Last Name *"
+                    placeholderTextColor="#6b7280"
                     value={newPatient.lastName}
                     onChangeText={(text) =>
                       setNewPatient((prev) => ({ ...prev, lastName: text }))
@@ -2713,7 +2715,8 @@ const ServiceFormScreen = ({ navigation }: any) => {
                       styles.input,
                       newPatientErrors.billingNumber && styles.inputError,
                     ]}
-                    placeholder="Billing Number (9 digits) *"
+                    placeholder="Health Services Number (9 digits) *"
+                    placeholderTextColor="#6b7280"
                     value={newPatient.billingNumber}
                     onChangeText={(text) => {
                       // Only allow digits and limit to 9 characters
@@ -2767,6 +2770,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
                   <TextInput
                     style={styles.input}
                     placeholder="Search patients by name or billing number..."
+                    placeholderTextColor="#6b7280"
                     value={patientSearchQuery}
                     onChangeText={(text) => {
                       setPatientSearchQuery(text);
@@ -2802,6 +2806,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
                         <TextInput
                           style={styles.modalSearchInput}
                           placeholder="Search patients..."
+                          placeholderTextColor="#6b7280"
                           value={patientSearchQuery}
                           onChangeText={setPatientSearchQuery}
                           autoFocus={true}

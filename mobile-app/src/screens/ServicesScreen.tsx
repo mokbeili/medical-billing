@@ -423,13 +423,13 @@ const ServicesScreen = ({ navigation }: any) => {
       (code) => code.billingCode.billing_record_type === 57
     );
 
-    if (type57Codes.length === 0) {
-      Alert.alert(
-        "No Type 57 Codes",
-        "This service does not contain any type 57 codes that require discharge."
-      );
-      return;
-    }
+    // if (type57Codes.length === 0) {
+    //   Alert.alert(
+    //     "No Type 57 Codes",
+    //     "This service does not contain any type 57 codes that require discharge."
+    //   );
+    //   return;
+    // }
 
     // Set today's date as default discharge date
     const today = new Date().toISOString().split("T")[0];

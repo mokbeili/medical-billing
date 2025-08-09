@@ -9,6 +9,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   const apiBaseUrl = process.env.API_BASE_URL || "https://www.myonhealth.ca";
   const appEnv = process.env.APP_ENV || "development";
 
+  const isDev = appEnv === "development";
+
   return {
     ...config,
     name: "Myon Health",
@@ -33,6 +35,15 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           "This app needs access to camera to scan patient information from documents.",
         NSPhotoLibraryUsageDescription:
           "This app needs access to photo library to select patient documents for scanning.",
+        ...(isDev
+          ? {
+              NSAppTransportSecurity: {
+                NSAllowsArbitraryLoads: true,
+                NSAllowsArbitraryLoadsInWebContent: true,
+                NSAllowsLocalNetworking: true,
+              },
+            }
+          : {}),
       },
     },
     android: {
@@ -46,6 +57,11 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
       ],
+      ...(isDev
+        ? {
+            usesCleartextTraffic: true,
+          }
+        : {}),
     },
     web: {
       favicon: "./assets/favicon.png",
@@ -54,10 +70,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     platforms: ["ios", "android"],
     plugins: [
       [
-        "expo-camera",
+        "react-native-vision-camera",
         {
-          cameraPermission:
-            "Allow Myon Health to access your camera to scan patient documents.",
+          cameraPermissionText: "We use your camera to scan text.",
+          enableMicrophonePermission: false,
         },
       ],
       [

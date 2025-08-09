@@ -69,23 +69,25 @@ export async function POST(
       (code) => code.billingCode.billing_record_type === 57
     );
 
-    if (type57Codes.length === 0) {
-      return NextResponse.json(
-        { error: "No type 57 codes found in this service" },
-        { status: 400 }
-      );
-    }
+    // if (type57Codes.length === 0) {
+    //   return NextResponse.json(
+    //     { error: "No type 57 codes found in this service" },
+    //     { status: 400 }
+    //   );
+    // }
 
     // Find the last type 57 code (the one with the latest service date)
     const lastType57Code = type57Codes[0]; // Already ordered by serviceDate desc
 
     // Update the end date of the last type 57 code
-    await prisma.serviceCodes.update({
-      where: { id: lastType57Code.id },
-      data: {
-        serviceEndDate: new Date(dischargeDate),
-      },
-    });
+    if (lastType57Code) {
+      await prisma.serviceCodes.update({
+        where: { id: lastType57Code.id },
+        data: {
+          serviceEndDate: new Date(dischargeDate),
+        },
+      });
+    }
 
     // Update the service status to PENDING
     await prisma.service.update({
