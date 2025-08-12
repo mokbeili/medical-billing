@@ -3,6 +3,7 @@ import { useRoute } from "@react-navigation/native";
 import { useQuery } from "@tanstack/react-query";
 import React, { useState } from "react";
 import {
+  Alert,
   FlatList,
   Modal,
   ScrollView,
@@ -43,8 +44,7 @@ const BillingCodeSearchScreen = ({ navigation }: any) => {
     serviceDate?: string;
   };
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCodes, setSelectedCodes] =
-    useState<BillingCode[]>(existingCodes);
+  const [selectedCodes, setSelectedCodes] = useState<BillingCode[]>([]);
   const [codeSubSelections, setCodeSubSelections] = useState<
     CodeSubSelection[]
   >([]);
@@ -75,11 +75,16 @@ const BillingCodeSearchScreen = ({ navigation }: any) => {
         );
         if (!existingSubSelection) {
           const calculatedDates = calculateServiceDates(code);
+          // For non-type 57 codes, set the service date from route params or today's date
+          const defaultServiceDate = !isType57Code(code)
+            ? serviceDate || new Date().toISOString().split("T")[0]
+            : calculatedDates.serviceDate;
+
           setCodeSubSelections((prev) => [
             ...prev,
             {
               codeId: code.id,
-              serviceDate: calculatedDates.serviceDate,
+              serviceDate: defaultServiceDate,
               serviceEndDate: calculatedDates.serviceEndDate,
               bilateralIndicator: null,
               serviceStartTime: null,
@@ -98,11 +103,16 @@ const BillingCodeSearchScreen = ({ navigation }: any) => {
           (s) => s.codeId === code.id
         );
         if (!existingSubSelection) {
+          // For non-type 57 codes, set the service date from route params or today's date
+          const defaultServiceDate = !isType57Code(code)
+            ? serviceDate || new Date().toISOString().split("T")[0]
+            : null;
+
           setCodeSubSelections((prev) => [
             ...prev,
             {
               codeId: code.id,
-              serviceDate: null,
+              serviceDate: defaultServiceDate,
               serviceEndDate: null,
               bilateralIndicator: null,
               serviceStartTime: null,
@@ -126,6 +136,25 @@ const BillingCodeSearchScreen = ({ navigation }: any) => {
   };
 
   const handleSubmit = () => {
+    // Validate that all non-type 57 codes have service dates
+    const codesWithoutServiceDates = selectedCodes.filter((code) => {
+      if (isType57Code(code)) return false; // Type 57 codes don't need validation here
+
+      const subSelection = getSubSelectionForCode(code.id);
+      return !subSelection?.serviceDate;
+    });
+
+    if (codesWithoutServiceDates.length > 0) {
+      const codeNames = codesWithoutServiceDates
+        .map((code) => code.code)
+        .join(", ");
+      Alert.alert(
+        "Service Date Required",
+        `The following codes require a service date: ${codeNames}. Please configure all codes before submitting.`
+      );
+      return;
+    }
+
     onSelect(selectedCodes, codeSubSelections);
     navigation.goBack();
   };
@@ -152,8 +181,8 @@ const BillingCodeSearchScreen = ({ navigation }: any) => {
 
   // Function to check if a code requires any extra selections
   const requiresExtraSelections = (code: BillingCode): boolean => {
-    // Check if it's a type 57 code (requires service dates)
-    if (isType57Code(code)) {
+    // All codes except type 57 require service date input
+    if (!isType57Code(code)) {
       return true;
     }
 
@@ -279,6 +308,28 @@ const BillingCodeSearchScreen = ({ navigation }: any) => {
             </View>
 
             <ScrollView style={styles.subSelectionScrollView}>
+              {/* Service Date - Required for all codes except Type 57 */}
+              {!isType57Code(currentCodeForSubSelection) && (
+                <View style={styles.subSelectionSection}>
+                  <Text style={styles.subSelectionSectionTitle}>
+                    Service Date <Text style={styles.requiredText}>*</Text>
+                  </Text>
+                  <TextInput
+                    style={styles.dateInput}
+                    placeholder="YYYY-MM-DD"
+                    value={subSelection.serviceDate || ""}
+                    onChangeText={(text) =>
+                      handleUpdateSubSelection(currentCodeForSubSelection.id, {
+                        serviceDate: text,
+                      })
+                    }
+                  />
+                  <Text style={styles.dateNote}>
+                    Enter the date when this service was provided
+                  </Text>
+                </View>
+              )}
+
               {/* Service Start/End Date - Only for Type 57 codes */}
               {isType57Code(currentCodeForSubSelection) && (
                 <View style={styles.subSelectionSection}>
@@ -1129,6 +1180,11 @@ const styles = StyleSheet.create({
     color: "#6b7280",
     fontStyle: "italic",
     marginTop: 8,
+  },
+  dateNote: {
+    fontSize: 12,
+    color: "#6b7280",
+    marginTop: 4,
   },
 });
 

@@ -29,8 +29,47 @@ import {
   BillingCode,
   ICDCode,
   ReferringPhysician,
+  ServiceCode,
   ServiceFormData,
 } from "../types";
+
+// Helper function to format date as "Month Day" (e.g., "Jan 15")
+const formatDateToMonthDay = (dateString: string): string => {
+  if (!dateString) return "";
+
+  try {
+    // Parse date string directly without timezone conversion
+    // Expected format: YYYY-MM-DD
+    const parts = dateString.split("-");
+    if (parts.length !== 3) return dateString;
+
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1; // Month is 0-indexed
+    const day = parseInt(parts[2], 10);
+
+    if (isNaN(year) || isNaN(month) || isNaN(day)) return dateString;
+
+    const monthNames = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
+
+    const monthName = monthNames[month];
+    return `${monthName} ${day}`;
+  } catch (error) {
+    return dateString; // Return original if parsing fails
+  }
+};
 
 interface ScannedPatientData {
   billingNumber: string;
@@ -62,7 +101,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
     billingCodes: [],
   });
 
-  const [selectedCodes, setSelectedCodes] = useState<BillingCode[]>([]);
+  const [selectedCodes, setSelectedCodes] = useState<ServiceCode[]>([]);
   const [selectedIcdCode, setSelectedIcdCode] = useState<ICDCode | null>(null);
   const [referringPhysicianSearchQuery, setReferringPhysicianSearchQuery] =
     useState("");
@@ -250,6 +289,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
     queryKey: ["service", serviceId],
     queryFn: () => servicesAPI.getById(serviceId!),
     enabled: !!serviceId,
+    staleTime: 0,
   });
 
   // Fetch other data
@@ -399,7 +439,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
       });
 
       // Set selected codes
-      setSelectedCodes(service.serviceCodes.map((code) => code.billingCode));
+      setSelectedCodes(service.serviceCodes.map((code) => code));
 
       // Set selected ICD code
       if (service.icdCode) {
@@ -695,7 +735,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
   const handleAddCodes = (codes: BillingCode[], subSelections?: any[]) => {
     // Filter out codes that are already selected
     const newCodes = codes.filter(
-      (code) => !selectedCodes.some((c) => c.id === code.id)
+      (code) => !selectedCodes.some((c) => c.billingCode.id === code.id)
     );
 
     if (newCodes.length === 0) {
@@ -703,26 +743,51 @@ const ServiceFormScreen = ({ navigation }: any) => {
       return;
     }
 
-    setSelectedCodes([...selectedCodes, ...newCodes]);
+    // Create ServiceCode objects from BillingCode objects
+    const newServiceCodes: ServiceCode[] = newCodes.map((code) => ({
+      id: Date.now() + Math.random(), // Generate temporary ID
+      status: "PENDING",
+      specialCircumstances: null,
+      bilateralIndicator: null,
+      serviceStartTime: null,
+      serviceEndTime: null,
+      serviceDate: formData.serviceDate,
+      serviceEndDate: null,
+      serviceLocation: formData.serviceLocation,
+      locationOfService: formData.locationOfService,
+      numberOfUnits: 1,
+      summary: "",
+      createdAt: new Date().toISOString(),
+      billingCode: code,
+    }));
+
+    setSelectedCodes([...selectedCodes, ...newServiceCodes]);
+
+    // Update formData.billingCodes to match the new ServiceCode structure
     setFormData((prev) => {
       const updatedBillingCodes = [...prev.billingCodes];
 
-      // Process each new code
-      newCodes.forEach((code) => {
-        const subSelection = subSelections?.find((s) => s.codeId === code.id);
+      // Process each new ServiceCode
+      newServiceCodes.forEach((serviceCode) => {
+        const subSelection = subSelections?.find(
+          (s) => s.codeId === serviceCode.billingCode.id
+        );
 
         // Calculate service start date for type 57 codes
         let serviceStartDate =
           subSelection?.serviceDate || formData.serviceDate;
         let serviceEndDate = subSelection?.serviceEndDate || null;
 
-        if (code.billing_record_type === 57) {
+        if (serviceCode.billingCode.billing_record_type === 57) {
           // Check if this code has previous codes defined and if any of them are already selected
-          if (code.previousCodes && code.previousCodes.length > 0) {
+          if (
+            serviceCode.billingCode.previousCodes &&
+            serviceCode.billingCode.previousCodes.length > 0
+          ) {
             // Find if any of the previous codes are already in the form
             const selectedPreviousCodes = updatedBillingCodes.filter(
               (selectedCode) =>
-                code.previousCodes?.some(
+                serviceCode.billingCode.previousCodes?.some(
                   (prevCode) =>
                     prevCode.previous_code.id === selectedCode.codeId
                 )
@@ -736,7 +801,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
                 (bc) => bc.codeId === previousCode.codeId
               );
               const previousSelectedCode = selectedCodes.find(
-                (c) => c.id === previousCode.codeId
+                (c) => c.billingCode.id === previousCode.codeId
               );
 
               if (previousCodeIndex >= 0 && previousSelectedCode) {
@@ -747,13 +812,13 @@ const ServiceFormScreen = ({ navigation }: any) => {
 
                 // Set the previous code's end date as previous start date + day range - 1
                 if (
-                  previousSelectedCode.day_range &&
-                  previousSelectedCode.day_range > 0
+                  previousSelectedCode.billingCode.day_range &&
+                  previousSelectedCode.billingCode.day_range > 0
                 ) {
                   const previousEndDate = new Date(previousStartDate);
                   previousEndDate.setDate(
                     previousEndDate.getDate() +
-                      previousSelectedCode.day_range -
+                      previousSelectedCode.billingCode.day_range -
                       1
                   );
 
@@ -766,12 +831,13 @@ const ServiceFormScreen = ({ navigation }: any) => {
 
                 // Set the new code's start date to previous start date + day range
                 if (
-                  previousSelectedCode.day_range &&
-                  previousSelectedCode.day_range > 0
+                  previousSelectedCode.billingCode.day_range &&
+                  previousSelectedCode.billingCode.day_range > 0
                 ) {
                   const newStartDate = new Date(previousStartDate);
                   newStartDate.setDate(
-                    newStartDate.getDate() + previousSelectedCode.day_range
+                    newStartDate.getDate() +
+                      previousSelectedCode.billingCode.day_range
                   );
                   serviceStartDate = newStartDate.toISOString().split("T")[0];
                 } else {
@@ -788,18 +854,23 @@ const ServiceFormScreen = ({ navigation }: any) => {
           serviceEndDate = null;
         } else {
           // For non-type 57 codes, calculate service end date based on day range
-          if (code.day_range && code.day_range > 0) {
+          if (
+            serviceCode.billingCode.day_range &&
+            serviceCode.billingCode.day_range > 0
+          ) {
             const startDate = new Date(serviceStartDate);
-            startDate.setDate(startDate.getDate() + code.day_range - 1); // -1 because it's inclusive
+            startDate.setDate(
+              startDate.getDate() + serviceCode.billingCode.day_range - 1
+            ); // -1 because it's inclusive
             serviceEndDate = startDate.toISOString().split("T")[0];
           }
         }
 
         // Add the new code to the billing codes
         updatedBillingCodes.push({
-          codeId: code.id,
+          codeId: serviceCode.billingCode.id,
           status: "PENDING",
-          billing_record_type: code.billing_record_type,
+          billing_record_type: serviceCode.billingCode.billing_record_type,
           serviceStartTime: subSelection?.serviceStartTime || null,
           serviceEndTime: subSelection?.serviceEndTime || null,
           numberOfUnits: subSelection?.numberOfUnits || 1,
@@ -807,8 +878,9 @@ const ServiceFormScreen = ({ navigation }: any) => {
           specialCircumstances: subSelection?.specialCircumstances || null,
           serviceDate: serviceStartDate,
           serviceEndDate: serviceEndDate,
-          fee_determinant: code.fee_determinant,
-          multiple_unit_indicator: code.multiple_unit_indicator,
+          fee_determinant: serviceCode.billingCode.fee_determinant,
+          multiple_unit_indicator:
+            serviceCode.billingCode.multiple_unit_indicator,
         });
       });
 
@@ -820,16 +892,18 @@ const ServiceFormScreen = ({ navigation }: any) => {
   };
 
   const handleRemoveCode = (codeId: number) => {
-    setSelectedCodes(selectedCodes.filter((c) => c.id !== codeId));
+    setSelectedCodes(selectedCodes.filter((c) => c.billingCode.id !== codeId));
     setFormData((prev) => ({
       ...prev,
       billingCodes: prev.billingCodes.filter((c) => c.codeId !== codeId),
     }));
 
     // Check if we still need a referring physician after removing this code
-    const remainingCodes = selectedCodes.filter((c) => c.id !== codeId);
+    const remainingCodes = selectedCodes.filter(
+      (c) => c.billingCode.id !== codeId
+    );
     const stillRequiresReferringPhysician = remainingCodes.some(
-      (code) => code.referring_practitioner_required === "Y"
+      (code) => code.billingCode.referring_practitioner_required === "Y"
     );
 
     // If no longer required, clear the referring physician
@@ -860,7 +934,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
 
   // Check if any selected billing codes require a referring practitioner
   const requiresReferringPhysician = selectedCodes.some(
-    (code) => code.referring_practitioner_required === "Y"
+    (code) => code.billingCode.referring_practitioner_required === "Y"
   );
 
   const handleCloseLocationModal = () => {
@@ -1440,24 +1514,31 @@ const ServiceFormScreen = ({ navigation }: any) => {
 
     // Check if there are type 57 codes that need discharge date
     const type57Codes = formData.billingCodes.filter((code) => {
-      const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
-      return selectedCode && selectedCode.billing_record_type === 57;
+      const selectedCode = selectedCodes.find(
+        (c) => c.billingCode.id === code.codeId
+      );
+      return (
+        selectedCode && selectedCode.billingCode.billing_record_type === 57
+      );
     });
 
     // Find the last type 57 code (the one with no next codes present)
     const lastType57Code = type57Codes.find((code) => {
-      const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
+      const selectedCode = selectedCodes.find(
+        (c) => c.billingCode.id === code.codeId
+      );
       if (!selectedCode) return false;
 
       // Check if this code has any next codes that are also selected
       const hasNextCodes = formData.billingCodes.some((nextCode) => {
         const nextSelectedCode = selectedCodes.find(
-          (c) => c.id === nextCode.codeId
+          (c) => c.billingCode.id === nextCode.codeId
         );
         return (
           nextSelectedCode &&
-          nextSelectedCode.previousCodes?.some(
-            (prevCode) => prevCode.previous_code.id === selectedCode.id
+          nextSelectedCode.billingCode.previousCodes?.some(
+            (prevCode) =>
+              prevCode.previous_code.id === selectedCode.billingCode.id
           )
         );
       });
@@ -1481,22 +1562,29 @@ const ServiceFormScreen = ({ navigation }: any) => {
 
     // Find the last type 57 code and set its end date
     const type57Codes = formData.billingCodes.filter((code) => {
-      const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
-      return selectedCode && selectedCode.billing_record_type === 57;
+      const selectedCode = selectedCodes.find(
+        (c) => c.billingCode.id === code.codeId
+      );
+      return (
+        selectedCode && selectedCode.billingCode.billing_record_type === 57
+      );
     });
 
     const lastType57Code = type57Codes.find((code) => {
-      const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
+      const selectedCode = selectedCodes.find(
+        (c) => c.billingCode.id === code.codeId
+      );
       if (!selectedCode) return false;
 
       const hasNextCodes = formData.billingCodes.some((nextCode) => {
         const nextSelectedCode = selectedCodes.find(
-          (c) => c.id === nextCode.codeId
+          (c) => c.billingCode.id === nextCode.codeId
         );
         return (
           nextSelectedCode &&
-          nextSelectedCode.previousCodes?.some(
-            (prevCode) => prevCode.previous_code.id === selectedCode.id
+          nextSelectedCode.billingCode.previousCodes?.some(
+            (prevCode) =>
+              prevCode.previous_code.id === selectedCode.billingCode.id
           )
         );
       });
@@ -2508,11 +2596,13 @@ const ServiceFormScreen = ({ navigation }: any) => {
                 <View key={code.id} style={styles.selectedCode}>
                   <View style={styles.codeInfo}>
                     <Chip mode="flat" style={styles.codeChip}>
-                      {code.code}
+                      {code.billingCode.code} -{" "}
+                      {formatDateToMonthDay(code.serviceDate || "")}
                     </Chip>
-                    <Text style={styles.codeTitle}>{code.title}</Text>
                   </View>
-                  <TouchableOpacity onPress={() => handleRemoveCode(code.id)}>
+                  <TouchableOpacity
+                    onPress={() => handleRemoveCode(code.billingCode.id)}
+                  >
                     <Ionicons name="close-circle" size={20} color="#ef4444" />
                   </TouchableOpacity>
                 </View>
@@ -2522,7 +2612,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
                 onPress={() =>
                   navigation.navigate("BillingCodeSearch", {
                     onSelect: handleAddCodes,
-                    existingCodes: selectedCodes,
+                    existingCodes: selectedCodes.map((c) => c.billingCode),
                     serviceDate: formData.serviceDate,
                   })
                 }

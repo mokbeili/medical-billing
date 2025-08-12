@@ -54,6 +54,10 @@
     "@types/crypto-js": "^4.2.2",
     "@types/react": "~19.0.10",
     "dotenv": "^16.6.1",
+    "metro": "^0.82.5",
+    "metro-babel-register": "^0.82.5",
+    "metro-core": "^0.82.5",
+    "metro-resolver": "^0.82.5",
     "typescript": "~5.8.3"
   },
   "private": true

@@ -83,6 +83,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
             "Allow Myon Health to access your photo library to select patient documents.",
         },
       ],
+      "expo-dev-client",
     ],
     extra: {
       eas: {

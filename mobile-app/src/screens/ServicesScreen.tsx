@@ -501,7 +501,8 @@ const ServicesScreen = ({ navigation }: any) => {
 
       const age = service.patient.dateOfBirth
         ? new Date().getFullYear() -
-          new Date(service.patient.dateOfBirth).getFullYear()
+          new Date(service.patient.dateOfBirth).getFullYear() -
+          1
         : null;
 
       const sex = service.patient.sex || "unknown";
@@ -712,7 +713,7 @@ const ServicesScreen = ({ navigation }: any) => {
                 statusFilter === "PENDING" && styles.filterButtonTextActive,
               ]}
             >
-              Done
+              Pending
             </Text>
           </TouchableOpacity>
         </View>
