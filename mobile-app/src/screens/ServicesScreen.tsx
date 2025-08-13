@@ -16,7 +16,7 @@ import {
 import { ActivityIndicator, Button, Card } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { patientsAPI, physiciansAPI, servicesAPI } from "../services/api";
-import { BillingCode, Service } from "../types";
+import { BillingCode, Service, ServiceCodeChangeLog } from "../types";
 
 const ServicesScreen = ({ navigation }: any) => {
   const [filteredServices, setFilteredServices] = useState<Service[]>([]);
@@ -490,10 +490,88 @@ const ServicesScreen = ({ navigation }: any) => {
     setSelectedServices(validServices.map((service) => service.id));
   };
 
+  // Function to check if service has been rounded
+  const hasRounding = (service: Service): boolean => {
+    return service.serviceCodes.some((serviceCode) =>
+      serviceCode.changeLogs.some((log) => log.changeType === "ROUND")
+    );
+  };
+
+  // Function to get the most recent rounding information
+  const getRoundingInfo = (service: Service): string | null => {
+    let mostRecentRounding: ServiceCodeChangeLog | null = null;
+
+    for (const serviceCode of service.serviceCodes) {
+      for (const log of serviceCode.changeLogs) {
+        if (log.changeType === "ROUND") {
+          if (
+            !mostRecentRounding ||
+            new Date(log.changedAt) > new Date(mostRecentRounding.changedAt)
+          ) {
+            mostRecentRounding = log;
+          }
+        }
+      }
+    }
+
+    if (!mostRecentRounding) return null;
+
+    const roundingDate = new Date(mostRecentRounding.changedAt);
+    const now = new Date();
+
+    // Check if it's the same day by comparing date strings (YYYY-MM-DD)
+    const roundingDateStr = roundingDate.toISOString().split("T")[0];
+    const nowDateStr = now.toISOString().split("T")[0];
+
+    if (roundingDateStr === nowDateStr) {
+      // Today
+      return "Rounded Today";
+    } else {
+      // Calculate days difference for other cases
+      const diffTime = Math.abs(now.getTime() - roundingDate.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays <= 7) {
+        // Within last 6 days, show day name
+        const dayNames = [
+          "Sunday",
+          "Monday",
+          "Tuesday",
+          "Wednesday",
+          "Thursday",
+          "Friday",
+          "Saturday",
+        ];
+        return `Rounded on ${dayNames[roundingDate.getDay()]}`;
+      } else {
+        // 7 or more days, show date
+        const monthNames = [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "May",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dec",
+        ];
+        return `Rounded on ${
+          monthNames[roundingDate.getMonth()]
+        } ${roundingDate.getDate()}`;
+      }
+    }
+  };
+
   const renderService = (service: Service) => {
     const isSelected = selectedServices.includes(service.id);
     const hasClaim = service.claimId !== null;
     const hasPendingStatus = service.status === "PENDING";
+    const hasBeenRounded = hasRounding(service);
+    const roundingInfo = getRoundingInfo(service);
 
     // Generate patient description
     const getPatientDescription = () => {
@@ -553,10 +631,11 @@ const ServicesScreen = ({ navigation }: any) => {
                   <TouchableOpacity
                     style={[
                       styles.actionButton,
-                      hasPendingStatus && styles.actionButtonDisabled,
+                      (hasPendingStatus || hasBeenRounded) &&
+                        styles.actionButtonDisabled,
                     ]}
                     onPress={async () => {
-                      if (hasPendingStatus) return;
+                      if (hasPendingStatus || hasBeenRounded) return;
                       try {
                         const result = await servicesAPI.round(service.id);
                         Alert.alert("Success", result.message);
@@ -574,7 +653,11 @@ const ServicesScreen = ({ navigation }: any) => {
                     <Ionicons
                       name="repeat"
                       size={20}
-                      color={hasPendingStatus ? "#9ca3af" : "#2563eb"}
+                      color={
+                        hasPendingStatus || hasBeenRounded
+                          ? "#9ca3af"
+                          : "#2563eb"
+                      }
                     />
                   </TouchableOpacity>
 
@@ -620,6 +703,11 @@ const ServicesScreen = ({ navigation }: any) => {
                 <Text style={styles.icdText}>
                   {service.icdCode.description}
                 </Text>
+              </View>
+            )}
+            {roundingInfo && (
+              <View style={styles.roundingInfoContainer}>
+                <Text style={styles.roundingInfo}>{roundingInfo}</Text>
               </View>
             )}
           </Card.Content>
@@ -1046,6 +1134,15 @@ const styles = StyleSheet.create({
   icdText: {
     fontSize: 14,
     color: "#374151",
+  },
+  roundingInfoContainer: {
+    marginTop: 8,
+    paddingHorizontal: 8,
+  },
+  roundingInfo: {
+    fontSize: 12,
+    color: "#059669",
+    fontStyle: "italic",
   },
   serviceCodes: {
     marginBottom: 8,

@@ -195,6 +195,7 @@ export async function POST(
     };
 
     let newServiceCodes: any[] = [];
+    let updatedServiceCodes: any[] = [];
 
     if (existingType57Codes.length === 0) {
       // No type 57 codes present, find the appropriate one based on service date
@@ -250,6 +251,24 @@ export async function POST(
         },
       });
 
+      // Create change log for the new service code
+      await prisma.serviceCodeChangeLog.create({
+        data: {
+          serviceCodeId: newServiceCode.id,
+          changeType: "ROUND",
+          newData: JSON.stringify({
+            codeId: selectedCode.id,
+            billingCode: selectedCode.code,
+            numberOfUnits: 1,
+            serviceDate: calculatedStartDate,
+            serviceLocation,
+            locationOfService,
+          }),
+          changedBy: parseInt(user.id),
+          notes: "Service code created during rounding operation",
+        },
+      });
+
       newServiceCodes.push(newServiceCode);
     } else {
       // Type 57 codes exist, check if we need to increase units or add new code
@@ -268,12 +287,31 @@ export async function POST(
               billingCode.max_units &&
               existingCode.numberOfUnits < billingCode.max_units
             ) {
-              await prisma.serviceCodes.update({
+              const previousUnits = existingCode.numberOfUnits;
+              const updatedCode = await prisma.serviceCodes.update({
                 where: { id: existingCode.id },
                 data: {
                   numberOfUnits: existingCode.numberOfUnits + 1,
                 },
               });
+
+              // Create change log for the updated service code
+              await prisma.serviceCodeChangeLog.create({
+                data: {
+                  serviceCodeId: existingCode.id,
+                  changeType: "ROUND",
+                  previousData: JSON.stringify({
+                    numberOfUnits: previousUnits,
+                  }),
+                  newData: JSON.stringify({
+                    numberOfUnits: updatedCode.numberOfUnits,
+                  }),
+                  changedBy: parseInt(user.id),
+                  notes: "Units increased during rounding operation",
+                },
+              });
+
+              updatedServiceCodes.push(updatedCode);
             }
           } else if (today > endDate) {
             // Today is beyond the existing code's range, find the next appropriate code
@@ -316,12 +354,30 @@ export async function POST(
                   previousEndDate.getDate() + billingCode.day_range - 1
                 );
 
-                await prisma.serviceCodes.update({
+                const updatedExistingCode = await prisma.serviceCodes.update({
                   where: { id: existingCode.id },
                   data: {
                     serviceEndDate: previousEndDate,
                   },
                 });
+
+                // Create change log for the updated service code (end date added)
+                await prisma.serviceCodeChangeLog.create({
+                  data: {
+                    serviceCodeId: existingCode.id,
+                    changeType: "ROUND",
+                    previousData: JSON.stringify({
+                      serviceEndDate: null,
+                    }),
+                    newData: JSON.stringify({
+                      serviceEndDate: previousEndDate,
+                    }),
+                    changedBy: parseInt(user.id),
+                    notes: "Service end date set during rounding operation",
+                  },
+                });
+
+                updatedServiceCodes.push(updatedExistingCode);
               }
 
               const newServiceCode = await prisma.serviceCodes.create({
@@ -340,6 +396,24 @@ export async function POST(
                       section: true,
                     },
                   },
+                },
+              });
+
+              // Create change log for the new service code
+              await prisma.serviceCodeChangeLog.create({
+                data: {
+                  serviceCodeId: newServiceCode.id,
+                  changeType: "ROUND",
+                  newData: JSON.stringify({
+                    codeId: selectedCode.id,
+                    billingCode: selectedCode.code,
+                    numberOfUnits: 1,
+                    serviceDate: calculatedStartDate,
+                    serviceLocation,
+                    locationOfService,
+                  }),
+                  changedBy: parseInt(user.id),
+                  notes: "Service code created during rounding operation",
                 },
               });
 
@@ -400,6 +474,7 @@ export async function POST(
     return NextResponse.json({
       service: decryptedService,
       newServiceCodes,
+      updatedServiceCodes,
       message: "Rounding completed successfully",
     });
   } catch (error) {

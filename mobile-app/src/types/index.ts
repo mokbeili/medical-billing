@@ -180,6 +180,16 @@ export interface HealthInstitution {
   country: string;
 }
 
+export interface ServiceCodeChangeLog {
+  id: number;
+  changeType: "INSERT" | "DELETE" | "UPDATE" | "ROUND";
+  previousData: string | null;
+  newData: string | null;
+  changedBy: number | null;
+  changedAt: string;
+  notes: string | null;
+}
+
 export interface ServiceCode {
   id: number;
   status: string;
@@ -195,6 +205,7 @@ export interface ServiceCode {
   summary: string;
   createdAt: string;
   billingCode: BillingCode;
+  changeLogs: ServiceCodeChangeLog[];
 }
 
 export interface Service {

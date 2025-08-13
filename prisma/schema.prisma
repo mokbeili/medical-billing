@@ -137,12 +137,12 @@ model BillingCodeChangeLog {
 }
 
 model User {
-  id                    Int              @id @default(autoincrement())
-  email                 String           @unique
+  id                    Int                    @id @default(autoincrement())
+  email                 String                 @unique
   password_hash         String
   roles                 Role[]
-  created_at            DateTime         @default(now())
-  updated_at            DateTime         @updatedAt
+  created_at            DateTime               @default(now())
+  updated_at            DateTime               @updatedAt
   reset_token           String?
   reset_token_expires   DateTime?
   encrypted_first_name  String?
@@ -155,6 +155,7 @@ model User {
   encrypted_unit        String?
   physicians            Physician[]
   SearchQueryLog        SearchQueryLog[]
+  serviceCodeChangeLogs ServiceCodeChangeLog[]
 
   @@map("users")
 }
@@ -303,22 +304,23 @@ model Service {
 }
 
 model ServiceCodes {
-  id                   Int         @id @default(autoincrement())
-  codeId               Int         @map("code_id")
-  serviceStartTime     DateTime?   @map("service_start_time")
-  serviceEndTime       DateTime?   @map("service_end_time")
-  serviceDate          DateTime?   @map("service_date")
-  serviceEndDate       DateTime?   @map("service_end_date")
-  bilateralIndicator   String?     @map("bilateral_indicator")
-  numberOfUnits        Int         @map("number_of_units")
-  serviceId            Int         @map("service_id")
-  specialCircumstances String?     @map("special_circumstances")
-  serviceLocation      String      @map("service_location")
-  locationOfService    String      @map("location_of_service")
-  claimNumber          Int?        @map("claim_number")
-  sequence             Int?        @map("sequence")
-  billingCode          BillingCode @relation(fields: [codeId], references: [id])
-  service              Service     @relation(fields: [serviceId], references: [id])
+  id                   Int                    @id @default(autoincrement())
+  codeId               Int                    @map("code_id")
+  serviceStartTime     DateTime?              @map("service_start_time")
+  serviceEndTime       DateTime?              @map("service_end_time")
+  serviceDate          DateTime?              @map("service_date")
+  serviceEndDate       DateTime?              @map("service_end_date")
+  bilateralIndicator   String?                @map("bilateral_indicator")
+  numberOfUnits        Int                    @map("number_of_units")
+  serviceId            Int                    @map("service_id")
+  specialCircumstances String?                @map("special_circumstances")
+  serviceLocation      String                 @map("service_location")
+  locationOfService    String                 @map("location_of_service")
+  claimNumber          Int?                   @map("claim_number")
+  sequence             Int?                   @map("sequence")
+  billingCode          BillingCode            @relation(fields: [codeId], references: [id])
+  service              Service                @relation(fields: [serviceId], references: [id])
+  changeLogs           ServiceCodeChangeLog[]
 
   @@index([serviceId])
   @@index([codeId])
@@ -424,4 +426,30 @@ enum ClaimStatus {
   SENT
   APPROVED
   REJECTED
+}
+
+enum ServiceCodeChangeType {
+  INSERT
+  DELETE
+  UPDATE
+  ROUND
+}
+
+model ServiceCodeChangeLog {
+  id            Int                   @id @default(autoincrement())
+  serviceCodeId Int                   @map("service_code_id")
+  changeType    ServiceCodeChangeType @map("change_type")
+  previousData  String?               @map("previous_data")
+  newData       String?               @map("new_data")
+  changedBy     Int?                  @map("changed_by")
+  changedAt     DateTime              @default(now()) @map("changed_at")
+  notes         String?
+
+  serviceCode ServiceCodes @relation(fields: [serviceCodeId], references: [id], onDelete: Cascade)
+  user        User?        @relation(fields: [changedBy], references: [id])
+
+  @@index([serviceCodeId])
+  @@index([changedAt])
+  @@index([changeType])
+  @@map("service_code_change_logs")
 }

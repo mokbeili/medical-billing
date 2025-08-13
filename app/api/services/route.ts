@@ -234,6 +234,15 @@ export async function GET(request: Request) {
                 section: true,
               },
             },
+            changeLogs: {
+              where: {
+                changeType: "ROUND",
+              },
+              orderBy: {
+                changedAt: "desc",
+              },
+              take: 1,
+            },
           },
         },
       },
