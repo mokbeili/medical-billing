@@ -51,6 +51,9 @@ export async function POST(request: Request) {
       serviceLocation,
       locationOfService,
       serviceStatus,
+      visitNumber,
+      attendingPhysicianId,
+      familyPhysicianId,
     } = data;
 
     // Validate required fields
@@ -111,6 +114,7 @@ export async function POST(request: Request) {
         },
         serviceDate: new Date(serviceDate),
         summary: summary || "",
+        visitNumber: visitNumber || null,
         healthInstitution: healthInstitutionId
           ? {
               connect: {
@@ -138,6 +142,20 @@ export async function POST(request: Request) {
               },
             }
           : undefined,
+        attendingPhysician: attendingPhysicianId
+          ? {
+              connect: {
+                id: attendingPhysicianId,
+              },
+            }
+          : undefined,
+        familyPhysician: familyPhysicianId
+          ? {
+              connect: {
+                id: familyPhysicianId,
+              },
+            }
+          : undefined,
         icdCode: icdCodeId
           ? {
               connect: {
@@ -153,6 +171,8 @@ export async function POST(request: Request) {
         patient: true,
         healthInstitution: true,
         icdCode: true,
+        attendingPhysician: true,
+        familyPhysician: true,
         serviceCodes: {
           include: {
             billingCode: true,
