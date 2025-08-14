@@ -286,6 +286,9 @@ model Service {
   serviceDate          DateTime            @default(now()) @map("service_date")
   summary              String              @default("")
   physicianId          String              @map("physician_id")
+  visitNumber          String?             @map("visit_number")
+  attendingPhysicianId Int?                @map("attending_physician_id")
+  familyPhysicianId    Int?                @map("family_physician_id")
   serviceCodes         ServiceCodes[]
   claim                BillingClaim?       @relation(fields: [claimId], references: [id], onDelete: SetNull)
   healthInstitution    HealthInstitution?  @relation(fields: [healthInstitutionId], references: [id])
@@ -293,6 +296,8 @@ model Service {
   patient              Patient?            @relation(fields: [patientId], references: [id])
   physician            Physician           @relation(fields: [physicianId], references: [id])
   referringPhysician   ReferringPhysician? @relation(fields: [referringPhysicianId], references: [id])
+  attendingPhysician   ReferringPhysician? @relation("AttendingPhysician", fields: [attendingPhysicianId], references: [id])
+  familyPhysician      ReferringPhysician? @relation("FamilyPhysician", fields: [familyPhysicianId], references: [id])
 
   @@index([claimId])
   @@index([patientId])
@@ -300,6 +305,8 @@ model Service {
   @@index([icdCodeId])
   @@index([referringPhysicianId])
   @@index([healthInstitutionId])
+  @@index([attendingPhysicianId])
+  @@index([familyPhysicianId])
   @@map("services")
 }
 
@@ -329,19 +336,21 @@ model ServiceCodes {
 }
 
 model ReferringPhysician {
-  id             Int                      @id @default(autoincrement())
-  jurisdictionId Int                      @map("jurisdiction_id")
-  code           String
-  name           String
-  location       String
-  specialty      String
-  physicianId    String?                  @map("physician_id")
-  createdAt      DateTime                 @default(now()) @map("created_at")
-  updatedAt      DateTime                 @updatedAt @map("updated_at")
-  searchVector   Unsupported("tsvector")? @map("search_vector")
-  jurisdiction   Jurisdiction             @relation(fields: [jurisdictionId], references: [id])
-  physician      Physician?               @relation(fields: [physicianId], references: [id])
-  Services       Service[]
+  id                Int                      @id @default(autoincrement())
+  jurisdictionId    Int                      @map("jurisdiction_id")
+  code              String
+  name              String
+  location          String
+  specialty         String
+  physicianId       String?                  @map("physician_id")
+  createdAt         DateTime                 @default(now()) @map("created_at")
+  updatedAt         DateTime                 @updatedAt @map("updated_at")
+  searchVector      Unsupported("tsvector")? @map("search_vector")
+  jurisdiction      Jurisdiction             @relation(fields: [jurisdictionId], references: [id])
+  physician         Physician?               @relation(fields: [physicianId], references: [id])
+  Services          Service[]
+  attendingServices Service[]                @relation("AttendingPhysician")
+  familyServices    Service[]                @relation("FamilyPhysician")
 
   @@map("referring_physicians")
 }
