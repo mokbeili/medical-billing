@@ -15,10 +15,16 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     ...config,
     name: "Myon Health",
     slug: "myon-health-mobile",
-    version: "1.0.0",
+    version: "1.0.5",
+    runtimeVersion: "1.0.5",
     orientation: "portrait",
     icon: "./assets/icon.png",
     userInterfaceStyle: "light",
+    updates: {
+      url: "https://u.expo.dev/f9c07c7d-ab5b-4f93-9a4a-5c8b5b4472fb",
+      checkAutomatically: "ON_LOAD",
+      fallbackToCacheTimeout: 0,
+    },
     splash: {
       image: "./assets/splash-icon.png",
       resizeMode: "contain",
