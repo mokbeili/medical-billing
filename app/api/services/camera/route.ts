@@ -1,8 +1,10 @@
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { encryptPatientFields } from "@/utils/patientEncryption";
 import { ServiceStatus } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
+import { v4 as uuidv4 } from "uuid";
 
 export async function POST(request: Request) {
   try {
@@ -86,20 +88,43 @@ export async function POST(request: Request) {
     });
 
     if (!patient) {
+      // Ensure physician exists to derive jurisdiction
+      const physicianRecord = await prisma.physician.findUnique({
+        where: { id: physicianId },
+        include: { jurisdiction: true },
+      });
+
+      if (!physicianRecord) {
+        return NextResponse.json(
+          { error: "Physician not found" },
+          { status: 404 }
+        );
+      }
+
+      const id = uuidv4();
+      const encryptedData = encryptPatientFields(
+        {
+          firstName,
+          lastName,
+          middleInitial,
+          billingNumber,
+          dateOfBirth,
+        },
+        physicianId
+      );
+
       // Create new patient
       patient = await prisma.patient.create({
         data: {
-          billingNumber: billingNumber,
-          firstName: firstName,
-          lastName: lastName,
-          middleInitial: middleInitial || null,
-          dateOfBirth: dateOfBirth,
-          gender: gender,
-          physician: {
-            connect: {
-              id: physicianId,
-            },
-          },
+          id,
+          billingNumber: encryptedData.billingNumber || "",
+          firstName: encryptedData.firstName || "",
+          lastName: encryptedData.lastName || "",
+          middleInitial: encryptedData.middleInitial,
+          dateOfBirth: encryptedData.dateOfBirth || "",
+          sex: gender,
+          physicianId: physicianId,
+          jurisdictionId: physicianRecord.jurisdictionId,
         },
       });
     }
