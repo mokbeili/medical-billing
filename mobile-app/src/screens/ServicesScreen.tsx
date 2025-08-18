@@ -519,10 +519,16 @@ const ServicesScreen = ({ navigation }: any) => {
     const roundingDate = new Date(mostRecentRounding.changedAt);
     const now = new Date();
 
-    // Check if it's the same day by comparing date strings (YYYY-MM-DD)
-    const roundingDateStr = roundingDate.toISOString().split("T")[0];
-    const nowDateStr = now.toISOString().split("T")[0];
+    // Compare local device dates (YYYY-MM-DD) to determine if rounded today
+    const localDateKey = (date: Date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    };
 
+    const roundingDateStr = localDateKey(roundingDate);
+    const nowDateStr = localDateKey(now);
     if (roundingDateStr === nowDateStr) {
       // Today
       return "Rounded Today";
@@ -564,6 +570,38 @@ const ServicesScreen = ({ navigation }: any) => {
         } ${roundingDate.getDate()}`;
       }
     }
+  };
+
+  // Function to determine if rounding has happened today (device's local timezone)
+  const isRoundedToday = (service: Service): boolean => {
+    let mostRecentRounding: ServiceCodeChangeLog | null = null;
+
+    for (const serviceCode of service.serviceCodes) {
+      for (const log of serviceCode.changeLogs) {
+        if (log.changeType === "ROUND") {
+          if (
+            !mostRecentRounding ||
+            new Date(log.changedAt) > new Date(mostRecentRounding.changedAt)
+          ) {
+            mostRecentRounding = log;
+          }
+        }
+      }
+    }
+
+    if (!mostRecentRounding) return false;
+
+    const roundingDate = new Date(mostRecentRounding.changedAt);
+    const now = new Date();
+
+    const localDateKey = (date: Date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    };
+
+    return localDateKey(roundingDate) === localDateKey(now);
   };
 
   const renderService = (service: Service) => {
@@ -631,11 +669,11 @@ const ServicesScreen = ({ navigation }: any) => {
                   <TouchableOpacity
                     style={[
                       styles.actionButton,
-                      (hasPendingStatus || hasBeenRounded) &&
+                      (hasPendingStatus || isRoundedToday(service)) &&
                         styles.actionButtonDisabled,
                     ]}
                     onPress={async () => {
-                      if (hasPendingStatus || hasBeenRounded) return;
+                      if (hasPendingStatus || isRoundedToday(service)) return;
                       try {
                         const result = await servicesAPI.round(service.id);
                         Alert.alert("Success", result.message);
@@ -654,7 +692,7 @@ const ServicesScreen = ({ navigation }: any) => {
                       name="repeat"
                       size={20}
                       color={
-                        hasPendingStatus || hasBeenRounded
+                        hasPendingStatus || isRoundedToday(service)
                           ? "#9ca3af"
                           : "#2563eb"
                       }
