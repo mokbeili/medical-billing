@@ -7,6 +7,10 @@
     "development": {
       "distribution": "internal",
       "channel": "development",
+      "env": {
+        "APP_ENV": "development",
+        "EXPO_PUBLIC_API_BASE_URL": "http://192.168.16.118:3000"
+      },
       "ios": {
         "resourceClass": "m-medium"
       },
@@ -17,6 +21,10 @@
     "preview": {
       "distribution": "internal",
       "channel": "preview",
+      "env": {
+        "APP_ENV": "preview",
+        "EXPO_PUBLIC_API_BASE_URL": "https://www.myonhealth.ca"
+      },
       "ios": {
         "resourceClass": "m-medium",
         "buildConfiguration": "Release"
@@ -28,6 +36,10 @@
     "production": {
       "autoIncrement": true,
       "channel": "production",
+      "env": {
+        "APP_ENV": "production",
+        "EXPO_PUBLIC_API_BASE_URL": "https://www.myonhealth.ca"
+      },
       "ios": {
         "resourceClass": "m-medium",
         "buildConfiguration": "Release"

@@ -15,19 +15,19 @@ import {
   User,
 } from "../types";
 
-// Resolve API base URL in priority: Expo constants extra -> env -> defaults
+// Resolve API base URL in priority: env -> Expo constants extra -> defaults
+const ENV_API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_BASE_URL || process.env.API_BASE_URL;
 const EXTRA_API_BASE_URL = (Constants?.expoConfig as any)?.extra?.apiBaseUrl as
   | string
   | undefined;
-const ENV_API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_BASE_URL || process.env.API_BASE_URL;
 
-const API_BASE_URL = EXTRA_API_BASE_URL
-  ? EXTRA_API_BASE_URL
-  : ENV_API_BASE_URL
+const API_BASE_URL = ENV_API_BASE_URL
   ? ENV_API_BASE_URL
+  : EXTRA_API_BASE_URL
+  ? EXTRA_API_BASE_URL
   : __DEV__
-  ? "http://172.16.1.172:3000"
+  ? "http://192.168.16.118:3000"
   : "https://www.myonhealth.ca"; // Update this with your actual domain
 
 const api = axios.create({
