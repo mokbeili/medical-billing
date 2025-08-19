@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRoute } from "@react-navigation/native";
 import { useQuery } from "@tanstack/react-query";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -35,6 +35,7 @@ const BillingCodeSearchScreen = ({ navigation }: any) => {
     onSelect,
     existingCodes = [],
     serviceDate,
+    presetBillingCodeIds,
   } = route.params as {
     onSelect: (
       codes: BillingCode[],
@@ -42,6 +43,7 @@ const BillingCodeSearchScreen = ({ navigation }: any) => {
     ) => void;
     existingCodes?: BillingCode[];
     serviceDate?: string;
+    presetBillingCodeIds?: number[];
   };
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCodes, setSelectedCodes] = useState<BillingCode[]>([]);
@@ -57,6 +59,79 @@ const BillingCodeSearchScreen = ({ navigation }: any) => {
     queryFn: () => billingCodesAPI.search(searchQuery),
     enabled: searchQuery.length > 0,
   });
+
+  // Preselect codes if provided via route params (e.g., frequent codes shortcut)
+  useEffect(() => {
+    const preloadCodes = async () => {
+      if (!presetBillingCodeIds || presetBillingCodeIds.length === 0) return;
+      try {
+        // Fetch full code details
+        const fetchedCodes: BillingCode[] = [];
+        for (const id of presetBillingCodeIds) {
+          const full = await billingCodesAPI.getById(id);
+          fetchedCodes.push(full);
+        }
+
+        // Initialize selections and sub-selections
+        const newSelections: BillingCode[] = [];
+        const newSubSelections: CodeSubSelection[] = [];
+
+        fetchedCodes.forEach((code) => {
+          // Avoid duplicates
+          if (newSelections.some((c) => c.id === code.id)) return;
+          newSelections.push(code);
+
+          if (requiresExtraSelections(code)) {
+            const calculatedDates = calculateServiceDates(code);
+            const defaultServiceDate = !isType57Code(code)
+              ? serviceDate || new Date().toISOString().split("T")[0]
+              : calculatedDates.serviceDate;
+            newSubSelections.push({
+              codeId: code.id,
+              serviceDate: defaultServiceDate,
+              serviceEndDate: calculatedDates.serviceEndDate,
+              bilateralIndicator: null,
+              serviceStartTime: null,
+              serviceEndTime: null,
+              numberOfUnits: 1,
+              specialCircumstances: null,
+            });
+          } else {
+            const defaultServiceDate = !isType57Code(code)
+              ? serviceDate || new Date().toISOString().split("T")[0]
+              : null;
+            newSubSelections.push({
+              codeId: code.id,
+              serviceDate: defaultServiceDate,
+              serviceEndDate: null,
+              bilateralIndicator: null,
+              serviceStartTime: null,
+              serviceEndTime: null,
+              numberOfUnits: 1,
+              specialCircumstances: null,
+            });
+          }
+        });
+
+        setSelectedCodes(newSelections);
+        setCodeSubSelections(newSubSelections);
+
+        // If any requires extra selections, open modal for the first
+        const firstRequiring = newSelections.find((c) =>
+          requiresExtraSelections(c)
+        );
+        if (firstRequiring) {
+          setCurrentCodeForSubSelection(firstRequiring);
+          setShowSubSelectionModal(true);
+        }
+      } catch (error) {
+        console.error("Error preloading billing codes:", error);
+      }
+    };
+
+    preloadCodes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleToggleCode = (code: BillingCode) => {
     const isSelected = selectedCodes.some((c) => c.id === code.id);

@@ -11,7 +11,10 @@ export async function POST(
   try {
     // Check for mobile app authentication first
     const userHeader = request.headers.get("x-user");
-    let user = null;
+    const userIdHeader = request.headers.get("x-user-id");
+    const userEmailHeader = request.headers.get("x-user-email");
+    const userRolesHeader = request.headers.get("x-user-roles");
+    let user: any = null;
 
     if (userHeader) {
       try {
@@ -19,6 +22,13 @@ export async function POST(
       } catch (error) {
         console.error("Error parsing user header:", error);
       }
+    } else if (userIdHeader && userEmailHeader && userRolesHeader) {
+      // Support mobile headers sent individually
+      user = {
+        id: userIdHeader,
+        email: userEmailHeader,
+        roles: userRolesHeader.split(","),
+      };
     }
 
     // If no mobile user, try NextAuth session
@@ -110,7 +120,17 @@ export async function POST(
       );
     }
 
-    const today = new Date();
+    // Optional override for the rounding reference date from request body
+    let body: any = null;
+    try {
+      body = await request.json();
+    } catch {
+      body = null;
+    }
+    const providedServiceDate: string | undefined = body?.serviceDate;
+    const today = providedServiceDate
+      ? new Date(providedServiceDate)
+      : new Date();
     const serviceDate = new Date(service.serviceDate);
     const existingType57Codes = service.serviceCodes.filter(
       (code) => code.billingCode.billing_record_type === 57

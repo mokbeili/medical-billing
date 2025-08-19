@@ -9,7 +9,7 @@
       "channel": "development",
       "env": {
         "APP_ENV": "development",
-        "EXPO_PUBLIC_API_BASE_URL": "http://192.168.16.118:3000"
+        "EXPO_PUBLIC_API_BASE_URL": "http://10.195.228.139:3000"
       },
       "ios": {
         "resourceClass": "m-medium"

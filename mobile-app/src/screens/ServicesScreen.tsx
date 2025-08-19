@@ -15,7 +15,12 @@ import {
 } from "react-native";
 import { ActivityIndicator, Button, Card } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { patientsAPI, physiciansAPI, servicesAPI } from "../services/api";
+import {
+  billingCodesAPI,
+  patientsAPI,
+  physiciansAPI,
+  servicesAPI,
+} from "../services/api";
 import { BillingCode, Service, ServiceCodeChangeLog } from "../types";
 
 const ServicesScreen = ({ navigation }: any) => {
@@ -28,6 +33,53 @@ const ServicesScreen = ({ navigation }: any) => {
   const [dischargeDate, setDischargeDate] = useState("");
   const [pendingDischargeService, setPendingDischargeService] =
     useState<Service | null>(null);
+  // Rounding modal state
+  const [showRoundingModal, setShowRoundingModal] = useState(false);
+  const [roundingDate, setRoundingDate] = useState("");
+  const [pendingRoundingService, setPendingRoundingService] =
+    useState<Service | null>(null);
+  const [showSuggestionsModal, setShowSuggestionsModal] = useState(false);
+  const [suggestionsForService, setSuggestionsForService] =
+    useState<Service | null>(null);
+  const [patientPreviousCodes, setPatientPreviousCodes] = useState<
+    Array<{
+      billingCode: BillingCode;
+      lastUsedDate: string;
+      lastServiceCodePayload: {
+        codeId: number;
+        serviceStartTime: string | null;
+        serviceEndTime: string | null;
+        serviceDate: string | null;
+        serviceEndDate: string | null;
+        bilateralIndicator: string | null;
+        numberOfUnits: number | null;
+        specialCircumstances: string | null;
+      };
+    }>
+  >([]);
+  const [physicianFrequentCodes, setPhysicianFrequentCodes] = useState<
+    BillingCode[]
+  >([]);
+
+  // Sub-selection flow state (mirrors BillingCodeSearchScreen)
+  interface CodeSubSelection {
+    codeId: number;
+    serviceDate: string | null;
+    serviceEndDate: string | null;
+    bilateralIndicator: string | null;
+    serviceStartTime: string | null;
+    serviceEndTime: string | null;
+    numberOfUnits: number;
+    specialCircumstances: string | null;
+  }
+
+  const [selectedCodes, setSelectedCodes] = useState<BillingCode[]>([]);
+  const [codeSubSelections, setCodeSubSelections] = useState<
+    CodeSubSelection[]
+  >([]);
+  const [showSubSelectionModal, setShowSubSelectionModal] = useState(false);
+  const [currentCodeForSubSelection, setCurrentCodeForSubSelection] =
+    useState<BillingCode | null>(null);
 
   const {
     data: services,
@@ -181,8 +233,7 @@ const ServicesScreen = ({ navigation }: any) => {
           const serviceData = {
             physicianId: currentPhysician.id,
             patientId: patientId,
-            serviceDate:
-              scannedData.serviceDate || new Date().toISOString().split("T")[0],
+            serviceDate: scannedData.serviceDate || getLocalYMD(new Date()),
             referringPhysicianId: null,
             icdCodeId: null,
             healthInstitutionId: null,
@@ -298,62 +349,145 @@ const ServicesScreen = ({ navigation }: any) => {
     }
   };
 
-  const handleAddServiceCode = (service: Service) => {
+  const handleAddServiceCode = async (service: Service) => {
     // Get today's date in YYYY-MM-DD format
-    const today = new Date().toISOString().split("T")[0];
+    const today = getLocalYMD(new Date());
 
     // Check for existing codes for today
     const todaysCodes = service.serviceCodes.filter((code) => {
       const codeDate = code.serviceDate
-        ? new Date(code.serviceDate).toISOString().split("T")[0]
+        ? normalizeToLocalYMD(code.serviceDate)
         : null;
       return codeDate === today;
     });
 
-    // Navigate to billing code search screen
-    navigation.navigate("BillingCodeSearch", {
-      onSelect: async (selectedCodes: BillingCode[], subSelections?: any[]) => {
-        try {
-          // Check for duplicates
-          const duplicateCodes = selectedCodes.filter((selectedCode) =>
-            todaysCodes.some(
-              (existingCode) => existingCode.billingCode.id === selectedCode.id
-            )
-          );
+    // Build suggestions: previous patient codes (non-57) and physician frequent codes
+    try {
+      setSuggestionsForService(service);
 
-          if (duplicateCodes.length > 0) {
-            const duplicateNames = duplicateCodes
-              .map((code) => code.code)
-              .join(", ");
-            Alert.alert(
-              "Duplicate Codes Detected",
-              `The following codes have already been added today: ${duplicateNames}. Do you want to continue?`,
-              [
-                {
-                  text: "Cancel",
-                  style: "cancel",
-                },
-                {
-                  text: "Continue",
-                  onPress: () =>
-                    addCodesToService(service, selectedCodes, subSelections),
-                },
-              ]
-            );
-          } else {
-            await addCodesToService(service, selectedCodes, subSelections);
-          }
-        } catch (error) {
-          console.error("Error adding service codes:", error);
-          Alert.alert(
-            "Error",
-            "Failed to add service codes. Please try again."
-          );
+      // 1) Previous patient codes (non-57) with last used date and payload of last occurrence
+      const previousMap = new Map<
+        number,
+        {
+          billingCode: BillingCode;
+          lastUsedDate: string;
+          lastServiceCodePayload: any;
         }
-      },
-      existingCodes: todaysCodes.map((code) => code.billingCode),
-      serviceDate: today,
-    });
+      >();
+
+      services?.forEach((s) => {
+        if (s.patient?.id !== service.patient?.id) return;
+        s.serviceCodes.forEach((sc) => {
+          const code = sc.billingCode;
+          if (!code || code.billing_record_type === 57) return; // exclude type 57
+          const scDate = sc.serviceDate || s.serviceDate;
+          const dateStr = scDate ? normalizeToLocalYMD(scDate) : today;
+          const existing = previousMap.get(code.id);
+          if (
+            !existing ||
+            new Date(dateStr) > new Date(existing.lastUsedDate)
+          ) {
+            previousMap.set(code.id, {
+              billingCode: code,
+              lastUsedDate: dateStr,
+              lastServiceCodePayload: {
+                codeId: code.id,
+                serviceStartTime: sc.serviceStartTime,
+                serviceEndTime: sc.serviceEndTime,
+                serviceDate: today, // override with today
+                serviceEndDate: null,
+                bilateralIndicator: sc.bilateralIndicator,
+                numberOfUnits: sc.numberOfUnits ?? 1,
+                specialCircumstances: sc.specialCircumstances,
+              },
+            });
+          }
+        });
+      });
+
+      const previousList = Array.from(previousMap.values()).sort(
+        (a, b) =>
+          new Date(b.lastUsedDate).getTime() -
+          new Date(a.lastUsedDate).getTime()
+      );
+      setPatientPreviousCodes(previousList);
+
+      // 2) Physician frequent codes from profile, exclude any present in previousList
+      const currentPhysician = physicians?.[0];
+      const frequent = (currentPhysician?.frequentlyUsedCodes || []).map(
+        (f) => ({
+          id: f.billingCode.id,
+          code: f.billingCode.code,
+          title: f.billingCode.title,
+          description: f.billingCode.description,
+          section: { code: "", title: "" },
+          jurisdiction: { id: 1, name: "Saskatchewan" },
+          provider: { id: 1, name: "Default Provider" },
+          billing_record_type: 50,
+          referring_practitioner_required: null,
+          fee_determinant: "",
+          multiple_unit_indicator: null,
+          max_units: null,
+          start_time_required: null,
+          stop_time_required: null,
+          day_range: null,
+        })
+      ) as unknown as BillingCode[];
+
+      // console.warn(frequent);
+
+      const previousIds = new Set(previousList.map((p) => p.billingCode.id));
+      const filteredFrequent = frequent.filter((c) => !previousIds.has(c.id));
+      setPhysicianFrequentCodes(filteredFrequent);
+
+      setShowSuggestionsModal(true);
+    } catch (e) {
+      console.error("Error preparing suggestions:", e);
+      // fallback to search screen
+      navigation.navigate("BillingCodeSearch", {
+        onSelect: async (
+          selectedCodes: BillingCode[],
+          subSelections?: any[]
+        ) => {
+          try {
+            const duplicateCodes = selectedCodes.filter((selectedCode) =>
+              todaysCodes.some(
+                (existingCode) =>
+                  existingCode.billingCode.id === selectedCode.id
+              )
+            );
+
+            if (duplicateCodes.length > 0) {
+              const duplicateNames = duplicateCodes
+                .map((code) => code.code)
+                .join(", ");
+              Alert.alert(
+                "Duplicate Codes Detected",
+                `The following codes have already been added today: ${duplicateNames}. Do you want to continue?`,
+                [
+                  { text: "Cancel", style: "cancel" },
+                  {
+                    text: "Continue",
+                    onPress: () =>
+                      addCodesToService(service, selectedCodes, subSelections),
+                  },
+                ]
+              );
+            } else {
+              await addCodesToService(service, selectedCodes, subSelections);
+            }
+          } catch (error) {
+            console.error("Error adding service codes:", error);
+            Alert.alert(
+              "Error",
+              "Failed to add service codes. Please try again."
+            );
+          }
+        },
+        existingCodes: todaysCodes.map((code) => code.billingCode),
+        serviceDate: today,
+      });
+    }
   };
 
   const addCodesToService = async (
@@ -362,7 +496,23 @@ const ServicesScreen = ({ navigation }: any) => {
     subSelections?: any[]
   ) => {
     try {
-      const today = new Date().toISOString().split("T")[0];
+      const today = getLocalYMD(new Date());
+
+      // Enforce service date for all non-type 57 codes
+      const missingDates = selectedCodes.filter((code) => {
+        if (code.billing_record_type === 57) return false;
+        const sub = subSelections?.find((s) => s.codeId === code.id);
+        return !sub?.serviceDate;
+      });
+
+      if (missingDates.length > 0) {
+        const codeNames = missingDates.map((c) => c.code).join(", ");
+        Alert.alert(
+          "Service Date Required",
+          `The following codes require a service date: ${codeNames}. Please configure all codes before adding.`
+        );
+        return;
+      }
 
       const billingCodesData = selectedCodes.map((code) => {
         const subSelection = subSelections?.find((s) => s.codeId === code.id);
@@ -370,7 +520,7 @@ const ServicesScreen = ({ navigation }: any) => {
           codeId: code.id,
           serviceStartTime: subSelection?.serviceStartTime || null,
           serviceEndTime: subSelection?.serviceEndTime || null,
-          serviceDate: subSelection?.serviceDate || today,
+          serviceDate: subSelection?.serviceDate || null,
           serviceEndDate: subSelection?.serviceEndDate || null,
           bilateralIndicator: subSelection?.bilateralIndicator || null,
           numberOfUnits: subSelection?.numberOfUnits || 1,
@@ -432,7 +582,7 @@ const ServicesScreen = ({ navigation }: any) => {
     // }
 
     // Set today's date as default discharge date
-    const today = new Date().toISOString().split("T")[0];
+    const today = getLocalYMD(new Date());
     setDischargeDate(today);
     setPendingDischargeService(service);
     setShowDischargeModal(true);
@@ -604,6 +754,103 @@ const ServicesScreen = ({ navigation }: any) => {
     return localDateKey(roundingDate) === localDateKey(now);
   };
 
+  // Helpers to ignore timezone and treat stored dates as local dates
+  const getLocalYMD = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  // Inline helpers copied from BillingCodeSearchScreen to determine extra selections
+  const isType57CodeInline = (code: BillingCode) =>
+    code.billing_record_type === 57;
+  const isWorXSectionInline = (code: BillingCode) =>
+    code.section.code === "W" || code.section.code === "X";
+  const isHSectionInline = (code: BillingCode) => code.section.code === "H";
+  const requiresExtraSelectionsInline = (code: BillingCode): boolean => {
+    if (!isType57CodeInline(code)) return true; // all non-57 need date at least
+    if (code.multiple_unit_indicator === "U") return true;
+    if (code.start_time_required === "Y" || code.stop_time_required === "Y")
+      return true;
+    if (code.title.includes("Bilateral")) return true;
+    if (isWorXSectionInline(code)) return true;
+    if (isHSectionInline(code)) return true;
+    return false;
+  };
+
+  const getSubSelectionForCodeInline = (codeId: number) =>
+    codeSubSelections.find((s) => s.codeId === codeId);
+  const handleUpdateSubSelectionInline = (
+    codeId: number,
+    updates: Partial<CodeSubSelection>
+  ) => {
+    setCodeSubSelections((prev) =>
+      prev.map((s) => (s.codeId === codeId ? { ...s, ...updates } : s))
+    );
+  };
+
+  const normalizeToLocalYMD = (input: string | Date): string => {
+    if (typeof input === "string") {
+      if (/^\d{4}-\d{2}-\d{2}/.test(input)) {
+        return input.substring(0, 10);
+      }
+      const d = new Date(input);
+      return getLocalYMD(d);
+    }
+    return getLocalYMD(input);
+  };
+
+  // Format a date string (YYYY-MM-DD) similarly to rounding info: Today, weekday, or Mon DD
+  const formatRelativeDate = (dateString: string): string => {
+    if (!dateString) return "";
+    const ymd = normalizeToLocalYMD(dateString);
+    const [y, m, d] = ymd.split("-").map((v) => parseInt(v, 10));
+    const target = new Date(y, m - 1, d);
+    const now = new Date();
+
+    const dayNames = [
+      "Sunday",
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+    ];
+    const monthNames = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
+
+    if (getLocalYMD(target) === getLocalYMD(now)) {
+      return "Today";
+    }
+
+    const midnight = (d2: Date) =>
+      new Date(d2.getFullYear(), d2.getMonth(), d2.getDate());
+    const diffMs = Math.abs(
+      midnight(now).getTime() - midnight(target).getTime()
+    );
+    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffDays <= 6) {
+      return dayNames[target.getDay()];
+    }
+
+    return `${monthNames[target.getMonth()]} ${target.getDate()}`;
+  };
+
   const renderService = (service: Service) => {
     const isSelected = selectedServices.includes(service.id);
     const hasClaim = service.claimId !== null;
@@ -632,11 +879,9 @@ const ServicesScreen = ({ navigation }: any) => {
 
     // Format date as DD/MM/YYYY without timezone conversion
     const formatServiceDate = (dateString: string) => {
-      const date = new Date(dateString);
-      const day = date.getUTCDate().toString().padStart(2, "0");
-      const month = (date.getUTCMonth() + 1).toString().padStart(2, "0");
-      const year = date.getUTCFullYear();
-      return `${day}/${month}/${year}`;
+      const ymd = normalizeToLocalYMD(dateString);
+      const [year, month, day] = ymd.split("-");
+      return `${day.padStart(2, "0")}/${month.padStart(2, "0")}/${year}`;
     };
 
     return (
@@ -672,20 +917,13 @@ const ServicesScreen = ({ navigation }: any) => {
                       (hasPendingStatus || isRoundedToday(service)) &&
                         styles.actionButtonDisabled,
                     ]}
-                    onPress={async () => {
+                    onPress={() => {
                       if (hasPendingStatus || isRoundedToday(service)) return;
-                      try {
-                        const result = await servicesAPI.round(service.id);
-                        Alert.alert("Success", result.message);
-                        // Refetch the specific service to get updated data
-                        await refetchService(service.id);
-                      } catch (error) {
-                        console.error("Error performing rounding:", error);
-                        Alert.alert(
-                          "Error",
-                          "Failed to perform rounding. Please try again."
-                        );
-                      }
+                      // Open rounding modal and default date to today
+                      const today = getLocalYMD(new Date());
+                      setRoundingDate(today);
+                      setPendingRoundingService(service);
+                      setShowRoundingModal(true);
                     }}
                   >
                     <Ionicons
@@ -959,6 +1197,967 @@ const ServicesScreen = ({ navigation }: any) => {
                 <Text style={styles.confirmButtonText}>Confirm</Text>
               </TouchableOpacity>
             </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Rounding Date Modal */}
+      <Modal
+        visible={showRoundingModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setShowRoundingModal(false);
+          setRoundingDate("");
+          setPendingRoundingService(null);
+        }}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => {
+            setShowRoundingModal(false);
+            setRoundingDate("");
+            setPendingRoundingService(null);
+          }}
+        >
+          <TouchableOpacity
+            style={styles.modalContent}
+            activeOpacity={1}
+            onPress={() => {}}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Set Rounding Date</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowRoundingModal(false);
+                  setRoundingDate("");
+                  setPendingRoundingService(null);
+                }}
+              >
+                <Ionicons name="close" size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalDescription}>
+              Please set the service date to use for rounding.
+            </Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="YYYY-MM-DD"
+              value={roundingDate}
+              onChangeText={setRoundingDate}
+              keyboardType="default"
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setShowRoundingModal(false);
+                  setRoundingDate("");
+                  setPendingRoundingService(null);
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.confirmButton]}
+                onPress={async () => {
+                  if (!pendingRoundingService || !roundingDate) {
+                    Alert.alert("Error", "Please enter a service date.");
+                    return;
+                  }
+                  try {
+                    const result = await servicesAPI.round(
+                      pendingRoundingService.id,
+                      roundingDate
+                    );
+                    Alert.alert("Success", result.message);
+                    setShowRoundingModal(false);
+                    setRoundingDate("");
+                    setPendingRoundingService(null);
+                    await refetchService(pendingRoundingService.id);
+                  } catch (error) {
+                    console.error("Error performing rounding:", error);
+                    Alert.alert(
+                      "Error",
+                      "Failed to perform rounding. Please try again."
+                    );
+                  }
+                }}
+              >
+                <Text style={styles.confirmButtonText}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Sub-selection Modal (same flow as BillingCodeSearchScreen) */}
+      {currentCodeForSubSelection && (
+        <Modal
+          visible={showSubSelectionModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowSubSelectionModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>
+                  Configure {currentCodeForSubSelection.code}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setShowSubSelectionModal(false)}
+                >
+                  <Ionicons name="close" size={24} color="#6b7280" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.subSelectionScrollView}>
+                {/* Service Date - Required for all codes except Type 57 */}
+                {!isType57CodeInline(currentCodeForSubSelection) && (
+                  <View style={styles.subSelectionSection}>
+                    <Text style={styles.subSelectionSectionTitle}>
+                      Service Date <Text style={styles.requiredText}>*</Text>
+                    </Text>
+                    <TextInput
+                      style={styles.dateInput}
+                      placeholder="YYYY-MM-DD"
+                      value={
+                        getSubSelectionForCodeInline(
+                          currentCodeForSubSelection.id
+                        )?.serviceDate || ""
+                      }
+                      onChangeText={(text) =>
+                        handleUpdateSubSelectionInline(
+                          currentCodeForSubSelection.id,
+                          { serviceDate: text }
+                        )
+                      }
+                    />
+                    <Text style={styles.dateNote}>
+                      Enter the date when this service was provided
+                    </Text>
+                  </View>
+                )}
+
+                {/* Service Start/End Date - Only for Type 57 codes */}
+                {isType57CodeInline(currentCodeForSubSelection) && (
+                  <View style={styles.subSelectionSection}>
+                    <Text style={styles.subSelectionSectionTitle}>
+                      Service Dates
+                    </Text>
+                    <View style={styles.dateRow}>
+                      <View style={styles.dateInputContainer}>
+                        <Text style={styles.dateLabel}>Start Date</Text>
+                        <TextInput
+                          style={[styles.dateInput, styles.readOnlyInput]}
+                          placeholder="YYYY-MM-DD"
+                          value={
+                            getSubSelectionForCodeInline(
+                              currentCodeForSubSelection.id
+                            )?.serviceDate || ""
+                          }
+                          editable={false}
+                        />
+                      </View>
+                      <View style={styles.dateInputContainer}>
+                        <Text style={styles.dateLabel}>End Date</Text>
+                        <TextInput
+                          style={[styles.dateInput, styles.readOnlyInput]}
+                          placeholder="YYYY-MM-DD"
+                          value={
+                            getSubSelectionForCodeInline(
+                              currentCodeForSubSelection.id
+                            )?.serviceEndDate || ""
+                          }
+                          editable={false}
+                        />
+                      </View>
+                    </View>
+                    <Text style={styles.calculatedDateNote}>
+                      Dates are automatically calculated based on service date
+                      and previous codes
+                    </Text>
+                  </View>
+                )}
+
+                {/* Units - Only for codes with multiple_unit_indicator === "U" */}
+                {currentCodeForSubSelection.multiple_unit_indicator === "U" && (
+                  <View style={styles.subSelectionSection}>
+                    <Text style={styles.subSelectionSectionTitle}>
+                      Number of Units
+                      {currentCodeForSubSelection.max_units && (
+                        <Text style={styles.maxUnitsText}>
+                          {" "}
+                          (Max: {currentCodeForSubSelection.max_units})
+                        </Text>
+                      )}
+                    </Text>
+                    <View style={styles.unitsContainer}>
+                      <TouchableOpacity
+                        style={[
+                          styles.unitButton,
+                          (getSubSelectionForCodeInline(
+                            currentCodeForSubSelection.id
+                          )?.numberOfUnits || 1) <= 1
+                            ? styles.disabledButton
+                            : null,
+                        ]}
+                        onPress={() => {
+                          const sub = getSubSelectionForCodeInline(
+                            currentCodeForSubSelection.id
+                          );
+                          if (!sub) return;
+                          if (sub.numberOfUnits > 1) {
+                            handleUpdateSubSelectionInline(
+                              currentCodeForSubSelection.id,
+                              { numberOfUnits: sub.numberOfUnits - 1 }
+                            );
+                          }
+                        }}
+                        disabled={
+                          (getSubSelectionForCodeInline(
+                            currentCodeForSubSelection.id
+                          )?.numberOfUnits || 1) <= 1
+                        }
+                      >
+                        <Text style={styles.unitButtonText}>-</Text>
+                      </TouchableOpacity>
+                      <TextInput
+                        style={styles.unitsInput}
+                        value={String(
+                          getSubSelectionForCodeInline(
+                            currentCodeForSubSelection.id
+                          )?.numberOfUnits || 1
+                        )}
+                        onChangeText={(text) => {
+                          const value = parseInt(text) || 1;
+                          const maxUnits =
+                            currentCodeForSubSelection.max_units || value;
+                          handleUpdateSubSelectionInline(
+                            currentCodeForSubSelection.id,
+                            { numberOfUnits: Math.min(value, maxUnits) }
+                          );
+                        }}
+                        keyboardType="numeric"
+                      />
+                      <TouchableOpacity
+                        style={[
+                          styles.unitButton,
+                          currentCodeForSubSelection.max_units &&
+                          (getSubSelectionForCodeInline(
+                            currentCodeForSubSelection.id
+                          )?.numberOfUnits || 1) >=
+                            (currentCodeForSubSelection.max_units || 0)
+                            ? styles.disabledButton
+                            : null,
+                        ]}
+                        onPress={() => {
+                          const sub = getSubSelectionForCodeInline(
+                            currentCodeForSubSelection.id
+                          );
+                          if (!sub) return;
+                          const maxUnits =
+                            currentCodeForSubSelection.max_units ||
+                            sub.numberOfUnits + 1;
+                          handleUpdateSubSelectionInline(
+                            currentCodeForSubSelection.id,
+                            {
+                              numberOfUnits: Math.min(
+                                sub.numberOfUnits + 1,
+                                maxUnits
+                              ),
+                            }
+                          );
+                        }}
+                        disabled={
+                          !!(
+                            currentCodeForSubSelection.max_units &&
+                            (getSubSelectionForCodeInline(
+                              currentCodeForSubSelection.id
+                            )?.numberOfUnits || 1) >=
+                              (currentCodeForSubSelection.max_units || 0)
+                          )
+                        }
+                      >
+                        <Text style={styles.unitButtonText}>+</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+
+                {/* Service Start/End Time */}
+                {(currentCodeForSubSelection.start_time_required === "Y" ||
+                  currentCodeForSubSelection.stop_time_required === "Y") && (
+                  <View style={styles.subSelectionSection}>
+                    <Text style={styles.subSelectionSectionTitle}>
+                      Service Times
+                    </Text>
+                    <View style={styles.timeRow}>
+                      {currentCodeForSubSelection.start_time_required ===
+                        "Y" && (
+                        <View style={styles.timeInputContainer}>
+                          <Text style={styles.timeLabel}>Start Time</Text>
+                          <TextInput
+                            style={styles.timeInput}
+                            placeholder="HH:MM"
+                            value={
+                              getSubSelectionForCodeInline(
+                                currentCodeForSubSelection.id
+                              )?.serviceStartTime || ""
+                            }
+                            onChangeText={(text) =>
+                              handleUpdateSubSelectionInline(
+                                currentCodeForSubSelection.id,
+                                { serviceStartTime: text }
+                              )
+                            }
+                          />
+                        </View>
+                      )}
+                      {currentCodeForSubSelection.stop_time_required ===
+                        "Y" && (
+                        <View style={styles.timeInputContainer}>
+                          <Text style={styles.timeLabel}>End Time</Text>
+                          <TextInput
+                            style={styles.timeInput}
+                            placeholder="HH:MM"
+                            value={
+                              getSubSelectionForCodeInline(
+                                currentCodeForSubSelection.id
+                              )?.serviceEndTime || ""
+                            }
+                            onChangeText={(text) =>
+                              handleUpdateSubSelectionInline(
+                                currentCodeForSubSelection.id,
+                                { serviceEndTime: text }
+                              )
+                            }
+                          />
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                )}
+
+                {/* Bilateral Indicator - Only for codes with "Bilateral" in title */}
+                {currentCodeForSubSelection.title.includes("Bilateral") && (
+                  <View style={styles.subSelectionSection}>
+                    <Text style={styles.subSelectionSectionTitle}>
+                      Bilateral Indicator
+                    </Text>
+                    <View style={styles.bilateralContainer}>
+                      <TouchableOpacity
+                        style={[
+                          styles.bilateralButton,
+                          getSubSelectionForCodeInline(
+                            currentCodeForSubSelection.id
+                          )?.bilateralIndicator === "L" &&
+                            styles.selectedBilateralButton,
+                        ]}
+                        onPress={() =>
+                          handleUpdateSubSelectionInline(
+                            currentCodeForSubSelection.id,
+                            {
+                              bilateralIndicator:
+                                getSubSelectionForCodeInline(
+                                  currentCodeForSubSelection.id
+                                )?.bilateralIndicator === "L"
+                                  ? null
+                                  : "L",
+                            }
+                          )
+                        }
+                      >
+                        <Text
+                          style={[
+                            styles.bilateralButtonText,
+                            getSubSelectionForCodeInline(
+                              currentCodeForSubSelection.id
+                            )?.bilateralIndicator === "L" &&
+                              styles.selectedBilateralButtonText,
+                          ]}
+                        >
+                          Left
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.bilateralButton,
+                          getSubSelectionForCodeInline(
+                            currentCodeForSubSelection.id
+                          )?.bilateralIndicator === "R" &&
+                            styles.selectedBilateralButton,
+                        ]}
+                        onPress={() =>
+                          handleUpdateSubSelectionInline(
+                            currentCodeForSubSelection.id,
+                            {
+                              bilateralIndicator:
+                                getSubSelectionForCodeInline(
+                                  currentCodeForSubSelection.id
+                                )?.bilateralIndicator === "R"
+                                  ? null
+                                  : "R",
+                            }
+                          )
+                        }
+                      >
+                        <Text
+                          style={[
+                            styles.bilateralButtonText,
+                            getSubSelectionForCodeInline(
+                              currentCodeForSubSelection.id
+                            )?.bilateralIndicator === "R" &&
+                              styles.selectedBilateralButtonText,
+                          ]}
+                        >
+                          Right
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.bilateralButton,
+                          getSubSelectionForCodeInline(
+                            currentCodeForSubSelection.id
+                          )?.bilateralIndicator === "B" &&
+                            styles.selectedBilateralButton,
+                        ]}
+                        onPress={() =>
+                          handleUpdateSubSelectionInline(
+                            currentCodeForSubSelection.id,
+                            {
+                              bilateralIndicator:
+                                getSubSelectionForCodeInline(
+                                  currentCodeForSubSelection.id
+                                )?.bilateralIndicator === "B"
+                                  ? null
+                                  : "B",
+                            }
+                          )
+                        }
+                      >
+                        <Text
+                          style={[
+                            styles.bilateralButtonText,
+                            getSubSelectionForCodeInline(
+                              currentCodeForSubSelection.id
+                            )?.bilateralIndicator === "B" &&
+                              styles.selectedBilateralButtonText,
+                          ]}
+                        >
+                          Both
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+
+                {/* Special Circumstances - W/X Section */}
+                {isWorXSectionInline(currentCodeForSubSelection) && (
+                  <View style={styles.subSelectionSection}>
+                    <Text style={styles.subSelectionSectionTitle}>
+                      Special Circumstances{" "}
+                      <Text style={styles.requiredText}>*</Text>
+                    </Text>
+                    <View style={styles.specialCircumstancesContainer}>
+                      <TouchableOpacity
+                        style={[
+                          styles.specialCircumstancesButton,
+                          getSubSelectionForCodeInline(
+                            currentCodeForSubSelection.id
+                          )?.specialCircumstances === "TF" &&
+                            styles.selectedSpecialCircumstancesButton,
+                        ]}
+                        onPress={() =>
+                          handleUpdateSubSelectionInline(
+                            currentCodeForSubSelection.id,
+                            { specialCircumstances: "TF" }
+                          )
+                        }
+                      >
+                        <Text
+                          style={[
+                            styles.specialCircumstancesButtonText,
+                            getSubSelectionForCodeInline(
+                              currentCodeForSubSelection.id
+                            )?.specialCircumstances === "TF" &&
+                              styles.selectedSpecialCircumstancesButtonText,
+                          ]}
+                        >
+                          Technical
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.specialCircumstancesButton,
+                          getSubSelectionForCodeInline(
+                            currentCodeForSubSelection.id
+                          )?.specialCircumstances === "PF" &&
+                            styles.selectedSpecialCircumstancesButton,
+                        ]}
+                        onPress={() =>
+                          handleUpdateSubSelectionInline(
+                            currentCodeForSubSelection.id,
+                            { specialCircumstances: "PF" }
+                          )
+                        }
+                      >
+                        <Text
+                          style={[
+                            styles.specialCircumstancesButtonText,
+                            getSubSelectionForCodeInline(
+                              currentCodeForSubSelection.id
+                            )?.specialCircumstances === "PF" &&
+                              styles.selectedSpecialCircumstancesButtonText,
+                          ]}
+                        >
+                          Interpretation
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.specialCircumstancesButton,
+                          getSubSelectionForCodeInline(
+                            currentCodeForSubSelection.id
+                          )?.specialCircumstances === "CF" &&
+                            styles.selectedSpecialCircumstancesButton,
+                        ]}
+                        onPress={() =>
+                          handleUpdateSubSelectionInline(
+                            currentCodeForSubSelection.id,
+                            { specialCircumstances: "CF" }
+                          )
+                        }
+                      >
+                        <Text
+                          style={[
+                            styles.specialCircumstancesButtonText,
+                            getSubSelectionForCodeInline(
+                              currentCodeForSubSelection.id
+                            )?.specialCircumstances === "CF" &&
+                              styles.selectedSpecialCircumstancesButtonText,
+                          ]}
+                        >
+                          Both
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+
+                {/* Special Circumstances - H Section */}
+                {isHSectionInline(currentCodeForSubSelection) && (
+                  <View style={styles.subSelectionSection}>
+                    <Text style={styles.subSelectionSectionTitle}>
+                      Special Circumstances
+                    </Text>
+                    <View style={styles.specialCircumstancesContainer}>
+                      <TouchableOpacity
+                        style={[
+                          styles.specialCircumstancesButton,
+                          getSubSelectionForCodeInline(
+                            currentCodeForSubSelection.id
+                          )?.specialCircumstances === "TA" &&
+                            styles.selectedSpecialCircumstancesButton,
+                        ]}
+                        onPress={() =>
+                          handleUpdateSubSelectionInline(
+                            currentCodeForSubSelection.id,
+                            {
+                              specialCircumstances:
+                                getSubSelectionForCodeInline(
+                                  currentCodeForSubSelection.id
+                                )?.specialCircumstances === "TA"
+                                  ? null
+                                  : "TA",
+                            }
+                          )
+                        }
+                      >
+                        <Text
+                          style={[
+                            styles.specialCircumstancesButtonText,
+                            getSubSelectionForCodeInline(
+                              currentCodeForSubSelection.id
+                            )?.specialCircumstances === "TA" &&
+                              styles.selectedSpecialCircumstancesButtonText,
+                          ]}
+                        >
+                          Takeover
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+              </ScrollView>
+
+              <View style={styles.modalButtonContainer}>
+                <Button
+                  mode="contained"
+                  onPress={async () => {
+                    if (!suggestionsForService || !currentCodeForSubSelection)
+                      return;
+                    try {
+                      const subs = codeSubSelections;
+                      await addCodesToService(
+                        suggestionsForService,
+                        selectedCodes,
+                        subs
+                      );
+                      setShowSubSelectionModal(false);
+                      setShowSuggestionsModal(false);
+                    } catch (e) {
+                      console.error("Error adding service code:", e);
+                      Alert.alert("Error", "Failed to add service code.");
+                    }
+                  }}
+                  style={styles.modalButton}
+                >
+                  Done
+                </Button>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {/* Inline Add Code Modal for frequent code tap (removed; using sub-selection modal flow) */}
+      {/*
+      <Modal
+        visible={false}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {}}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowAddCodeModal(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalContent}
+            activeOpacity={1}
+            onPress={() => {}}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {pendingBillingCode
+                  ? `Add ${pendingBillingCode.code}`
+                  : "Add Service Code"}
+              </Text>
+              <TouchableOpacity onPress={() => setShowAddCodeModal(false)}>
+                <Ionicons name="close" size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalDescription}>
+              Enter required details for this billing code.
+            </Text>
+
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Service Date (YYYY-MM-DD)"
+              value={codeForm.serviceDate}
+              onChangeText={(t) =>
+                setCodeForm((p) => ({ ...p, serviceDate: t }))
+              }
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Service End Date (optional, YYYY-MM-DD)"
+              value={codeForm.serviceEndDate}
+              onChangeText={(t) =>
+                setCodeForm((p) => ({ ...p, serviceEndDate: t }))
+              }
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Start Time (HH:MM)"
+              value={codeForm.serviceStartTime}
+              onChangeText={(t) =>
+                setCodeForm((p) => ({ ...p, serviceStartTime: t }))
+              }
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="End Time (HH:MM)"
+              value={codeForm.serviceEndTime}
+              onChangeText={(t) =>
+                setCodeForm((p) => ({ ...p, serviceEndTime: t }))
+              }
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Number of Units"
+              keyboardType="numeric"
+              value={codeForm.numberOfUnits}
+              onChangeText={(t) =>
+                setCodeForm((p) => ({ ...p, numberOfUnits: t }))
+              }
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Bilateral Indicator (e.g., B)"
+              value={codeForm.bilateralIndicator}
+              onChangeText={(t) =>
+                setCodeForm((p) => ({ ...p, bilateralIndicator: t }))
+              }
+            />
+            <TextInput
+              style={[styles.modalInput, { height: 80 }]}
+              placeholder="Special Circumstances"
+              value={codeForm.specialCircumstances}
+              multiline
+              onChangeText={(t) =>
+                setCodeForm((p) => ({ ...p, specialCircumstances: t }))
+              }
+            />
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setShowAddCodeModal(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.confirmButton]}
+                onPress={async () => {
+                  if (!suggestionsForService || !pendingBillingCode) return;
+                  try {
+                    const subSelections = [
+                      {
+                        codeId: pendingBillingCode.id,
+                        serviceStartTime: codeForm.serviceStartTime || null,
+                        serviceEndTime: codeForm.serviceEndTime || null,
+                        serviceDate:
+                          codeForm.serviceDate || getLocalYMD(new Date()),
+                        serviceEndDate: codeForm.serviceEndDate || null,
+                        bilateralIndicator: codeForm.bilateralIndicator || null,
+                        numberOfUnits: Number(codeForm.numberOfUnits || "1"),
+                        specialCircumstances:
+                          codeForm.specialCircumstances || null,
+                      },
+                    ];
+
+                    await addCodesToService(
+                      suggestionsForService,
+                      [pendingBillingCode],
+                      subSelections
+                    );
+                    setShowAddCodeModal(false);
+                    setShowSuggestionsModal(false);
+                  } catch (e) {
+                    console.error("Error adding service code inline:", e);
+                    Alert.alert("Error", "Failed to add service code.");
+                  }
+                }}
+              >
+                <Text style={styles.confirmButtonText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+      */}
+
+      {/* Suggestions Modal for adding codes */}
+      <Modal
+        visible={showSuggestionsModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowSuggestionsModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowSuggestionsModal(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalContent}
+            activeOpacity={1}
+            onPress={() => {}}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add Service Code</Text>
+              <TouchableOpacity onPress={() => setShowSuggestionsModal(false)}>
+                <Ionicons name="close" size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView>
+              {patientPreviousCodes.length > 0 && (
+                <View style={{ marginBottom: 16 }}>
+                  <View style={styles.suggestionGrid}>
+                    {patientPreviousCodes.map((item) => (
+                      <TouchableOpacity
+                        key={`prev-${item.billingCode.id}`}
+                        style={[styles.suggestionItem, styles.suggestionChip]}
+                        onPress={async () => {
+                          if (!suggestionsForService) return;
+                          // Initialize selection and force sub-selection modal so user confirms/sets dates
+                          setSelectedCodes([item.billingCode]);
+                          setCodeSubSelections([
+                            {
+                              ...item.lastServiceCodePayload,
+                              numberOfUnits:
+                                item.lastServiceCodePayload.numberOfUnits ?? 1,
+                            },
+                          ]);
+                          setCurrentCodeForSubSelection(item.billingCode);
+                          setShowSubSelectionModal(true);
+                        }}
+                        onLongPress={() =>
+                          Alert.alert(
+                            item.billingCode.code,
+                            `${
+                              item.billingCode.title || ""
+                            }\nLast billed ${formatRelativeDate(
+                              item.lastUsedDate
+                            )}`
+                          )
+                        }
+                      >
+                        <Text
+                          style={styles.suggestionTitleDark}
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
+                        >
+                          {item.billingCode.code}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {physicianFrequentCodes.length > 0 && (
+                <View style={{ marginBottom: 16 }}>
+                  <View style={styles.suggestionGrid}>
+                    {physicianFrequentCodes.map((code) => (
+                      <TouchableOpacity
+                        key={`freq-${code.id}`}
+                        style={[
+                          styles.suggestionItemBlue,
+                          styles.suggestionChip,
+                        ]}
+                        onPress={async () => {
+                          if (!suggestionsForService) return;
+                          try {
+                            // Fetch full code details to ensure flags are present (use search to avoid 405 on /billing-codes/:id)
+                            const matches = await billingCodesAPI.search(
+                              code.code
+                            );
+                            const full =
+                              matches.find((m) => m.id === code.id) ||
+                              matches[0] ||
+                              code;
+                            const today = getLocalYMD(new Date());
+
+                            // Initialize selection and sub-selection according to BillingCodeSearchScreen
+                            setSelectedCodes([full]);
+
+                            const isType57 = full.billing_record_type === 57;
+                            const defaultServiceDate = !isType57 ? today : null;
+
+                            setCodeSubSelections([
+                              {
+                                codeId: full.id,
+                                serviceDate: defaultServiceDate,
+                                serviceEndDate: null,
+                                bilateralIndicator: null,
+                                serviceStartTime: null,
+                                serviceEndTime: null,
+                                numberOfUnits: 1,
+                                specialCircumstances: null,
+                              },
+                            ]);
+
+                            // If the code requires extra selections, open the modal
+                            if (requiresExtraSelectionsInline(full)) {
+                              setCurrentCodeForSubSelection(full);
+                              setShowSubSelectionModal(true);
+                            } else {
+                              // If no extra selections, save immediately
+                              await addCodesToService(
+                                suggestionsForService,
+                                [full],
+                                codeSubSelections
+                              );
+                              setShowSuggestionsModal(false);
+                            }
+                          } catch (e) {
+                            console.error("Error preloading frequent code:", e);
+                            Alert.alert(
+                              "Error",
+                              "Unable to prepare the code for adding."
+                            );
+                          }
+                        }}
+                        onLongPress={() =>
+                          Alert.alert(code.code, code.title || "")
+                        }
+                      >
+                        <Text
+                          style={styles.suggestionTitleLight}
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
+                        >
+                          {code.code}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              <View style={{ marginTop: 8 }}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.cancelButton]}
+                  onPress={() => {
+                    setShowSuggestionsModal(false);
+                    const today = getLocalYMD(new Date());
+                    if (suggestionsForService) {
+                      const todaysCodes =
+                        suggestionsForService.serviceCodes.filter((code) => {
+                          const codeDate = code.serviceDate
+                            ? normalizeToLocalYMD(code.serviceDate)
+                            : null;
+                          return codeDate === today;
+                        });
+                      navigation.navigate("BillingCodeSearch", {
+                        onSelect: async (
+                          selectedCodes: BillingCode[],
+                          subSelections?: any[]
+                        ) => {
+                          try {
+                            await addCodesToService(
+                              suggestionsForService,
+                              selectedCodes,
+                              subSelections
+                            );
+                          } catch (error) {
+                            console.error("Error adding service codes:", error);
+                            Alert.alert(
+                              "Error",
+                              "Failed to add service codes. Please try again."
+                            );
+                          }
+                        },
+                        existingCodes: todaysCodes.map(
+                          (code) => code.billingCode
+                        ),
+                        serviceDate: today,
+                      });
+                    }
+                  }}
+                >
+                  <Text style={styles.cancelButtonText}>Other</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -1360,6 +2559,246 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 16,
     fontWeight: "600",
+  },
+  // Sub-selection modal styles
+  subSelectionScrollView: {
+    padding: 20,
+  },
+  subSelectionSection: {
+    marginBottom: 24,
+  },
+  subSelectionSectionTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#374151",
+    marginBottom: 12,
+  },
+  requiredText: {
+    color: "#ef4444",
+  },
+  dateRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  dateInputContainer: {
+    flex: 1,
+  },
+  dateLabel: {
+    fontSize: 14,
+    color: "#6b7280",
+    marginBottom: 4,
+  },
+  dateInput: {
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    backgroundColor: "#ffffff",
+  },
+  readOnlyInput: {
+    backgroundColor: "#f3f4f6",
+    color: "#6b7280",
+  },
+  calculatedDateNote: {
+    fontSize: 12,
+    color: "#6b7280",
+    fontStyle: "italic",
+    marginTop: 8,
+  },
+  dateNote: {
+    fontSize: 12,
+    color: "#6b7280",
+    marginTop: 4,
+  },
+  unitsContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  unitButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    backgroundColor: "#ffffff",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  disabledButton: {
+    opacity: 0.5,
+  },
+  unitButtonText: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#374151",
+  },
+  maxUnitsText: {
+    fontSize: 12,
+    color: "#6b7280",
+  },
+  unitsInput: {
+    width: 60,
+    height: 40,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 8,
+    padding: 8,
+    fontSize: 18,
+    fontWeight: "bold",
+    textAlign: "center",
+    backgroundColor: "#ffffff",
+  },
+  timeRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  timeInputContainer: {
+    flex: 1,
+  },
+  timeLabel: {
+    fontSize: 14,
+    color: "#6b7280",
+    marginBottom: 4,
+  },
+  timeInput: {
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    backgroundColor: "#ffffff",
+  },
+  bilateralContainer: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  bilateralButton: {
+    flex: 1,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 8,
+    backgroundColor: "#ffffff",
+    alignItems: "center",
+  },
+  selectedBilateralButton: {
+    borderColor: "#2563eb",
+    backgroundColor: "#dbeafe",
+  },
+  bilateralButtonText: {
+    fontSize: 14,
+    color: "#374151",
+    fontWeight: "500",
+  },
+  selectedBilateralButtonText: {
+    color: "#1e40af",
+    fontWeight: "600",
+  },
+  specialCircumstancesContainer: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  specialCircumstancesButton: {
+    flex: 1,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 8,
+    backgroundColor: "#ffffff",
+    alignItems: "center",
+  },
+  selectedSpecialCircumstancesButton: {
+    borderColor: "#2563eb",
+    backgroundColor: "#dbeafe",
+  },
+  specialCircumstancesButtonText: {
+    fontSize: 14,
+    color: "#374151",
+    fontWeight: "500",
+  },
+  selectedSpecialCircumstancesButtonText: {
+    color: "#1e40af",
+    fontWeight: "600",
+  },
+  modalButtonContainer: {
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+  },
+  suggestionItem: {
+    backgroundColor: "#f1f5f9",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  suggestionItemBlue: {
+    backgroundColor: "#93c5fd", // lighter blue
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  suggestionTitleDark: {
+    color: "#111827",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  suggestionSubtitleDark: {
+    color: "#6b7280",
+    fontSize: 12,
+    marginTop: 2,
+  },
+  suggestionTitleLight: {
+    color: "#1f2937",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  paginationRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  pageButton: {
+    backgroundColor: "#bfdbfe",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  pageButtonDisabled: {
+    backgroundColor: "#e5e7eb",
+  },
+  pageButtonText: {
+    color: "#1f2937",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  pageIndicator: {
+    color: "#6b7280",
+    fontSize: 12,
+  },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  sectionHeaderTitle: {
+    color: "#6b7280", // gray-500
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  suggestionGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  suggestionChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    alignItems: "center",
   },
 });
 

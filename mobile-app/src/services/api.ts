@@ -27,7 +27,7 @@ const API_BASE_URL = ENV_API_BASE_URL
   : EXTRA_API_BASE_URL
   ? EXTRA_API_BASE_URL
   : __DEV__
-  ? "http://192.168.16.118:3000"
+  ? "http://10.195.228.139:3000"
   : "https://www.myonhealth.ca"; // Update this with your actual domain
 
 const api = axios.create({
@@ -237,9 +237,13 @@ export const servicesAPI = {
   },
 
   round: async (
-    id: string
+    id: string,
+    serviceDate?: string | null
   ): Promise<{ service: Service; newServiceCodes: any[]; message: string }> => {
-    const response = await api.post(`/api/services/${id}/round`);
+    const response = await api.post(`/api/services/${id}/round`, {
+      // If provided, pass the service date so backend can use it for rounding
+      serviceDate: serviceDate ?? null,
+    });
     return response.data;
   },
 
