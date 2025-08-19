@@ -143,6 +143,15 @@ export interface Physician {
   healthInstitution?: {
     city: string;
   } | null;
+  frequentlyUsedCodes?: Array<{
+    sortMetric: number;
+    billingCode: {
+      id: number;
+      code: string;
+      title: string;
+      description: string | null;
+    };
+  }>;
 }
 
 export interface Patient {

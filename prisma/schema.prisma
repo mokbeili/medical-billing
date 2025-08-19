@@ -81,6 +81,7 @@ model BillingCode {
   billing_code_embeddings         billing_code_embeddings?
   section                         Section                  @relation(fields: [section_id], references: [id])
   serviceCodes                    ServiceCodes[]
+  frequentlyUsedBy                FrequentlyUsedCode[]
 
   // Many-to-many relationship for previous/next codes
   previousCodes BillingCodeRelation[] @relation("BillingCodeNext")
@@ -217,6 +218,7 @@ model Physician {
   SearchQueryLog        SearchQueryLog[]
   Service               Service[]
   preferredSections     PreferredSection[]
+  frequentlyUsedCodes   FrequentlyUsedCode[]
 
   @@map("physicians")
 }
@@ -416,6 +418,23 @@ model PreferredSection {
   @@index([physicianId])
   @@index([sectionId])
   @@map("preferred_sections")
+}
+
+model FrequentlyUsedCode {
+  id            Int      @id @default(autoincrement())
+  physicianId   String   @map("physician_id")
+  billingCodeId Int      @map("billing_code_id")
+  sortMetric    Int      @default(0) @map("sort_metric")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  physician   Physician   @relation(fields: [physicianId], references: [id], onDelete: Cascade)
+  billingCode BillingCode @relation(fields: [billingCodeId], references: [id], onDelete: Cascade)
+
+  @@unique([physicianId, billingCodeId])
+  @@index([physicianId])
+  @@index([billingCodeId])
+  @@map("frequently_used_codes")
 }
 
 enum Role {

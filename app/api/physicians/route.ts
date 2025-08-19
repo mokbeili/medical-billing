@@ -9,6 +9,9 @@ export async function GET(request: Request) {
   try {
     // Check for mobile app authentication first
     const userHeader = request.headers.get("x-user");
+    const userId = request.headers.get("x-user-id");
+    const userEmail = request.headers.get("x-user-email");
+    const userRoles = request.headers.get("x-user-roles");
     let user = null;
 
     if (userHeader) {
@@ -17,6 +20,13 @@ export async function GET(request: Request) {
       } catch (error) {
         console.error("Error parsing user header:", error);
       }
+    } else if (userId && userEmail && userRoles) {
+      // Handle individual headers from mobile app
+      user = {
+        id: userId,
+        email: userEmail,
+        roles: userRoles.split(","),
+      } as any;
     }
 
     // If no mobile user, try NextAuth session
@@ -40,6 +50,22 @@ export async function GET(request: Request) {
         lastName: true,
         middleInitial: true,
         billingNumber: true,
+        frequentlyUsedCodes: {
+          orderBy: {
+            sortMetric: "desc",
+          },
+          select: {
+            sortMetric: true,
+            billingCode: {
+              select: {
+                id: true,
+                code: true,
+                title: true,
+                description: true,
+              },
+            },
+          },
+        },
         healthInstitution: {
           select: {
             city: true,
