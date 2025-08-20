@@ -12,7 +12,7 @@
     "build:preview:android": "eas build --platform android --profile preview",
     "build:production": "eas build --platform all --profile production",
     "update:dev": "eas update --branch development --message 'dev update'",
-    "update:preview": "eas update --branch preview --message 'preview update'",
+    "update:preview": "APP_ENV=preview eas update --branch preview --message 'preview update'",
     "update:prod": "eas update --branch production --message 'prod update'",
     "setup:env": "cp .env.example .env && echo 'Please edit .env with your AWS credentials'"
   },

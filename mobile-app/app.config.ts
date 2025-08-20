@@ -1,5 +1,11 @@
-import "dotenv/config";
+import { config as dotenvConfig } from "dotenv";
 import { ConfigContext, ExpoConfig } from "expo/config";
+// Load environment variables from .env.<APP_ENV> if present, else fallback to .env
+const appEnvFromProcess = process.env.APP_ENV || "development";
+const primaryEnvLoad = dotenvConfig({ path: `.env.${appEnvFromProcess}` });
+if (primaryEnvLoad.error) {
+  dotenvConfig();
+}
 
 export default ({ config }: ConfigContext): ExpoConfig => {
   // Load environment variables

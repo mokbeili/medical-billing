@@ -844,11 +844,121 @@ const ServicesScreen = ({ navigation }: any) => {
     );
     const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
 
+    if (diffDays === 1) {
+      return "Yesterday";
+    }
+
     if (diffDays <= 6) {
       return dayNames[target.getDay()];
     }
 
     return `${monthNames[target.getMonth()]} ${target.getDate()}`;
+  };
+
+  // Component for date input with navigation buttons
+  const DateInputWithNavigation = ({
+    value,
+    onChangeText,
+    placeholder,
+  }: {
+    value: string;
+    onChangeText: (text: string) => void;
+    placeholder: string;
+  }) => {
+    const navigateDate = (direction: "prev" | "next") => {
+      if (!value) {
+        // If no current date, start with today
+        onChangeText(getLocalYMD(new Date()));
+        return;
+      }
+
+      try {
+        const [year, month, day] = value.split("-").map((v) => parseInt(v, 10));
+        const currentDate = new Date(year, month - 1, day);
+
+        if (direction === "prev") {
+          currentDate.setDate(currentDate.getDate() - 1);
+        } else {
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+
+        onChangeText(getLocalYMD(currentDate));
+      } catch (error) {
+        // If parsing fails, default to today
+        onChangeText(getLocalYMD(new Date()));
+      }
+    };
+
+    const getDisplayValue = () => {
+      if (!value) return "";
+
+      const today = getLocalYMD(new Date());
+      const yesterday = getLocalYMD(new Date(Date.now() - 24 * 60 * 60 * 1000));
+
+      if (value === today) return "Today";
+      if (value === yesterday) return "Yesterday";
+
+      // Format as MM/DD/YYYY for other dates
+      try {
+        const [year, month, day] = value.split("-");
+        return `${month}/${day}/${year}`;
+      } catch {
+        return value;
+      }
+    };
+
+    const handleTextChange = (text: string) => {
+      // If user types "Today", set to today's date
+      if (text.toLowerCase() === "today") {
+        onChangeText(getLocalYMD(new Date()));
+        return;
+      }
+
+      // If user types "Yesterday", set to yesterday's date
+      if (text.toLowerCase() === "yesterday") {
+        const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        onChangeText(getLocalYMD(yesterday));
+        return;
+      }
+
+      // For other text, try to parse as date or pass through
+      onChangeText(text);
+    };
+
+    return (
+      <View style={styles.dateInputWithNavigationContainer}>
+        <TouchableOpacity
+          style={styles.dateNavButton}
+          onPress={() => navigateDate("prev")}
+        >
+          <Ionicons name="chevron-back" size={20} color="#6b7280" />
+        </TouchableOpacity>
+
+        <View style={styles.dateInputCenter}>
+          <TextInput
+            style={styles.dateInput}
+            placeholder={placeholder}
+            value={getDisplayValue()}
+            onChangeText={handleTextChange}
+          />
+        </View>
+
+        <TouchableOpacity
+          style={[
+            styles.dateNavButton,
+            getLocalYMD(new Date()) === value ? styles.disabledButton : null,
+          ]}
+          onPress={() => navigateDate("next")}
+          disabled={getLocalYMD(new Date()) === value}
+        >
+          <Ionicons
+            name="chevron-forward"
+            size={20}
+            color={getLocalYMD(new Date()) === value ? "#9ca3af" : "#6b7280"}
+          />
+        </TouchableOpacity>
+      </View>
+    );
   };
 
   const renderService = (service: Service) => {
@@ -1238,29 +1348,18 @@ const ServicesScreen = ({ navigation }: any) => {
                 <Ionicons name="close" size={24} color="#6b7280" />
               </TouchableOpacity>
             </View>
-            <Text style={styles.modalDescription}>
-              Please set the service date to use for rounding.
-            </Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="YYYY-MM-DD"
-              value={roundingDate}
-              onChangeText={setRoundingDate}
-              keyboardType="default"
-            />
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => {
-                  setShowRoundingModal(false);
-                  setRoundingDate("");
-                  setPendingRoundingService(null);
-                }}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.confirmButton]}
+            <ScrollView style={styles.subSelectionScrollView}>
+              <View style={styles.subSelectionSection}>
+                <DateInputWithNavigation
+                  value={roundingDate}
+                  onChangeText={setRoundingDate}
+                  placeholder="YYYY-MM-DD"
+                />
+              </View>
+            </ScrollView>
+            <View style={styles.modalButtonContainer}>
+              <Button
+                mode="contained"
                 onPress={async () => {
                   if (!pendingRoundingService || !roundingDate) {
                     Alert.alert("Error", "Please enter a service date.");
@@ -1284,9 +1383,10 @@ const ServicesScreen = ({ navigation }: any) => {
                     );
                   }
                 }}
+                style={styles.modalButton}
               >
-                <Text style={styles.confirmButtonText}>Confirm</Text>
-              </TouchableOpacity>
+                Confirm
+              </Button>
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
@@ -1320,9 +1420,7 @@ const ServicesScreen = ({ navigation }: any) => {
                     <Text style={styles.subSelectionSectionTitle}>
                       Service Date <Text style={styles.requiredText}>*</Text>
                     </Text>
-                    <TextInput
-                      style={styles.dateInput}
-                      placeholder="YYYY-MM-DD"
+                    <DateInputWithNavigation
                       value={
                         getSubSelectionForCodeInline(
                           currentCodeForSubSelection.id
@@ -1334,10 +1432,8 @@ const ServicesScreen = ({ navigation }: any) => {
                           { serviceDate: text }
                         )
                       }
+                      placeholder="YYYY-MM-DD"
                     />
-                    <Text style={styles.dateNote}>
-                      Enter the date when this service was provided
-                    </Text>
                   </View>
                 )}
 
@@ -1822,146 +1918,6 @@ const ServicesScreen = ({ navigation }: any) => {
           </View>
         </Modal>
       )}
-
-      {/* Inline Add Code Modal for frequent code tap (removed; using sub-selection modal flow) */}
-      {/*
-      <Modal
-        visible={false}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => {}}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowAddCodeModal(false)}
-        >
-          <TouchableOpacity
-            style={styles.modalContent}
-            activeOpacity={1}
-            onPress={() => {}}
-          >
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {pendingBillingCode
-                  ? `Add ${pendingBillingCode.code}`
-                  : "Add Service Code"}
-              </Text>
-              <TouchableOpacity onPress={() => setShowAddCodeModal(false)}>
-                <Ionicons name="close" size={24} color="#6b7280" />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.modalDescription}>
-              Enter required details for this billing code.
-            </Text>
-
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Service Date (YYYY-MM-DD)"
-              value={codeForm.serviceDate}
-              onChangeText={(t) =>
-                setCodeForm((p) => ({ ...p, serviceDate: t }))
-              }
-            />
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Service End Date (optional, YYYY-MM-DD)"
-              value={codeForm.serviceEndDate}
-              onChangeText={(t) =>
-                setCodeForm((p) => ({ ...p, serviceEndDate: t }))
-              }
-            />
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Start Time (HH:MM)"
-              value={codeForm.serviceStartTime}
-              onChangeText={(t) =>
-                setCodeForm((p) => ({ ...p, serviceStartTime: t }))
-              }
-            />
-            <TextInput
-              style={styles.modalInput}
-              placeholder="End Time (HH:MM)"
-              value={codeForm.serviceEndTime}
-              onChangeText={(t) =>
-                setCodeForm((p) => ({ ...p, serviceEndTime: t }))
-              }
-            />
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Number of Units"
-              keyboardType="numeric"
-              value={codeForm.numberOfUnits}
-              onChangeText={(t) =>
-                setCodeForm((p) => ({ ...p, numberOfUnits: t }))
-              }
-            />
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Bilateral Indicator (e.g., B)"
-              value={codeForm.bilateralIndicator}
-              onChangeText={(t) =>
-                setCodeForm((p) => ({ ...p, bilateralIndicator: t }))
-              }
-            />
-            <TextInput
-              style={[styles.modalInput, { height: 80 }]}
-              placeholder="Special Circumstances"
-              value={codeForm.specialCircumstances}
-              multiline
-              onChangeText={(t) =>
-                setCodeForm((p) => ({ ...p, specialCircumstances: t }))
-              }
-            />
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setShowAddCodeModal(false)}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.confirmButton]}
-                onPress={async () => {
-                  if (!suggestionsForService || !pendingBillingCode) return;
-                  try {
-                    const subSelections = [
-                      {
-                        codeId: pendingBillingCode.id,
-                        serviceStartTime: codeForm.serviceStartTime || null,
-                        serviceEndTime: codeForm.serviceEndTime || null,
-                        serviceDate:
-                          codeForm.serviceDate || getLocalYMD(new Date()),
-                        serviceEndDate: codeForm.serviceEndDate || null,
-                        bilateralIndicator: codeForm.bilateralIndicator || null,
-                        numberOfUnits: Number(codeForm.numberOfUnits || "1"),
-                        specialCircumstances:
-                          codeForm.specialCircumstances || null,
-                      },
-                    ];
-
-                    await addCodesToService(
-                      suggestionsForService,
-                      [pendingBillingCode],
-                      subSelections
-                    );
-                    setShowAddCodeModal(false);
-                    setShowSuggestionsModal(false);
-                  } catch (e) {
-                    console.error("Error adding service code inline:", e);
-                    Alert.alert("Error", "Failed to add service code.");
-                  }
-                }}
-              >
-                <Text style={styles.confirmButtonText}>Save</Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-      */}
 
       {/* Suggestions Modal for adding codes */}
       <Modal
@@ -2565,7 +2521,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   subSelectionSection: {
-    marginBottom: 24,
+    marginBottom: 16,
   },
   subSelectionSectionTitle: {
     fontSize: 16,
@@ -2799,6 +2755,23 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 16,
     alignItems: "center",
+  },
+  dateInputWithNavigationContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "transparent",
+  },
+  dateNavButton: {
+    padding: 8,
+    borderRadius: 6,
+    backgroundColor: "#f8fafc",
+    marginHorizontal: 4,
+  },
+  dateInputCenter: {
+    flex: 1,
+    alignItems: "center",
+    paddingHorizontal: 8,
   },
 });
 
