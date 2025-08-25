@@ -239,9 +239,9 @@ export async function POST(request: Request) {
           })()
         : "";
       const sex = (service.patient?.sex || "M") as "M" | "F";
-      const name = `${decryptedPatient.firstName || ""}, ${
-        decryptedPatient.lastName || ""
-      }`;
+      const name = `${decryptedPatient.lastName || ""}, ${
+        decryptedPatient.firstName || ""
+      } `;
       const diagnosticCode = service.icdCode?.code?.substring(0, 3) || "";
       const refPractitioner = service.referringPhysician?.code;
       const dateOfService = (() => {
@@ -251,8 +251,7 @@ export async function POST(request: Request) {
         const year = String(date.getUTCFullYear()).slice(-2);
         return day + month + year;
       })();
-      const location = "0"; // Default location since it's now in serviceCodes
-      const facilityNumber = "00000";
+      const facilityNumber = "     ";
 
       return service.serviceCodes
         .sort(
@@ -291,7 +290,7 @@ export async function POST(request: Request) {
           units: String(
             serviceCode.numberOfUnits === undefined
               ? serviceCode.numberOfUnits
-              : ""
+              : "01"
           ),
           locationOfService: serviceCode.locationOfService || "0",
           feeCode: serviceCode.billingCode.code,
@@ -325,7 +324,7 @@ export async function POST(request: Request) {
                 .replace(/:/g, "")
             : undefined,
           facilityNumber: facilityNumber,
-          claimType: serviceCode.billingCode.billing_record_type.toString(),
+          claimType: " ",
           serviceLocation: serviceCode.serviceLocation,
           billingRecordType: String(
             serviceCode.billingCode.billing_record_type

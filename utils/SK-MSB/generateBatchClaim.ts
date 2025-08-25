@@ -84,11 +84,11 @@ function formatService50(practitionerNumber: string, s: ServiceRecord): string {
     pad(s.feeCents, 6) +
     s.mode +
     s.formType +
-    pad(s.specialCircumstances || "", 2) +
+    (s.specialCircumstances || "  ") +
     (s.bilateral || " ") +
     (s.startTime || "    ") +
     (s.stopTime || "    ") +
-    pad(s.facilityNumber || "", 5) +
+    (s.facilityNumber || "     ") +
     (s.claimType || " ") +
     (s.serviceLocation || " ") +
     " "
