@@ -4,6 +4,13 @@ import Layout from "@/app/components/layout/Layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ServiceStatus } from "@prisma/client";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -40,19 +47,78 @@ interface BillingClaim {
   }[];
 }
 
+interface Physician {
+  id: string;
+  firstName: string;
+  lastName: string;
+  middleInitial?: string;
+  billingNumber: string;
+  groupNumber?: string;
+  jurisdiction: {
+    country: string;
+    region: string;
+  };
+}
+
 export default function BillingClaimsSearchPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const [claims, setClaims] = useState<BillingClaim[]>([]);
+  const [physicians, setPhysicians] = useState<Physician[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedPhysicianId, setSelectedPhysicianId] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    const checkUserRole = async () => {
+      try {
+        const response = await fetch("/api/user");
+        if (response.ok) {
+          const userData = await response.json();
+          setIsAdmin(userData.roles.includes("ADMIN"));
+        }
+      } catch (error) {
+        console.error("Error checking user role:", error);
+      }
+    };
+
+    if (status === "authenticated") {
+      checkUserRole();
+    }
+  }, [status]);
+
+  useEffect(() => {
+    const fetchPhysicians = async () => {
+      if (!isAdmin) return;
+
+      try {
+        const response = await fetch("/api/physicians/admin");
+        if (response.ok) {
+          const data = await response.json();
+          setPhysicians(data);
+        }
+      } catch (error) {
+        console.error("Error fetching physicians:", error);
+      }
+    };
+
+    if (isAdmin) {
+      fetchPhysicians();
+    }
+  }, [isAdmin]);
 
   useEffect(() => {
     const fetchClaims = async () => {
       try {
-        const response = await fetch("/api/billing-claims");
+        let url = "/api/billing-claims";
+        if (isAdmin && selectedPhysicianId) {
+          url += `?physicianId=${selectedPhysicianId}`;
+        }
+
+        const response = await fetch(url);
         if (response.ok) {
           const data = await response.json();
           setClaims(data);
@@ -67,10 +133,29 @@ export default function BillingClaimsSearchPage() {
     if (status === "authenticated") {
       fetchClaims();
     }
-  }, [status]);
+  }, [status, isAdmin, selectedPhysicianId]);
 
   const handleSearch = (query: string) => {
+    setSelectedPhysicianId("");
     setSearchQuery(query);
+    // Clear physician selection when user starts typing in search field
+    if (query && selectedPhysicianId) {
+      setSelectedPhysicianId("");
+    }
+  };
+
+  const handlePhysicianChange = (physicianId: string) => {
+    if (physicianId === "all") {
+      setSelectedPhysicianId("");
+    } else {
+      setSelectedPhysicianId(physicianId);
+    }
+    setIsLoading(true);
+  };
+
+  const handleClearFilter = () => {
+    setSelectedPhysicianId("");
+    setIsLoading(true);
   };
 
   const handleDelete = async (claim: BillingClaim) => {
@@ -178,6 +263,40 @@ export default function BillingClaimsSearchPage() {
     document.body.removeChild(a);
   };
 
+  const handleDownloadAll = async () => {
+    if (!window.confirm("Are you sure you want to download all claims?")) {
+      return;
+    }
+
+    try {
+      let apiUrl = "/api/billing-claims/download-all";
+      if (selectedPhysicianId) {
+        apiUrl += `?physicianId=${selectedPhysicianId}`;
+      }
+
+      const response = await fetch(apiUrl);
+      if (response.ok) {
+        const blob = await response.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = downloadUrl;
+        a.download = selectedPhysicianId
+          ? `physician_claims_${selectedPhysicianId}.zip`
+          : "all_billing_claims.zip";
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(downloadUrl);
+        document.body.removeChild(a);
+      } else {
+        const error = await response.text();
+        alert(error || "Failed to download all claims");
+      }
+    } catch (error) {
+      console.error("Error downloading all claims:", error);
+      alert("Failed to download all claims");
+    }
+  };
+
   if (status === "loading" || isLoading) {
     return (
       <Layout>
@@ -200,17 +319,95 @@ export default function BillingClaimsSearchPage() {
       <div className="min-h-screen bg-gray-50">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Billing Claims</h1>
+          {isAdmin && selectedPhysicianId && (
+            <p className="mt-2 text-sm text-gray-600">
+              Viewing claims for:{" "}
+              {physicians.find((p) => p.id === selectedPhysicianId)?.lastName},{" "}
+              {physicians.find((p) => p.id === selectedPhysicianId)?.firstName}
+            </p>
+          )}
+          <p className="mt-1 text-sm text-gray-500">
+            {isLoading
+              ? "Loading claims..."
+              : `${filteredClaims.length} claim${
+                  filteredClaims.length !== 1 ? "s" : ""
+                } found`}
+            {!isLoading &&
+              isAdmin &&
+              selectedPhysicianId &&
+              ` for selected physician`}
+            {!isLoading &&
+              isAdmin &&
+              !selectedPhysicianId &&
+              " across all physicians"}
+          </p>
         </div>
 
         <div className="bg-white rounded-lg shadow mb-6">
-          <div className="p-4">
+          <div className="p-4 space-y-4">
             <Input
               type="text"
-              placeholder="Search claims by ID, physician, or jurisdiction..."
+              placeholder="Search claims by ID, physician, or jurisdiction... (clears physician filter)"
               value={searchQuery}
               onChange={(e) => handleSearch(e.target.value)}
               className="max-w-md"
             />
+            {isAdmin && selectedPhysicianId && (
+              <p className="text-xs text-gray-500">
+                💡 Tip: Start typing in the search field to clear the physician
+                filter
+              </p>
+            )}
+
+            {isAdmin && (
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium text-gray-700">
+                    Filter by Physician:
+                  </label>
+                  <Select
+                    value={selectedPhysicianId || "all"}
+                    onValueChange={handlePhysicianChange}
+                  >
+                    <SelectTrigger className="w-80">
+                      <SelectValue placeholder="Select a physician to filter claims" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Physicians</SelectItem>
+                      {physicians.map((physician) => (
+                        <SelectItem key={physician.id} value={physician.id}>
+                          {physician.lastName}, {physician.firstName}{" "}
+                          {physician.middleInitial || ""}(
+                          {physician.billingNumber}) -{" "}
+                          {physician.jurisdiction.region},{" "}
+                          {physician.jurisdiction.country}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {selectedPhysicianId && (
+                  <Button
+                    variant="outline"
+                    onClick={handleClearFilter}
+                    className="text-sm"
+                  >
+                    Clear Filter
+                  </Button>
+                )}
+
+                {isAdmin && filteredClaims.length > 0 && (
+                  <Button
+                    variant="default"
+                    onClick={() => handleDownloadAll()}
+                    className="text-sm"
+                  >
+                    Download All Claims
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -224,7 +421,16 @@ export default function BillingClaimsSearchPage() {
               <Card key={claim.id}>
                 <CardHeader>
                   <div className="flex justify-between items-start">
-                    <CardTitle>{claim.friendlyId}</CardTitle>
+                    <div>
+                      <CardTitle>{claim.friendlyId}</CardTitle>
+                      {isAdmin && !selectedPhysicianId && (
+                        <p className="text-sm text-gray-600 mt-1">
+                          Physician: {claim.physician.firstName}{" "}
+                          {claim.physician.lastName} (
+                          {claim.physician.billingNumber})
+                        </p>
+                      )}
+                    </div>
                     <div className="flex gap-2">
                       {claim.batchClaimText && (
                         <Button

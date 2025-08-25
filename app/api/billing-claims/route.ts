@@ -7,21 +7,48 @@ import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    const claims = await prisma.billingClaim.findMany({
-      where: {
-        physician: {
-          user: {
-            id: parseInt(session.user.id),
-          },
-        },
+    // Get query parameters
+    const { searchParams } = new URL(request.url);
+    const physicianId = searchParams.get("physicianId");
+
+    // Check if user has ADMIN role
+    const user = await prisma.user.findUnique({
+      where: { id: parseInt(session.user.id) },
+      select: {
+        id: true,
+        roles: true,
       },
+    });
+
+    if (!user) {
+      return new NextResponse("User not found", { status: 404 });
+    }
+
+    let whereClause: any = {};
+
+    if (user.roles.includes("ADMIN")) {
+      // Admin can view all claims or filter by specific physician
+      if (physicianId) {
+        whereClause.physicianId = physicianId;
+      }
+    } else {
+      // Regular users can only view their own claims
+      whereClause.physician = {
+        user: {
+          id: parseInt(session.user.id),
+        },
+      };
+    }
+
+    const claims = await prisma.billingClaim.findMany({
+      where: whereClause,
       include: {
         physician: true,
         jurisdiction: true,
