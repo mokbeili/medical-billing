@@ -6,9 +6,10 @@ import { NextResponse } from "next/server";
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     // Check for mobile app authentication first
     const userHeader = request.headers.get("x-user");
     const userIdHeader = request.headers.get("x-user-id");
@@ -43,7 +44,7 @@ export async function POST(
     // Get the service with all related data
     const service = await prisma.service.findFirst({
       where: {
-        id: parseInt(params.id),
+        id: parseInt(id),
         patient: {
           physician: {
             userId: parseInt(user.id),
@@ -447,7 +448,7 @@ export async function POST(
     // Fetch the updated service with all relations
     const updatedService = await prisma.service.findFirst({
       where: {
-        id: parseInt(params.id),
+        id: parseInt(id),
       },
       include: {
         patient: true,

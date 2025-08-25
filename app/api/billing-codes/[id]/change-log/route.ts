@@ -5,9 +5,10 @@ import { NextResponse } from "next/server";
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return new NextResponse("Unauthorized", { status: 401 });
@@ -15,7 +16,7 @@ export async function GET(
 
     const changeLogs = await prisma.billingCodeChangeLog.findMany({
       where: {
-        billing_code_id: parseInt(params.id),
+        billing_code_id: parseInt(id),
       },
       orderBy: {
         changed_at: "desc",

@@ -1,7 +1,7 @@
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { decryptBillingClaimData } from "@/utils/billingClaimEncryption";
-import * as JSZip from "jszip";
+import JSZip from "jszip";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 

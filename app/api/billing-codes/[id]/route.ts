@@ -5,9 +5,10 @@ import { NextResponse } from "next/server";
 
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return new NextResponse("Unauthorized", { status: 401 });
@@ -15,7 +16,7 @@ export async function PUT(
 
     const data = await request.json();
     const currentBillingCode = await prisma.billingCode.findUnique({
-      where: { id: parseInt(params.id) },
+      where: { id: parseInt(id) },
     });
 
     if (!currentBillingCode) {
@@ -26,14 +27,14 @@ export async function PUT(
     await prisma.billingCodeRelation.deleteMany({
       where: {
         OR: [
-          { previous_code_id: parseInt(params.id) },
-          { next_code_id: parseInt(params.id) },
+          { previous_code_id: parseInt(id) },
+          { next_code_id: parseInt(id) },
         ],
       },
     });
 
     const updatedBillingCode = await prisma.billingCode.update({
-      where: { id: parseInt(params.id) },
+      where: { id: parseInt(id) },
       data: {
         code: data.code,
         title: data.title,
@@ -155,9 +156,10 @@ export async function PUT(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return new NextResponse("Unauthorized", { status: 401 });
@@ -165,7 +167,7 @@ export async function DELETE(
 
     await prisma.billingCode.delete({
       where: {
-        id: parseInt(params.id),
+        id: parseInt(id),
       },
     });
 

@@ -759,6 +759,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
       summary: "",
       createdAt: new Date().toISOString(),
       billingCode: code,
+      changeLogs: [], // Add empty changeLogs array
     }));
 
     setSelectedCodes([...selectedCodes, ...newServiceCodes]);

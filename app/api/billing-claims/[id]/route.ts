@@ -6,9 +6,10 @@ import { NextResponse } from "next/server";
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return new NextResponse("Unauthorized", { status: 401 });
@@ -16,7 +17,7 @@ export async function GET(
 
     const claim = await prisma.billingClaim.findUnique({
       where: {
-        id: params.id,
+        id: id,
         physician: {
           user: {
             id: parseInt(session.user.id),
@@ -51,9 +52,10 @@ export async function GET(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return new NextResponse("Unauthorized", { status: 401 });
@@ -62,7 +64,7 @@ export async function DELETE(
     // Find the claim and check if it has any PENDING services
     const claim = await prisma.billingClaim.findUnique({
       where: {
-        id: params.id,
+        id: id,
         physician: {
           user: {
             id: parseInt(session.user.id),
@@ -92,7 +94,7 @@ export async function DELETE(
     // Delete the claim and its associated services
     await prisma.billingClaim.delete({
       where: {
-        id: params.id,
+        id: id,
       },
     });
 

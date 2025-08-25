@@ -147,7 +147,7 @@ export async function GET(request: Request) {
     }
 
     // Get request metadata
-    const headersList = headers();
+    const headersList = await headers();
     const ipAddress =
       headersList.get("x-forwarded-for") || headersList.get("x-real-ip");
     const userAgent = headersList.get("user-agent");

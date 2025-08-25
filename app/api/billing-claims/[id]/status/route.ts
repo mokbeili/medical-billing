@@ -6,15 +6,15 @@ import { NextResponse } from "next/server";
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
     if (!session) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    const { id } = params;
     const { status } = await request.json();
 
     if (!status || !Object.values(ServiceStatus).includes(status)) {

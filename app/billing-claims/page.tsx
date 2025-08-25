@@ -345,23 +345,16 @@ export default function BillingClaimsSearchPage() {
 
         <div className="bg-white rounded-lg shadow mb-6">
           <div className="p-4 space-y-4">
-            <Input
-              type="text"
-              placeholder="Search claims by ID, physician, or jurisdiction... (clears physician filter)"
-              value={searchQuery}
-              onChange={(e) => handleSearch(e.target.value)}
-              className="max-w-md"
-            />
-            {isAdmin && selectedPhysicianId && (
-              <p className="text-xs text-gray-500">
-                💡 Tip: Start typing in the search field to clear the physician
-                filter
-              </p>
-            )}
-
             {isAdmin && (
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
+                  <Input
+                    type="text"
+                    placeholder="Search claims by ID, physician, or jurisdiction... (clears physician filter)"
+                    value={searchQuery}
+                    onChange={(e) => handleSearch(e.target.value)}
+                    className="max-w-md"
+                  />
                   <label className="text-sm font-medium text-gray-700">
                     Filter by Physician:
                   </label>

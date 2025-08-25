@@ -6,9 +6,10 @@ import { NextResponse } from "next/server";
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     // Check for mobile app authentication first
     const userHeader = request.headers.get("x-user");
     let user = null;
@@ -32,7 +33,7 @@ export async function GET(
 
     const service = await prisma.service.findFirst({
       where: {
-        id: parseInt(params.id),
+        id: parseInt(id),
         patient: {
           physician: {
             userId: parseInt(user.id),
@@ -93,9 +94,10 @@ export async function GET(
 
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     // Check for mobile app authentication first
     const userHeader = request.headers.get("x-user");
     let user = null;
@@ -134,7 +136,7 @@ export async function PUT(
     // Check if service exists and belongs to the user's patients
     const existingService = await prisma.service.findFirst({
       where: {
-        id: parseInt(params.id),
+        id: parseInt(id),
         patient: {
           physician: {
             userId: parseInt(user.id),
@@ -150,7 +152,7 @@ export async function PUT(
     // Update the service
     const updatedService = await prisma.service.update({
       where: {
-        id: parseInt(params.id),
+        id: parseInt(id),
       },
       data: {
         physician: physicianId ? { connect: { id: physicianId } } : undefined,
@@ -188,7 +190,7 @@ export async function PUT(
       // Delete existing service codes
       await prisma.serviceCodes.deleteMany({
         where: {
-          serviceId: parseInt(params.id),
+          serviceId: parseInt(id),
         },
       });
 
@@ -196,7 +198,7 @@ export async function PUT(
       if (billingCodes.length > 0) {
         await prisma.serviceCodes.createMany({
           data: billingCodes.map((code: any) => ({
-            serviceId: parseInt(params.id),
+            serviceId: parseInt(id),
             codeId: code.codeId,
             serviceStartTime: code.serviceStartTime
               ? new Date(code.serviceStartTime)
@@ -221,7 +223,7 @@ export async function PUT(
     // Fetch the updated service with all relations
     const finalService = await prisma.service.findFirst({
       where: {
-        id: parseInt(params.id),
+        id: parseInt(id),
       },
       include: {
         patient: true,
@@ -277,9 +279,10 @@ export async function PUT(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     // Check for mobile app authentication first
     const userHeader = request.headers.get("x-user");
     let user = null;
@@ -304,7 +307,7 @@ export async function DELETE(
     // Check if service exists and belongs to the user's patients
     const existingService = await prisma.service.findFirst({
       where: {
-        id: parseInt(params.id),
+        id: parseInt(id),
         patient: {
           physician: {
             userId: parseInt(user.id),
@@ -320,7 +323,7 @@ export async function DELETE(
     // Delete the service (this will cascade delete service codes)
     await prisma.service.delete({
       where: {
-        id: parseInt(params.id),
+        id: parseInt(id),
       },
     });
 
