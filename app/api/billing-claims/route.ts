@@ -203,7 +203,7 @@ export async function POST(request: Request) {
       clinicNumber: physician.healthInstitution?.number || "000",
       name: `${firstServiceCode.patient.physician.firstName} ${firstServiceCode.patient.physician.lastName}`,
       address: firstServiceCode.patient.physician.streetAddress || "",
-      cityProvince: `${firstServiceCode.patient.physician.city || ""},${
+      cityProvince: `${firstServiceCode.patient.physician.city || ""}, ${
         firstServiceCode.patient.physician.province || ""
       }`,
       postalCode: firstServiceCode.patient.physician.postalCode || "",
@@ -232,12 +232,51 @@ export async function POST(request: Request) {
       const hsn = decryptedPatient.billingNumber || "";
       const dob = decryptedPatient.dateOfBirth
         ? (() => {
+            // Parse the date string and create a date object
             const date = new Date(decryptedPatient.dateOfBirth);
+
+            // Check if the date is valid
+            if (isNaN(date.getTime())) {
+              console.warn(
+                `Invalid date of birth: ${decryptedPatient.dateOfBirth}`
+              );
+              return "";
+            }
+
+            // Use local date methods to avoid timezone issues
             const month = String(date.getMonth() + 1).padStart(2, "0");
             const year = String(date.getFullYear()).slice(-2);
+
+            // Validate that the year is reasonable (not in the future and not too far in the past)
+            const currentYear = new Date().getFullYear();
+            const birthYear = date.getFullYear();
+
+            if (birthYear > currentYear || birthYear < 1900) {
+              console.warn(
+                `Suspicious birth year: ${birthYear} for patient ${decryptedPatient.billingNumber}`
+              );
+            }
+
             return month + year;
           })()
         : "";
+
+      // Calculate century indicator based on birth year
+      const centuryIndicator = decryptedPatient.dateOfBirth
+        ? (() => {
+            const date = new Date(decryptedPatient.dateOfBirth);
+            if (isNaN(date.getTime())) return 1; // Default to 1 if invalid date
+
+            const birthYear = date.getFullYear();
+            if (birthYear >= 1900 && birthYear < 2000) {
+              return 1; // 19xx
+            } else if (birthYear >= 2000) {
+              return 2; // 20xx
+            } else {
+              return 1; // Default to 1 for years before 1900
+            }
+          })()
+        : 1; // Default to 1 if no date of birth
       const sex = (service.patient?.sex || "M") as "M" | "F";
       const name = `${decryptedPatient.lastName || ""}, ${
         decryptedPatient.firstName || ""
@@ -332,6 +371,7 @@ export async function POST(request: Request) {
           serviceStartTime: serviceCode.serviceStartTime
             ? new Date(serviceCode.serviceStartTime).getTime()
             : 0,
+          centuryIndicator,
         }));
     });
 
@@ -392,6 +432,7 @@ export async function POST(request: Request) {
         serviceLocation: record.serviceLocation,
         billingRecordType: record.billingRecordType,
         locationOfService: record.locationOfService,
+        centuryIndicator: record.centuryIndicator,
       });
 
       // Update counters
