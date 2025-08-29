@@ -56,7 +56,27 @@ export async function GET(request: Request) {
           include: {
             serviceCodes: {
               include: {
-                billingCode: true,
+                billingCode: {
+                  include: {
+                    billingCodeChains: {
+                      select: {
+                        codeId: true,
+                        code: true,
+                        title: true,
+                        dayRange: true,
+                        rootId: true,
+                        previousCodeId: true,
+                        previousDayRange: true,
+                        cumulativeDayRange: true,
+                        prevPlusSelf: true,
+                        isLast: true,
+                      },
+                      orderBy: {
+                        cumulativeDayRange: "asc",
+                      },
+                    },
+                  },
+                },
               },
             },
           },
@@ -166,7 +186,27 @@ export async function POST(request: Request) {
         healthInstitution: true,
         serviceCodes: {
           include: {
-            billingCode: true,
+            billingCode: {
+              include: {
+                billingCodeChains: {
+                  select: {
+                    codeId: true,
+                    code: true,
+                    title: true,
+                    dayRange: true,
+                    rootId: true,
+                    previousCodeId: true,
+                    previousDayRange: true,
+                    cumulativeDayRange: true,
+                    prevPlusSelf: true,
+                    isLast: true,
+                  },
+                  orderBy: {
+                    cumulativeDayRange: "asc",
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -482,7 +522,27 @@ export async function POST(request: Request) {
           include: {
             serviceCodes: {
               include: {
-                billingCode: true,
+                billingCode: {
+                  include: {
+                    billingCodeChains: {
+                      select: {
+                        codeId: true,
+                        code: true,
+                        title: true,
+                        dayRange: true,
+                        rootId: true,
+                        previousCodeId: true,
+                        previousDayRange: true,
+                        cumulativeDayRange: true,
+                        prevPlusSelf: true,
+                        isLast: true,
+                      },
+                      orderBy: {
+                        cumulativeDayRange: "asc",
+                      },
+                    },
+                  },
+                },
               },
             },
             patient: true,

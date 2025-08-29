@@ -118,6 +118,23 @@ export async function PUT(
             },
           },
         },
+        billingCodeChains: {
+          select: {
+            codeId: true,
+            code: true,
+            title: true,
+            dayRange: true,
+            rootId: true,
+            previousCodeId: true,
+            previousDayRange: true,
+            cumulativeDayRange: true,
+            prevPlusSelf: true,
+            isLast: true,
+          },
+          orderBy: {
+            cumulativeDayRange: "asc",
+          },
+        },
       },
     });
 

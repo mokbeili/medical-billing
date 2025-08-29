@@ -84,6 +84,18 @@ interface BillingCode {
       };
     };
   }>;
+  billingCodeChains: Array<{
+    codeId: number;
+    code: string;
+    title: string;
+    dayRange: number;
+    rootId: number;
+    previousCodeId: number | null;
+    previousDayRange: number;
+    cumulativeDayRange: number;
+    prevPlusSelf: number;
+    isLast: boolean;
+  }>;
 }
 
 interface BillingCodeChangeLog {

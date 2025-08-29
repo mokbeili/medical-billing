@@ -132,6 +132,23 @@ export async function GET(request: Request) {
               },
             },
           },
+          billingCodeChains: {
+            select: {
+              codeId: true,
+              code: true,
+              title: true,
+              dayRange: true,
+              rootId: true,
+              previousCodeId: true,
+              previousDayRange: true,
+              cumulativeDayRange: true,
+              prevPlusSelf: true,
+              isLast: true,
+            },
+            orderBy: {
+              cumulativeDayRange: "asc",
+            },
+          },
         },
         orderBy: [
           {
@@ -288,6 +305,23 @@ export async function POST(request: Request) {
                 },
               },
             },
+          },
+        },
+        billingCodeChains: {
+          select: {
+            codeId: true,
+            code: true,
+            title: true,
+            dayRange: true,
+            rootId: true,
+            previousCodeId: true,
+            previousDayRange: true,
+            cumulativeDayRange: true,
+            prevPlusSelf: true,
+            isLast: true,
+          },
+          orderBy: {
+            cumulativeDayRange: "asc",
           },
         },
       },

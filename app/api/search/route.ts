@@ -44,6 +44,18 @@ interface BaseSearchResult {
       };
     };
   }>;
+  billingCodeChains: Array<{
+    codeId: number;
+    code: string;
+    title: string;
+    dayRange: number;
+    rootId: number;
+    previousCodeId: number | null;
+    previousDayRange: number;
+    cumulativeDayRange: number;
+    prevPlusSelf: number;
+    isLast: boolean;
+  }>;
 }
 
 interface PrismaSearchResult {
@@ -82,6 +94,18 @@ interface PrismaSearchResult {
         title: string;
       };
     };
+  }>;
+  billingCodeChains: Array<{
+    codeId: number;
+    code: string;
+    title: string;
+    dayRange: number;
+    rootId: number;
+    previousCodeId: number | null;
+    previousDayRange: number;
+    cumulativeDayRange: number;
+    prevPlusSelf: number;
+    isLast: boolean;
   }>;
 }
 
@@ -260,7 +284,23 @@ export async function GET(request: Request) {
               )
             )
           ) FILTER (WHERE next_bc.id IS NOT NULL), '[]'::json
-        ) as "nextCodes"
+        ) as "nextCodes",
+        COALESCE(
+          json_agg(
+            DISTINCT jsonb_build_object(
+              'codeId', bcc.code_id,
+              'code', bcc.code,
+              'title', bcc.title,
+              'dayRange', bcc.day_range,
+              'rootId', bcc.root_id,
+              'previousCodeId', bcc.previous_code_id,
+              'previousDayRange', bcc.previous_day_range,
+              'cumulativeDayRange', bcc.cumulative_day_range,
+              'prevPlusSelf', bcc.prev_plus_self,
+              'isLast', bcc.is_last
+            )
+          ) FILTER (WHERE bcc.code_id IS NOT NULL), '[]'::json
+        ) as "billingCodeChains"
       FROM billing_codes bc
       JOIN sections s ON bc.section_id = s.id
       LEFT JOIN billing_code_relations bcr_prev ON bc.id = bcr_prev.next_code_id
@@ -269,6 +309,7 @@ export async function GET(request: Request) {
       LEFT JOIN billing_code_relations bcr_next ON bc.id = bcr_next.previous_code_id
       LEFT JOIN billing_codes next_bc ON bcr_next.next_code_id = next_bc.id
       LEFT JOIN sections next_s ON next_bc.section_id = next_s.id
+      LEFT JOIN billing_code_chain bcc ON bc.id = bcc.code_id
       WHERE 
         bc.code ILIKE ${query.trim()} OR
         bc.code ILIKE ${cleanedQuery} OR
@@ -276,7 +317,7 @@ export async function GET(request: Request) {
         LTRIM(bc.code, '0') ILIKE ${query.trim()}
       GROUP BY bc.id, bc.code, bc.title, bc.description, bc.referring_practitioner_required, 
                bc.multiple_unit_indicator, bc.start_time_required, bc.stop_time_required, 
-               bc.max_units, bc.day_range, bc.billing_record_type, s.code, s.title
+               bc.max_units, bc.day_range, bc.billing_record_type, s.code, s.title, bcc.code_id, bcc.code, bcc.title, bcc.day_range, bcc.root_id, bcc.previous_code_id, bcc.previous_day_range, bcc.cumulative_day_range, bcc.prev_plus_self, bcc.is_last
       LIMIT 1
     `;
 
@@ -348,6 +389,23 @@ export async function GET(request: Request) {
               },
             },
           },
+          billingCodeChains: {
+            select: {
+              codeId: true,
+              code: true,
+              title: true,
+              dayRange: true,
+              rootId: true,
+              previousCodeId: true,
+              previousDayRange: true,
+              cumulativeDayRange: true,
+              prevPlusSelf: true,
+              isLast: true,
+            },
+            orderBy: {
+              cumulativeDayRange: "asc",
+            },
+          },
         },
         take: limit - allResults.length,
       });
@@ -417,6 +475,23 @@ export async function GET(request: Request) {
               },
             },
           },
+          billingCodeChains: {
+            select: {
+              codeId: true,
+              code: true,
+              title: true,
+              dayRange: true,
+              rootId: true,
+              previousCodeId: true,
+              previousDayRange: true,
+              cumulativeDayRange: true,
+              prevPlusSelf: true,
+              isLast: true,
+            },
+            orderBy: {
+              cumulativeDayRange: "asc",
+            },
+          },
         },
         take: limit - allResults.length,
       });
@@ -479,7 +554,23 @@ export async function GET(request: Request) {
               )
             )
           ) FILTER (WHERE next_bc.id IS NOT NULL), '[]'::json
-        ) as "nextCodes"
+        ) as "nextCodes",
+        COALESCE(
+          json_agg(
+            DISTINCT jsonb_build_object(
+              'codeId', bcc.code_id,
+              'code', bcc.code,
+              'title', bcc.title,
+              'dayRange', bcc.day_range,
+              'rootId', bcc.root_id,
+              'previousCodeId', bcc.previous_code_id,
+              'previousDayRange', bcc.previous_day_range,
+              'cumulativeDayRange', bcc.cumulative_day_range,
+              'prevPlusSelf', bcc.prev_plus_self,
+              'isLast', bcc.is_last
+            )
+          ) FILTER (WHERE bcc.code_id IS NOT NULL), '[]'::json
+        ) as "billingCodeChains"
       FROM billing_codes bc
       JOIN sections s ON bc.section_id = s.id
       LEFT JOIN billing_code_relations bcr_prev ON bc.id = bcr_prev.next_code_id
@@ -488,11 +579,12 @@ export async function GET(request: Request) {
       LEFT JOIN billing_code_relations bcr_next ON bc.id = bcr_next.previous_code_id
       LEFT JOIN billing_codes next_bc ON bcr_next.next_code_id = next_bc.id
       LEFT JOIN sections next_s ON next_bc.section_id = next_s.id
+      LEFT JOIN billing_code_chain bcc ON bc.id = bcc.code_id
       where to_tsvector('english', s.code || ' ' || s.title || ' ' || bc.code || ' ' || bc.title || '' || bc.description) @@ 
       plainto_tsquery('english', ${query})
       GROUP BY bc.id, bc.code, bc.title, bc.description, bc.billing_record_type,
                bc.referring_practitioner_required, bc.multiple_unit_indicator, 
-               bc.start_time_required, bc.stop_time_required, bc.max_units, bc.day_range, s.code, s.title
+               bc.start_time_required, bc.stop_time_required, bc.max_units, bc.day_range, s.code, s.title, bcc.code_id, bcc.code, bcc.title, bcc.day_range, bcc.root_id, bcc.previous_code_id, bcc.previous_day_range, bcc.cumulative_day_range, bcc.prev_plus_self, bcc.is_last
     `;
       addUniqueResults(partialMatches, [], "synonym");
     }
@@ -612,7 +704,23 @@ export async function GET(request: Request) {
                 )
               )
             ) FILTER (WHERE next_bc.id IS NOT NULL), '[]'::json
-          ) as "nextCodes"
+          ) as "nextCodes",
+          COALESCE(
+            json_agg(
+              DISTINCT jsonb_build_object(
+                'codeId', bcc.code_id,
+                'code', bcc.code,
+                'title', bcc.title,
+                'dayRange', bcc.day_range,
+                'rootId', bcc.root_id,
+                'previousCodeId', bcc.previous_code_id,
+                'previousDayRange', bcc.previous_day_range,
+                'cumulativeDayRange', bcc.cumulative_day_range,
+                'prevPlusSelf', bcc.prev_plus_self,
+                'isLast', bcc.is_last
+              )
+            ) FILTER (WHERE bcc.code_id IS NOT NULL), '[]'::json
+          ) as "billingCodeChains"
         FROM billing_codes bc
         join billing_code_embeddings bce on bc.id = bce.billing_code_id
         JOIN sections s ON bc.section_id = s.id
@@ -622,13 +730,14 @@ export async function GET(request: Request) {
         LEFT JOIN billing_code_relations bcr_next ON bc.id = bcr_next.previous_code_id
         LEFT JOIN billing_codes next_bc ON bcr_next.next_code_id = next_bc.id
         LEFT JOIN sections next_s ON next_bc.section_id = next_s.id
+        LEFT JOIN billing_code_chain bcc ON bc.id = bcc.code_id
         WHERE bc.openai_embedding::vector IS NOT NULL 
           AND bc.code NOT IN (${existingCodes.length > 0 ? existingCodes : ""})
           AND 1 - (bce.vector_embeddings <=> ${embeddingString}::vector) > 0.70
         GROUP BY bc.id, bc.code, bc.title, bc.description, bc.billing_record_type,
                  bc.referring_practitioner_required, bc.multiple_unit_indicator, 
                  bc.start_time_required, bc.stop_time_required, bc.max_units, bc.day_range, s.code, s.title,
-                 bce.vector_embeddings
+                 bce.vector_embeddings, bcc.code_id, bcc.code, bcc.title, bcc.day_range, bcc.root_id, bcc.previous_code_id, bcc.previous_day_range, bcc.cumulative_day_range, bcc.prev_plus_self, bcc.is_last
         ORDER BY similarity DESC
         LIMIT ${limit - allResults.length}
       `;

@@ -169,7 +169,7 @@ export async function POST(request: Request) {
             serviceEndDate: code.serviceEndDate
               ? new Date(code.serviceEndDate)
               : null,
-            bilateralIndicator: code.bilateralIndicator,
+            bilateralIndicator: code.billingCode.bilateralIndicator,
             numberOfUnits: code.numberOfUnits || 1,
             specialCircumstances: code.specialCircumstances,
             serviceLocation: code.serviceLocation || defaults.serviceLocation,
@@ -253,6 +253,23 @@ export async function GET(request: Request) {
         billingCode: {
           include: {
             section: true,
+            billingCodeChains: {
+              select: {
+                codeId: true,
+                code: true,
+                title: true,
+                dayRange: true,
+                rootId: true,
+                previousCodeId: true,
+                previousDayRange: true,
+                cumulativeDayRange: true,
+                prevPlusSelf: true,
+                isLast: true,
+              },
+              orderBy: {
+                cumulativeDayRange: "asc",
+              },
+            },
           },
         },
       },

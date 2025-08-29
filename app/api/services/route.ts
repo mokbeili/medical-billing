@@ -252,6 +252,23 @@ export async function GET(request: Request) {
             billingCode: {
               include: {
                 section: true,
+                billingCodeChains: {
+                  select: {
+                    codeId: true,
+                    code: true,
+                    title: true,
+                    dayRange: true,
+                    rootId: true,
+                    previousCodeId: true,
+                    previousDayRange: true,
+                    cumulativeDayRange: true,
+                    prevPlusSelf: true,
+                    isLast: true,
+                  },
+                  orderBy: {
+                    cumulativeDayRange: "asc",
+                  },
+                },
               },
             },
             changeLogs: {
@@ -485,6 +502,23 @@ export async function PUT(request: Request) {
             billingCode: {
               include: {
                 section: true,
+                billingCodeChains: {
+                  select: {
+                    codeId: true,
+                    code: true,
+                    title: true,
+                    dayRange: true,
+                    rootId: true,
+                    previousCodeId: true,
+                    previousDayRange: true,
+                    cumulativeDayRange: true,
+                    prevPlusSelf: true,
+                    isLast: true,
+                  },
+                  orderBy: {
+                    cumulativeDayRange: "asc",
+                  },
+                },
               },
             },
           },
