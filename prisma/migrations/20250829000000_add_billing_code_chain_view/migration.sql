@@ -62,5 +62,4 @@ SELECT
     is_last                    -- TRUE if no next code
 FROM chain;
 
--- Add comment to the view
 COMMENT ON VIEW billing_code_chain IS 'Recursive view showing billing code chains with cumulative day ranges and path tracking';
