@@ -569,20 +569,115 @@ export default function ServiceForm({
     return String(remainder) === value[8];
   };
 
+  // Helper function to find the correct start date for a code based on its dependencies
+  const findCorrectStartDate = (
+    code: BillingCode,
+    existingBillingCodes: typeof formData.billingCodes
+  ): string => {
+    // If the code has no previous codes, use the admit date
+    if (!code.previousCodes || code.previousCodes.length === 0) {
+      return formData.serviceDate;
+    }
+
+    // Check if any previous codes are already selected
+    const selectedPreviousCodes = existingBillingCodes.filter((billingCode) =>
+      code.previousCodes?.some(
+        (prevCode) => prevCode.previous_code.id === billingCode.codeId
+      )
+    );
+
+    if (selectedPreviousCodes.length === 0) {
+      // No previous codes are selected, but we should still position this code
+      // after any existing codes that might be in the same dependency chain
+
+      // Find any codes that this code depends on (even if not selected)
+      const dependencyChain = new Set<number>();
+      const addToChain = (codeId: number) => {
+        if (dependencyChain.has(codeId)) return;
+        dependencyChain.add(codeId);
+
+        const codeObj = selectedCodes.find((c) => c.id === codeId);
+        if (codeObj?.previousCodes) {
+          codeObj.previousCodes.forEach((prevCode) => {
+            addToChain(prevCode.previous_code.id);
+          });
+        }
+      };
+
+      // Add all codes in the dependency chain
+      code.previousCodes.forEach((prevCode) => {
+        addToChain(prevCode.previous_code.id);
+      });
+
+      // Find the latest end date among existing codes that are in the dependency chain
+      let latestEndDate: Date | null = null;
+      existingBillingCodes.forEach((billingCode) => {
+        if (
+          dependencyChain.has(billingCode.codeId) &&
+          billingCode.serviceEndDate
+        ) {
+          const endDate = new Date(billingCode.serviceEndDate);
+          if (!latestEndDate || endDate > latestEndDate) {
+            latestEndDate = endDate;
+          }
+        }
+      });
+
+      if (latestEndDate) {
+        // Position after the latest existing code
+        const newStartDate = new Date(latestEndDate);
+        newStartDate.setDate(newStartDate.getDate() + 1);
+        return newStartDate.toISOString().split("T")[0];
+      }
+
+      // Fallback to admit date
+      return formData.serviceDate;
+    }
+
+    // Find the most recent previous code and calculate the start date
+    const mostRecentPreviousCode = selectedPreviousCodes.reduce(
+      (latest, current) => {
+        if (!latest) return current;
+
+        const latestEndDate = latest.serviceEndDate
+          ? new Date(latest.serviceEndDate)
+          : null;
+        const currentEndDate = current.serviceEndDate
+          ? new Date(current.serviceEndDate)
+          : null;
+
+        if (!latestEndDate) return current;
+        if (!currentEndDate) return latest;
+
+        return currentEndDate > latestEndDate ? current : latest;
+      },
+      null as (typeof selectedPreviousCodes)[0] | null
+    );
+
+    if (mostRecentPreviousCode && mostRecentPreviousCode.serviceEndDate) {
+      const newStartDate = new Date(mostRecentPreviousCode.serviceEndDate);
+      newStartDate.setDate(newStartDate.getDate() + 1);
+      return newStartDate.toISOString().split("T")[0];
+    }
+
+    // Fallback to admit date
+    return formData.serviceDate;
+  };
+
   const handleAddCode = (code: BillingCode) => {
     if (!selectedCodes.find((c) => c.id === code.id)) {
-      // Default service date to today
-      const today = new Date().toISOString().split("T")[0];
-      const serviceDate = today;
-
       setSelectedCodes([...selectedCodes, code]);
 
       // Calculate service start date for type 57 codes
-      let serviceStartDate = serviceDate;
+      let serviceStartDate: string;
       let serviceEndDate = null;
       let updatedBillingCodes = [...formData.billingCodes];
+      console.log(code);
 
       if (code.billing_record_type === 57) {
+        // For type 57 codes, use the helper function to find the correct start date
+        serviceStartDate = findCorrectStartDate(code, formData.billingCodes);
+
         // Check if this code has previous codes defined and if any of them are already selected
         if (code.previousCodes && code.previousCodes.length > 0) {
           const existingFormCodes = formData.billingCodes;
@@ -627,31 +722,17 @@ export default function ServiceForm({
                   serviceEndDate: previousEndDate.toISOString().split("T")[0],
                 };
               }
-
-              // Set the new code's start date to previous start date + day range
-              if (
-                previousSelectedCode.day_range &&
-                previousSelectedCode.day_range > 0
-              ) {
-                const newStartDate = new Date(previousStartDate);
-                newStartDate.setDate(
-                  newStartDate.getDate() + previousSelectedCode.day_range
-                );
-                serviceStartDate = newStartDate.toISOString().split("T")[0];
-              } else {
-                // If previous code has no day range, start the next day
-                const newStartDate = new Date(previousStartDate);
-                newStartDate.setDate(newStartDate.getDate() + 1);
-                serviceStartDate = newStartDate.toISOString().split("T")[0];
-              }
             }
           }
-          // If no previous codes are selected, use the user-provided date
         }
         // For type 57 codes, do not set an end date initially
         serviceEndDate = null;
       } else {
-        // For non-type 57 codes, calculate service end date based on day range
+        // For non-type 57 codes, use today's date as default
+        const today = new Date().toISOString().split("T")[0];
+        serviceStartDate = today;
+
+        // Calculate service end date based on day range
         if (code.day_range && code.day_range > 0) {
           const startDate = new Date(serviceStartDate);
           startDate.setDate(startDate.getDate() + code.day_range - 1); // -1 because it's inclusive
@@ -782,118 +863,138 @@ export default function ServiceForm({
       );
     });
 
-    // Step 3: Update dependent codes' start dates
-    dependentCodes.forEach((dependentCode) => {
-      const dependentIndex = updatedCodes.findIndex(
-        (c) => c.codeId === dependentCode.codeId
-      );
-      const dependentSelectedCode = selectedCodes.find(
-        (c) => c.id === dependentCode.codeId
-      );
+    // Step 3: Update dependent codes' start dates in dependency order
+    const processedCodes = new Set<number>([changedCode.codeId]);
 
-      if (!dependentSelectedCode) return;
+    // Process codes in dependency order
+    let hasChanges = true;
+    while (hasChanges) {
+      hasChanges = false;
 
-      // Calculate new start date based on the changed code's end date
-      const changedEndDate = updatedCodes[changedIndex].serviceEndDate;
-      if (changedEndDate) {
-        const newStartDate = new Date(changedEndDate);
-        newStartDate.setDate(newStartDate.getDate() + 1); // Start the next day
+      dependentCodes.forEach((dependentCode) => {
+        if (processedCodes.has(dependentCode.codeId)) return;
 
-        let newServiceDate = newStartDate.toISOString().split("T")[0];
-        let newServiceEndDate = null;
+        const dependentIndex = updatedCodes.findIndex(
+          (c) => c.codeId === dependentCode.codeId
+        );
+        const dependentSelectedCode = selectedCodes.find(
+          (c) => c.id === dependentCode.codeId
+        );
 
-        // Calculate end date if this code has a day range
-        if (
-          dependentSelectedCode.day_range &&
-          dependentSelectedCode.day_range > 0
-        ) {
-          const endDate = new Date(newStartDate);
-          endDate.setDate(
-            endDate.getDate() + dependentSelectedCode.day_range - 1
+        if (!dependentSelectedCode) return;
+
+        // Check if all previous codes have been processed
+        const allPreviousProcessed = dependentSelectedCode.previousCodes?.every(
+          (prevCode) => processedCodes.has(prevCode.previous_code.id)
+        );
+
+        if (!allPreviousProcessed) return;
+
+        // Calculate new start date based on the most recent previous code's end date
+        const previousCodes =
+          dependentSelectedCode.previousCodes?.filter((prevCode) =>
+            processedCodes.has(prevCode.previous_code.id)
+          ) || [];
+
+        if (previousCodes.length === 0) return;
+
+        // Find the most recent previous code (the one with the latest end date)
+        let latestPreviousEndDate: Date | null = null;
+        let latestPreviousCode: (typeof previousCodes)[0] | null = null;
+
+        previousCodes.forEach((prevCode) => {
+          const prevCodeIndex = updatedCodes.findIndex(
+            (c) => c.codeId === prevCode.previous_code.id
           );
-          newServiceEndDate = endDate.toISOString().split("T")[0];
-        }
-
-        updatedCodes[dependentIndex] = {
-          ...dependentCode,
-          serviceDate: newServiceDate,
-          serviceEndDate: newServiceEndDate,
-        };
-
-        // Recursively update codes that depend on this dependent code
-        const nextDependentCodes = updatedCodes.filter((code, index) => {
-          if (index === dependentIndex) return false;
-          const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
-          return selectedCode?.previousCodes?.some(
-            (prevCode) => prevCode.previous_code.id === dependentSelectedCode.id
-          );
+          if (prevCodeIndex >= 0) {
+            const prevCodeEndDate = updatedCodes[prevCodeIndex].serviceEndDate;
+            if (prevCodeEndDate) {
+              const endDate = new Date(prevCodeEndDate);
+              if (!latestPreviousEndDate || endDate > latestPreviousEndDate) {
+                latestPreviousEndDate = endDate;
+                latestPreviousCode = prevCode;
+              }
+            }
+          }
         });
 
-        nextDependentCodes.forEach((nextCode) => {
-          const nextIndex = updatedCodes.findIndex(
-            (c) => c.codeId === nextCode.codeId
-          );
-          const nextSelectedCode = selectedCodes.find(
-            (c) => c.id === nextCode.codeId
-          );
+        if (latestPreviousEndDate && latestPreviousCode) {
+          // Set the new code's start date to the day after the previous code's end date
+          const newStartDate = new Date(latestPreviousEndDate);
+          newStartDate.setDate(newStartDate.getDate() + 1);
 
-          if (!nextSelectedCode) return;
+          let newServiceDate = newStartDate.toISOString().split("T")[0];
+          let newServiceEndDate = null;
 
-          const dependentEndDate = updatedCodes[dependentIndex].serviceEndDate;
-          const dependentStartDate = updatedCodes[dependentIndex].serviceDate;
-          const nextStartDate = new Date(
-            dependentEndDate || dependentStartDate || formData.serviceDate
-          );
-          nextStartDate.setDate(nextStartDate.getDate() + 1);
-
-          let nextServiceDate = nextStartDate.toISOString().split("T")[0];
-          let nextServiceEndDate = null;
-
-          if (nextSelectedCode.day_range && nextSelectedCode.day_range > 0) {
-            const endDate = new Date(nextStartDate);
-            endDate.setDate(endDate.getDate() + nextSelectedCode.day_range - 1);
-            nextServiceEndDate = endDate.toISOString().split("T")[0];
+          // Calculate end date if this code has a day range
+          if (
+            dependentSelectedCode.day_range &&
+            dependentSelectedCode.day_range > 0
+          ) {
+            const endDate = new Date(newStartDate);
+            endDate.setDate(
+              endDate.getDate() + dependentSelectedCode.day_range - 1
+            );
+            newServiceEndDate = endDate.toISOString().split("T")[0];
           }
 
-          updatedCodes[nextIndex] = {
-            ...nextCode,
-            serviceDate: nextServiceDate,
-            serviceEndDate: nextServiceEndDate,
+          updatedCodes[dependentIndex] = {
+            ...dependentCode,
+            serviceDate: newServiceDate,
+            serviceEndDate: newServiceEndDate,
           };
-        });
-      }
-    });
+
+          processedCodes.add(dependentCode.codeId);
+          hasChanges = true;
+        }
+      });
+    }
 
     return updatedCodes;
   };
 
   // Function to handle main service date changes and update all billing codes
   const handleMainServiceDateChange = (newServiceDate: string) => {
+    // Step 1: Find all codes that should have their start date updated
+    // These are codes that either have no previous codes, or whose previous codes are not selected
+    const codesToUpdate = formData.billingCodes.filter((code, index) => {
+      const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
+      if (!selectedCode) return false;
+
+      // If this code has no previous codes defined, it should be updated
+      if (
+        !selectedCode.previousCodes ||
+        selectedCode.previousCodes.length === 0
+      ) {
+        return true;
+      }
+
+      // If this code has previous codes defined, check if any of them are selected
+      const hasSelectedPreviousCodes = formData.billingCodes.some(
+        (billingCode) =>
+          selectedCode.previousCodes?.some(
+            (prevCode) => prevCode.previous_code.id === billingCode.codeId
+          )
+      );
+
+      // Only update if no previous codes are selected (this is the first in the chain)
+      return !hasSelectedPreviousCodes;
+    });
+
+    // Step 2: Update the start dates of codes that should be updated
     const updatedBillingCodes = formData.billingCodes.map((code, index) => {
       const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
       if (!selectedCode) return code;
 
-      // For type 57 codes, we need to check if they have previous codes
-      if (
-        selectedCode.billing_record_type === 57 &&
-        selectedCode.previousCodes &&
-        selectedCode.previousCodes.length > 0
-      ) {
-        // Check if any previous codes are already selected
-        const selectedPreviousCodes = formData.billingCodes.filter(
-          (billingCode) =>
-            selectedCode.previousCodes?.some(
-              (prevCode) => prevCode.previous_code.id === billingCode.codeId
-            )
-        );
+      // Check if this code should be updated
+      const shouldUpdate = codesToUpdate.some((c) => c.codeId === code.codeId);
 
-        if (selectedPreviousCodes.length > 0) {
-          // This code depends on previous codes, so don't change its date
-          return code;
-        }
+      if (!shouldUpdate) {
+        // This code shouldn't be updated, keep it as is
+        return code;
       }
 
-      // For codes without dependencies or the first code in a chain, update the start date
+      // For codes that should be updated, set the new start date
       let newServiceStartDate = newServiceDate;
       let newServiceEndDate = null;
 
@@ -911,14 +1012,46 @@ export default function ServiceForm({
       };
     });
 
-    // Now recalculate all dependent codes
+    // Step 3: Recalculate all dependent codes in the correct order
     let finalBillingCodes = [...updatedBillingCodes];
-    updatedBillingCodes.forEach((code, index) => {
-      const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
-      if (selectedCode && selectedCode.billing_record_type === 57) {
+
+    // Process codes in dependency order (codes with no previous codes first, then their dependents)
+    const processedCodes = new Set<number>();
+
+    // First pass: process codes with no previous codes
+    codesToUpdate.forEach((code) => {
+      const index = finalBillingCodes.findIndex(
+        (c) => c.codeId === code.codeId
+      );
+      if (index >= 0) {
         finalBillingCodes = recalculateAllDates(finalBillingCodes, index);
+        processedCodes.add(code.codeId);
       }
     });
+
+    // Second pass: process remaining codes that depend on processed codes
+    let hasChanges = true;
+    while (hasChanges) {
+      hasChanges = false;
+
+      finalBillingCodes.forEach((code, index) => {
+        if (processedCodes.has(code.codeId)) return;
+
+        const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
+        if (!selectedCode || !selectedCode.previousCodes) return;
+
+        // Check if all previous codes have been processed
+        const allPreviousProcessed = selectedCode.previousCodes.every(
+          (prevCode) => processedCodes.has(prevCode.previous_code.id)
+        );
+
+        if (allPreviousProcessed) {
+          finalBillingCodes = recalculateAllDates(finalBillingCodes, index);
+          processedCodes.add(code.codeId);
+          hasChanges = true;
+        }
+      });
+    }
 
     setFormData({
       ...formData,
@@ -1013,149 +1146,7 @@ export default function ServiceForm({
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!validateForm()) {
-      return;
-    }
-
-    if (status === "loading") {
-      return;
-    }
-
-    if (status === "unauthenticated" || !session) {
-      console.error("No active session. Please log in.");
-      router.push("/auth/signin");
-      return;
-    }
-
-    try {
-      // Use the user's selected service date as the primary service date
-      const primaryServiceDate = new Date(formData.serviceDate);
-      // Helper function to combine date and time
-      const combineDateTime = (date: Date, timeStr: string) => {
-        if (!timeStr) return null;
-        const [hours, minutes] = timeStr.split(":").map(Number);
-        const newDate = new Date(date);
-        newDate.setHours(hours, minutes, 0, 0);
-        return newDate.toISOString();
-      };
-
-      if (type === "new") {
-        // Create new service with billing codes in a single request
-        const serviceData = {
-          physicianId: formData.physicianId,
-          patientId: formData.patientId,
-          referringPhysicianId: formData.referringPhysicianId,
-          icdCodeId: formData.icdCodeId,
-          healthInstitutionId: formData.healthInstitutionId,
-          summary: formData.summary,
-          serviceDate: primaryServiceDate.toISOString(),
-          serviceLocation: formData.serviceLocation,
-          locationOfService: formData.locationOfService,
-          serviceStatus: "OPEN",
-          billingCodes: formData.billingCodes.map((code) => ({
-            codeId: code.codeId,
-            status: code.status,
-            serviceStartTime: code.serviceStartTime
-              ? combineDateTime(
-                  new Date(code.serviceDate || formData.serviceDate),
-                  code.serviceStartTime
-                )
-              : null,
-            serviceEndTime: code.serviceEndTime
-              ? combineDateTime(
-                  new Date(code.serviceDate || formData.serviceDate),
-                  code.serviceEndTime
-                )
-              : null,
-            numberOfUnits: code.numberOfUnits || null,
-            bilateralIndicator: code.bilateralIndicator,
-            specialCircumstances: code.specialCircumstances,
-            serviceDate: code.serviceDate
-              ? new Date(code.serviceDate).toISOString()
-              : primaryServiceDate.toISOString(),
-            serviceEndDate: code.serviceEndDate
-              ? new Date(code.serviceEndDate).toISOString()
-              : null,
-          })),
-        };
-
-        const serviceResponse = await fetch("/api/services", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.user?.id}`,
-          },
-          body: JSON.stringify(serviceData),
-        });
-
-        if (!serviceResponse.ok) {
-          console.error(serviceResponse);
-          throw new Error("Failed to create service");
-        }
-      } else if (type === "edit" && serviceId) {
-        // Update existing service with billing codes in a single request
-        const serviceData = {
-          id: serviceId,
-          physicianId: formData.physicianId,
-          patientId: formData.patientId,
-          referringPhysicianId: formData.referringPhysicianId,
-          icdCodeId: formData.icdCodeId,
-          healthInstitutionId: formData.healthInstitutionId,
-          summary: formData.summary,
-          serviceDate: primaryServiceDate.toISOString(),
-          serviceLocation: formData.serviceLocation,
-          locationOfService: formData.locationOfService,
-          serviceStatus: "OPEN",
-          billingCodes: formData.billingCodes.map((code) => ({
-            codeId: code.codeId,
-            status: code.status,
-            serviceStartTime: code.serviceStartTime
-              ? combineDateTime(
-                  new Date(code.serviceDate || formData.serviceDate),
-                  code.serviceStartTime
-                )
-              : null,
-            serviceEndTime: code.serviceEndTime
-              ? combineDateTime(
-                  new Date(code.serviceDate || formData.serviceDate),
-                  code.serviceEndTime
-                )
-              : null,
-            numberOfUnits: code.numberOfUnits || null,
-            bilateralIndicator: code.bilateralIndicator,
-            specialCircumstances: code.specialCircumstances,
-            serviceDate: code.serviceDate
-              ? new Date(code.serviceDate).toISOString()
-              : primaryServiceDate.toISOString(),
-            serviceEndDate: code.serviceEndDate
-              ? new Date(code.serviceEndDate).toISOString()
-              : null,
-          })),
-        };
-
-        const serviceResponse = await fetch("/api/services", {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.user?.id}`,
-          },
-          body: JSON.stringify(serviceData),
-        });
-
-        if (!serviceResponse.ok) {
-          console.error(serviceResponse);
-          throw new Error("Failed to update service");
-        }
-      }
-
-      router.push("/services");
-    } catch (error) {
-      console.error(
-        "Error creating/updating service and service codes:",
-        error
-      );
-    }
+    // TODO: Implement save functionality
   };
 
   const handleApproveAndFinish = async (e: React.FormEvent) => {
@@ -1202,8 +1193,9 @@ export default function ServiceForm({
       return !hasNextCodes;
     });
 
-    if (lastType57Code && !lastType57Code.serviceEndDate) {
-      // Prompt for discharge date
+    if (lastType57Code) {
+      // Always prompt for discharge date for the last type 57 code
+      // This allows the user to override the calculated end date if needed
       setShowDischargeDateModal(true);
       setPendingApproveAndFinish(true);
       return;
@@ -1241,12 +1233,42 @@ export default function ServiceForm({
       return !hasNextCodes;
     });
 
+    let updatedBillingCodes = formData.billingCodes;
+
     if (lastType57Code) {
-      const updatedBillingCodes = formData.billingCodes.map((code) => {
+      updatedBillingCodes = formData.billingCodes.map((code) => {
         if (code.codeId === lastType57Code.codeId) {
+          // Find the selected code to get its day range
+          const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
+
+          // Calculate the end date based on the code's day range
+          let calculatedEndDate = dischargeDate;
+
+          if (selectedCode?.day_range && selectedCode.day_range > 0) {
+            const startDate = new Date(
+              code.serviceDate || formData.serviceDate
+            );
+            const dayRangeEndDate = new Date(startDate);
+            dayRangeEndDate.setDate(
+              startDate.getDate() + selectedCode.day_range - 1
+            ); // -1 because it's inclusive
+
+            const dischargeDateObj = new Date(dischargeDate);
+
+            // Use the discharge date if it's earlier than or equal to the calculated day range end date
+            // This allows the user to set an earlier discharge date than the full day range
+            if (dischargeDateObj <= dayRangeEndDate) {
+              calculatedEndDate = dischargeDate;
+            } else {
+              // If discharge date is later than the calculated end date, use the calculated end date
+              // This prevents extending beyond the code's natural end date
+              calculatedEndDate = dayRangeEndDate.toISOString().split("T")[0];
+            }
+          }
+
           return {
             ...code,
-            serviceEndDate: dischargeDate,
+            serviceEndDate: calculatedEndDate,
           };
         }
         return code;
@@ -1262,11 +1284,13 @@ export default function ServiceForm({
     setDischargeDate(new Date().toISOString().split("T")[0]);
     setPendingApproveAndFinish(false);
 
-    // Now proceed with approve and finish
-    await performApproveAndFinish();
+    // Now proceed with approve and finish, passing the updated billing codes
+    await performApproveAndFinish(updatedBillingCodes);
   };
 
-  const performApproveAndFinish = async () => {
+  const performApproveAndFinish = async (
+    billingCodesToUse = formData.billingCodes
+  ) => {
     if (status === "unauthenticated" || !session) {
       console.error("No active session. Please log in.");
       router.push("/auth/signin");
@@ -1298,7 +1322,7 @@ export default function ServiceForm({
           serviceLocation: formData.serviceLocation,
           locationOfService: formData.locationOfService,
           serviceStatus: "PENDING",
-          billingCodes: formData.billingCodes.map((code) => ({
+          billingCodes: billingCodesToUse.map((code) => ({
             codeId: code.codeId,
             status: code.status,
             serviceStartTime: code.serviceStartTime
@@ -1352,7 +1376,7 @@ export default function ServiceForm({
           serviceLocation: formData.serviceLocation,
           locationOfService: formData.locationOfService,
           serviceStatus: "PENDING",
-          billingCodes: formData.billingCodes.map((code) => ({
+          billingCodes: billingCodesToUse.map((code) => ({
             codeId: code.codeId,
             status: code.status,
             serviceStartTime: code.serviceStartTime
@@ -1512,9 +1536,7 @@ export default function ServiceForm({
           </div> */}
 
           <div className="space-y-2">
-            <label className="block text-sm font-medium">
-              Service / Admission Date
-            </label>
+            <label className="block text-sm font-medium">Admission Date</label>
             <div className="flex gap-2 items-center">
               <Input
                 type="date"
@@ -3114,9 +3136,80 @@ export default function ServiceForm({
             <h3 className="text-lg font-semibold mb-4">Set Discharge Date</h3>
             <p className="text-sm text-gray-600 mb-4">
               Please set the discharge date for the last type 57 code in the
-              service.
+              service. This will override the calculated end date if the
+              discharge date is earlier.
             </p>
             <div className="space-y-4">
+              {/* Show calculated end date information */}
+              {(() => {
+                const type57Codes = formData.billingCodes.filter((code) => {
+                  const selectedCode = selectedCodes.find(
+                    (c) => c.id === code.codeId
+                  );
+                  return (
+                    selectedCode && selectedCode.billing_record_type === 57
+                  );
+                });
+
+                const lastType57Code = type57Codes.find((code) => {
+                  const selectedCode = selectedCodes.find(
+                    (c) => c.id === code.codeId
+                  );
+                  if (!selectedCode) return false;
+
+                  const hasNextCodes = formData.billingCodes.some(
+                    (nextCode) => {
+                      const nextSelectedCode = selectedCodes.find(
+                        (c) => c.id === nextCode.codeId
+                      );
+                      return (
+                        nextSelectedCode &&
+                        nextSelectedCode.previousCodes?.some(
+                          (prevCode) =>
+                            prevCode.previous_code.id === selectedCode.id
+                        )
+                      );
+                    }
+                  );
+
+                  return !hasNextCodes;
+                });
+
+                if (lastType57Code) {
+                  const selectedCode = selectedCodes.find(
+                    (c) => c.id === lastType57Code.codeId
+                  );
+                  if (selectedCode?.day_range && selectedCode.day_range > 0) {
+                    const startDate = new Date(
+                      lastType57Code.serviceDate || formData.serviceDate
+                    );
+                    const calculatedEndDate = new Date(startDate);
+                    calculatedEndDate.setDate(
+                      startDate.getDate() + selectedCode.day_range - 1
+                    );
+
+                    return (
+                      <div className="p-3 bg-blue-50 rounded-md">
+                        <p className="text-sm text-blue-800 mb-2">
+                          <strong>Code {selectedCode.code}</strong> has a day
+                          range of {selectedCode.day_range} days.
+                        </p>
+                        <p className="text-xs text-blue-700">
+                          Calculated end date:{" "}
+                          {calculatedEndDate.toISOString().split("T")[0]}
+                          (start date + {selectedCode.day_range - 1} days)
+                        </p>
+                        <p className="text-xs text-blue-700 mt-1">
+                          Setting an earlier discharge date will override this
+                          calculation.
+                        </p>
+                      </div>
+                    );
+                  }
+                }
+                return null;
+              })()}
+
               <div>
                 <label className="block text-sm font-medium mb-2">
                   Discharge Date

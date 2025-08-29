@@ -87,6 +87,9 @@ model BillingCode {
   previousCodes BillingCodeRelation[] @relation("BillingCodeNext")
   nextCodes     BillingCodeRelation[] @relation("BillingCodePrevious")
 
+  // Relationship to billing code chains view
+  billingCodeChains BillingCodeChain[] @relation("BillingCodeToChain")
+
   @@index([section_id])
   @@index([code])
   @@index([title])
@@ -480,4 +483,24 @@ model ServiceCodeChangeLog {
   @@index([changedAt])
   @@index([changeType])
   @@map("service_code_change_logs")
+}
+
+// View model for billing code chains
+model BillingCodeChain {
+  codeId             Int     @map("code_id")
+  code               String
+  title              String
+  dayRange           Int     @map("day_range")
+  rootId             Int     @map("root_id")
+  previousCodeId     Int?    @map("previous_code_id")
+  previousDayRange   Int     @map("previous_day_range")
+  cumulativeDayRange Int     @map("cumulative_day_range")
+  prevPlusSelf       Int     @map("prev_plus_self")
+  isLast             Boolean @map("is_last")
+
+  // Relationship back to BillingCode
+  billingCode BillingCode @relation("BillingCodeToChain", fields: [codeId], references: [id])
+
+  @@unique([codeId, rootId])
+  @@map("billing_code_chain")
 }
