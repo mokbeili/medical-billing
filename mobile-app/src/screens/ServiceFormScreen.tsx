@@ -32,44 +32,9 @@ import {
   ServiceCode,
   ServiceFormData,
 } from "../types";
+import { formatFullDate } from "../utils/dateUtils";
 
-// Helper function to format date as "Month Day" (e.g., "Jan 15")
-const formatDateToMonthDay = (dateString: string): string => {
-  if (!dateString) return "";
-
-  try {
-    // Parse date string directly without timezone conversion
-    // Expected format: YYYY-MM-DD
-    const parts = dateString.split("-");
-    if (parts.length !== 3) return dateString;
-
-    const year = parseInt(parts[0], 10);
-    const month = parseInt(parts[1], 10) - 1; // Month is 0-indexed
-    const day = parseInt(parts[2], 10);
-
-    if (isNaN(year) || isNaN(month) || isNaN(day)) return dateString;
-
-    const monthNames = [
-      "Jan",
-      "Feb",
-      "Mar",
-      "Apr",
-      "May",
-      "Jun",
-      "Jul",
-      "Aug",
-      "Sep",
-      "Oct",
-      "Nov",
-      "Dec",
-    ];
-
-    const monthName = monthNames[month];
-    return `${monthName} ${day}`;
-  } catch (error) {
-    return dateString; // Return original if parsing fails
-  }
-};
+// Using the imported formatDateToMonthDay function from dateUtils
 
 interface ScannedPatientData {
   billingNumber: string;
@@ -632,7 +597,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
     onSuccess: async (data) => {
       const status =
         data.status === "PENDING" ? "approved and finished" : "saved";
-      Alert.alert("Success", `Service ${status} successfully!`);
+      Alert.alert("Success", `Claim ${status} successfully!`);
       await queryClient.invalidateQueries({ queryKey: ["services"] });
       navigation.goBack();
     },
@@ -648,7 +613,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
     onSuccess: async (data) => {
       const status =
         data.status === "PENDING" ? "approved and finished" : "saved";
-      Alert.alert("Success", `Service ${status} successfully!`);
+      Alert.alert("Success", `Claim ${status} successfully!`);
       await queryClient.invalidateQueries({ queryKey: ["services"] });
       queryClient.invalidateQueries({ queryKey: ["service", serviceId] });
       navigation.goBack();
@@ -1740,7 +1705,9 @@ const ServiceFormScreen = ({ navigation }: any) => {
                       : styles.placeholderText
                   }
                 >
-                  {formData.serviceDate || "Select Service Date"}
+                  {formData.serviceDate
+                    ? formatFullDate(formData.serviceDate)
+                    : "Select Service Date"}
                 </Text>
                 <Ionicons name="calendar" size={20} color="#6b7280" />
               </TouchableOpacity>
@@ -2598,7 +2565,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
                   <View style={styles.codeInfo}>
                     <Chip mode="flat" style={styles.codeChip}>
                       {code.billingCode.code} -{" "}
-                      {formatDateToMonthDay(code.serviceDate || "")}
+                      {formatFullDate(code.serviceDate || "")}
                     </Chip>
                   </View>
                   <TouchableOpacity

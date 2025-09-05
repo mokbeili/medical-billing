@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { formatFullDate } from "@/lib/dateUtils";
 import { ServiceStatus } from "@prisma/client";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
@@ -303,15 +304,15 @@ export default function ServiceRecordsPage() {
     <Layout>
       <div className="min-h-screen bg-gray-50">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Services</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Claims</h1>
           <div className="space-x-4">
             {selectedServices.length > 0 && (
               <Button onClick={handleCreateClaim}>
-                Create Claim ({selectedServices.length})
+                Create Submission ({selectedServices.length})
               </Button>
             )}
             <Link href="/services/new">
-              <Button>New Service</Button>
+              <Button>New Claim</Button>
             </Link>
           </div>
         </div>
@@ -340,7 +341,7 @@ export default function ServiceRecordsPage() {
 
             <div className="space-y-2">
               <label className="block text-sm font-medium">
-                Include Services with Claims
+                Include Claims with Submissions
               </label>
               <div className="flex items-center space-x-2">
                 <input
@@ -352,7 +353,7 @@ export default function ServiceRecordsPage() {
                   className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                 />
                 <span className="text-sm text-gray-500">
-                  Show services with claims
+                  Show claims with submissions
                 </span>
               </div>
             </div>
@@ -420,9 +421,7 @@ export default function ServiceRecordsPage() {
 
         <div className="bg-white rounded-lg shadow overflow-hidden">
           {filteredServices.length === 0 ? (
-            <div className="p-4 text-center text-gray-500">
-              No services found
-            </div>
+            <div className="p-4 text-center text-gray-500">No claims found</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
@@ -581,15 +580,10 @@ export default function ServiceRecordsPage() {
                                             }
                                           </td>
                                           <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                                            {serviceCode.serviceDate
-                                              ? new Date(
-                                                  serviceCode.serviceDate
-                                                )
-                                                  .toISOString()
-                                                  .slice(0, 10)
-                                              : new Date(service.serviceDate)
-                                                  .toISOString()
-                                                  .slice(0, 10)}
+                                            {formatFullDate(
+                                              serviceCode.serviceDate ||
+                                                service.serviceDate
+                                            )}
                                           </td>
                                         </tr>
                                       );

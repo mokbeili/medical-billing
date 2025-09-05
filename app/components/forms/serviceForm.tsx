@@ -1584,7 +1584,7 @@ export default function ServiceForm({
                         : "border-transparent text-gray-500 hover:text-gray-700"
                     }`}
                   >
-                    Services, Consultation, etc.
+                    Claims, Consultation, etc.
                   </button>
                   <button
                     type="button"
@@ -1607,7 +1607,7 @@ export default function ServiceForm({
                     ).length > 0 ? (
                       <>
                         <h4 className="text-sm font-medium text-gray-700 mt-2 mb-1">
-                          Services, Consultation, etc.
+                          Claims, Consultation, etc.
                         </h4>
                         {selectedCodes
                           .filter((code) => code.billing_record_type === 50)
@@ -2102,7 +2102,7 @@ export default function ServiceForm({
                       </>
                     ) : (
                       <p className="text-sm text-gray-500">
-                        No services, consultation, etc. codes added yet.
+                        No claims, consultation, etc. codes added yet.
                       </p>
                     )}
                   </div>

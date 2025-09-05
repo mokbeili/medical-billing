@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { formatDateTime } from "@/lib/dateUtils";
 import { ServiceStatus } from "@prisma/client";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -124,7 +125,7 @@ export default function BillingClaimsSearchPage() {
           setClaims(data);
         }
       } catch (error) {
-        console.error("Error fetching claims:", error);
+        console.error("Error fetching submissions:", error);
       } finally {
         setIsLoading(false);
       }
@@ -173,11 +174,11 @@ export default function BillingClaimsSearchPage() {
         setClaims((prevClaims) => prevClaims.filter((c) => c.id !== claim.id));
       } else {
         const error = await response.text();
-        alert(error || "Failed to delete claim");
+        alert(error || "Failed to delete submission");
       }
     } catch (error) {
-      console.error("Error deleting claim:", error);
-      alert("Failed to delete claim");
+      console.error("Error deleting submission:", error);
+      alert("Failed to delete submission");
     } finally {
       setIsDeleting(false);
     }
@@ -218,11 +219,11 @@ export default function BillingClaimsSearchPage() {
         );
       } else {
         const error = await response.text();
-        alert(error || "Failed to update claim status");
+        alert(error || "Failed to update submission status");
       }
     } catch (error) {
-      console.error("Error updating claim status:", error);
-      alert("Failed to update claim status");
+      console.error("Error updating submission status:", error);
+      alert("Failed to update submission status");
     } finally {
       setIsUpdating(false);
     }
@@ -264,7 +265,7 @@ export default function BillingClaimsSearchPage() {
   };
 
   const handleDownloadAll = async () => {
-    if (!window.confirm("Are you sure you want to download all claims?")) {
+    if (!window.confirm("Are you sure you want to download all submissions?")) {
       return;
     }
 
@@ -281,19 +282,19 @@ export default function BillingClaimsSearchPage() {
         const a = document.createElement("a");
         a.href = downloadUrl;
         a.download = selectedPhysicianId
-          ? `physician_claims_${selectedPhysicianId}.zip`
-          : "all_billing_claims.zip";
+          ? `physician_submissions_${selectedPhysicianId}.zip`
+          : "all_submissions.zip";
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(downloadUrl);
         document.body.removeChild(a);
       } else {
         const error = await response.text();
-        alert(error || "Failed to download all claims");
+        alert(error || "Failed to download all submissions");
       }
     } catch (error) {
-      console.error("Error downloading all claims:", error);
-      alert("Failed to download all claims");
+      console.error("Error downloading all submissions:", error);
+      alert("Failed to download all submissions");
     }
   };
 
@@ -318,18 +319,18 @@ export default function BillingClaimsSearchPage() {
     <Layout>
       <div className="min-h-screen bg-gray-50">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Billing Claims</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Submissions</h1>
           {isAdmin && selectedPhysicianId && (
             <p className="mt-2 text-sm text-gray-600">
-              Viewing claims for:{" "}
+              Viewing submissions for:{" "}
               {physicians.find((p) => p.id === selectedPhysicianId)?.lastName},{" "}
               {physicians.find((p) => p.id === selectedPhysicianId)?.firstName}
             </p>
           )}
           <p className="mt-1 text-sm text-gray-500">
             {isLoading
-              ? "Loading claims..."
-              : `${filteredClaims.length} claim${
+              ? "Loading submissions..."
+              : `${filteredClaims.length} submission${
                   filteredClaims.length !== 1 ? "s" : ""
                 } found`}
             {!isLoading &&
@@ -350,7 +351,7 @@ export default function BillingClaimsSearchPage() {
                 <div className="flex items-center gap-2">
                   <Input
                     type="text"
-                    placeholder="Search claims by ID, physician, or jurisdiction... (clears physician filter)"
+                    placeholder="Search submissions by ID, physician, or jurisdiction... (clears physician filter)"
                     value={searchQuery}
                     onChange={(e) => handleSearch(e.target.value)}
                     className="max-w-md"
@@ -363,7 +364,7 @@ export default function BillingClaimsSearchPage() {
                     onValueChange={handlePhysicianChange}
                   >
                     <SelectTrigger className="w-80">
-                      <SelectValue placeholder="Select a physician to filter claims" />
+                      <SelectValue placeholder="Select a physician to filter submissions" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Physicians</SelectItem>
@@ -396,7 +397,7 @@ export default function BillingClaimsSearchPage() {
                     onClick={() => handleDownloadAll()}
                     className="text-sm"
                   >
-                    Download All Claims
+                    Download All Submissions
                   </Button>
                 )}
               </div>
@@ -407,7 +408,7 @@ export default function BillingClaimsSearchPage() {
         <div className="grid gap-6">
           {filteredClaims.length === 0 ? (
             <div className="bg-white rounded-lg shadow p-4 text-center text-gray-500">
-              No claims found
+              No submissions found
             </div>
           ) : (
             filteredClaims.map((claim) => (
@@ -517,7 +518,7 @@ export default function BillingClaimsSearchPage() {
                         Created At
                       </h3>
                       <p className="mt-1 text-sm text-gray-900">
-                        {new Date(claim.createdAt).toLocaleString()}
+                        {formatDateTime(claim.createdAt)}
                       </p>
                     </div>
                   </div>

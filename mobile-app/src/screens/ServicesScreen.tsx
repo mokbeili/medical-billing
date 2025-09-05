@@ -22,6 +22,7 @@ import {
   servicesAPI,
 } from "../services/api";
 import { BillingCode, Service, ServiceCodeChangeLog } from "../types";
+import { formatFullDate, formatRelativeDate } from "../utils/dateUtils";
 
 const ServicesScreen = ({ navigation }: any) => {
   const [filteredServices, setFilteredServices] = useState<Service[]>([]);
@@ -555,15 +556,15 @@ const ServicesScreen = ({ navigation }: any) => {
       });
 
       if (response.ok) {
-        Alert.alert("Success", "Claim created successfully!");
+        Alert.alert("Success", "Submission created successfully!");
         setSelectedServices([]);
         refetch();
       } else {
-        Alert.alert("Error", "Failed to create claim");
+        Alert.alert("Error", "Failed to create submission");
       }
     } catch (error) {
       console.error("Error creating claim:", error);
-      Alert.alert("Error", "Failed to create claim");
+      Alert.alert("Error", "Failed to create submission");
     }
   };
 
@@ -801,59 +802,8 @@ const ServicesScreen = ({ navigation }: any) => {
     return getLocalYMD(input);
   };
 
-  // Format a date string (YYYY-MM-DD) similarly to rounding info: Today, weekday, or Mon DD
-  const formatRelativeDate = (dateString: string): string => {
-    if (!dateString) return "";
-    const ymd = normalizeToLocalYMD(dateString);
-    const [y, m, d] = ymd.split("-").map((v) => parseInt(v, 10));
-    const target = new Date(y, m - 1, d);
-    const now = new Date();
-
-    const dayNames = [
-      "Sunday",
-      "Monday",
-      "Tuesday",
-      "Wednesday",
-      "Thursday",
-      "Friday",
-      "Saturday",
-    ];
-    const monthNames = [
-      "Jan",
-      "Feb",
-      "Mar",
-      "Apr",
-      "May",
-      "Jun",
-      "Jul",
-      "Aug",
-      "Sep",
-      "Oct",
-      "Nov",
-      "Dec",
-    ];
-
-    if (getLocalYMD(target) === getLocalYMD(now)) {
-      return "Today";
-    }
-
-    const midnight = (d2: Date) =>
-      new Date(d2.getFullYear(), d2.getMonth(), d2.getDate());
-    const diffMs = Math.abs(
-      midnight(now).getTime() - midnight(target).getTime()
-    );
-    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
-
-    if (diffDays === 1) {
-      return "Yesterday";
-    }
-
-    if (diffDays <= 6) {
-      return dayNames[target.getDay()];
-    }
-
-    return `${monthNames[target.getMonth()]} ${target.getDate()}`;
-  };
+  // Use the imported formatRelativeDate function from dateUtils
+  // The local function is now replaced by the utility function
 
   // Component for date input with navigation buttons
   const DateInputWithNavigation = ({
@@ -987,12 +937,8 @@ const ServicesScreen = ({ navigation }: any) => {
       return `${sexText}`;
     };
 
-    // Format date as DD/MM/YYYY without timezone conversion
-    const formatServiceDate = (dateString: string) => {
-      const ymd = normalizeToLocalYMD(dateString);
-      const [year, month, day] = ymd.split("-");
-      return `${day.padStart(2, "0")}/${month.padStart(2, "0")}/${year}`;
-    };
+    // Use the imported formatFullDate function from dateUtils
+    // The local formatServiceDate function is now replaced by the utility function
 
     return (
       <TouchableOpacity
@@ -1018,7 +964,7 @@ const ServicesScreen = ({ navigation }: any) => {
               </View>
               <View style={styles.serviceDateContainer}>
                 <Text style={styles.serviceDate}>
-                  {formatServiceDate(service.serviceDate)}
+                  {formatFullDate(service.serviceDate)}
                 </Text>
                 <View style={styles.actionButtons}>
                   <TouchableOpacity
@@ -1106,7 +1052,7 @@ const ServicesScreen = ({ navigation }: any) => {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <View>
-          <Text style={styles.headerTitle}>Services</Text>
+          <Text style={styles.headerTitle}>Claims</Text>
         </View>
         <View style={styles.headerButtons}>
           <TouchableOpacity
@@ -1196,14 +1142,14 @@ const ServicesScreen = ({ navigation }: any) => {
       {selectedServices.length > 0 && (
         <View style={styles.actionBar}>
           <Text style={styles.selectedCount}>
-            {selectedServices.length} service(s) selected
+            {selectedServices.length} claim(s) selected
           </Text>
           <Button
             mode="contained"
             onPress={handleCreateClaim}
             style={styles.createClaimButton}
           >
-            Create Claim
+            Create Submission
           </Button>
         </View>
       )}
@@ -1217,11 +1163,11 @@ const ServicesScreen = ({ navigation }: any) => {
         {isLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#2563eb" />
-            <Text style={styles.loadingText}>Loading services...</Text>
+            <Text style={styles.loadingText}>Loading claims...</Text>
           </View>
         ) : error ? (
           <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>Error loading services</Text>
+            <Text style={styles.errorText}>Error loading claims</Text>
             <Text style={styles.errorSubtext}>Please try again later</Text>
             <TouchableOpacity
               style={styles.retryButton}
@@ -1236,7 +1182,7 @@ const ServicesScreen = ({ navigation }: any) => {
           </View>
         ) : (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No services found.</Text>
+            <Text style={styles.emptyText}>No claims found.</Text>
           </View>
         )}
       </ScrollView>

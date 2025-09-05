@@ -14,6 +14,7 @@ import {
 } from "react-native-vision-camera";
 import { Worklets } from "react-native-worklets-core";
 
+import { formatFullDate } from "../utils/dateUtils";
 import textRecognitionService from "../utils/expoTextRecognitionService";
 
 interface ScannedPatientData {
@@ -288,7 +289,7 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
                 <View style={styles.dataRow}>
                   <Text style={styles.dataLabel}>Service Date:</Text>
                   <Text style={styles.dataValue}>
-                    {scannedData.serviceDate}
+                    {formatFullDate(scannedData.serviceDate)}
                   </Text>
                 </View>
               )}

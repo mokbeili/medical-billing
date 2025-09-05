@@ -70,13 +70,13 @@ export default function Navbar({ onMenuClick }: { onMenuClick: () => void }) {
                 {session.user.roles.includes("PHYSICIAN") && (
                   <>
                     <NavLink href="/services" active={pathname === "/services"}>
-                      Services
+                      Claims
                     </NavLink>
                     <NavLink
                       href="/billing-claims"
                       active={pathname === "/billing-claims"}
                     >
-                      Billing Claims
+                      Submissions
                     </NavLink>
                   </>
                 )}

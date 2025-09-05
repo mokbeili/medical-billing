@@ -234,7 +234,7 @@ export async function POST(request: Request) {
 
     // Generate unique IDs
     const id = uuidv4();
-    const friendlyId = `CLAIM-${Date.now()}`;
+    const friendlyId = `SUBMISSION-${Date.now()}`;
 
     // Generate batch claim text
     const practitionerHeader = {

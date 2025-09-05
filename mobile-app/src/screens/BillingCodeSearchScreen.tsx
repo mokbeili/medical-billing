@@ -17,6 +17,7 @@ import { ActivityIndicator, Button, Card, Chip } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { billingCodesAPI } from "../services/api";
 import { BillingCode } from "../types";
+import { formatFullDate } from "../utils/dateUtils";
 
 interface CodeSubSelection {
   codeId: number;
@@ -392,7 +393,7 @@ const BillingCodeSearchScreen = ({ navigation }: any) => {
                   <TextInput
                     style={styles.dateInput}
                     placeholder="YYYY-MM-DD"
-                    value={subSelection.serviceDate || ""}
+                    value={formatFullDate(subSelection.serviceDate || "")}
                     onChangeText={(text) =>
                       handleUpdateSubSelection(currentCodeForSubSelection.id, {
                         serviceDate: text,
@@ -417,7 +418,7 @@ const BillingCodeSearchScreen = ({ navigation }: any) => {
                       <TextInput
                         style={[styles.dateInput, styles.readOnlyInput]}
                         placeholder="YYYY-MM-DD"
-                        value={subSelection.serviceDate || ""}
+                        value={formatFullDate(subSelection.serviceDate || "")}
                         editable={false}
                       />
                     </View>
@@ -426,7 +427,9 @@ const BillingCodeSearchScreen = ({ navigation }: any) => {
                       <TextInput
                         style={[styles.dateInput, styles.readOnlyInput]}
                         placeholder="YYYY-MM-DD"
-                        value={subSelection.serviceEndDate || ""}
+                        value={formatFullDate(
+                          subSelection.serviceEndDate || ""
+                        )}
                         editable={false}
                       />
                     </View>

@@ -27,7 +27,7 @@ const API_BASE_URL = ENV_API_BASE_URL
   : EXTRA_API_BASE_URL
   ? EXTRA_API_BASE_URL
   : __DEV__
-  ? "http://192.168.0.149:3000"
+  ? "http://192.168.16.54:3000"
   : "https://www.myonhealth.ca"; // Update this with your actual domain
 
 const api = axios.create({
