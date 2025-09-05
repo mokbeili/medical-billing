@@ -136,12 +136,24 @@ export default function ServiceRecordsPage() {
     }
 
     if (filters.serviceDate) {
-      const searchTerm = filters.serviceDate.toLowerCase();
-      filtered = filtered.filter(
-        (service) =>
-          new Date(service.serviceDate).toISOString().slice(0, 16) ===
-          searchTerm
-      );
+      const searchTerm = filters.serviceDate;
+
+      filtered = filtered.filter((service) => {
+        // Parse service date in local timezone
+        const serviceDate = new Date(service.serviceDate);
+
+        // Parse filter date as UTC to avoid timezone shifts
+        // searchTerm is in YYYY-MM-DD format, so we append 'T00:00:00.000Z' to make it UTC
+        const filterDate = new Date(searchTerm + "T00:00:00.000Z");
+
+        // Compare year, month, and day only (ignore time and timezone)
+        // Use UTC methods for filterDate to avoid timezone conversion
+        return (
+          serviceDate.getFullYear() === filterDate.getUTCFullYear() &&
+          serviceDate.getMonth() === filterDate.getUTCMonth() &&
+          serviceDate.getDate() === filterDate.getUTCDate()
+        );
+      });
     }
 
     if (filters.code) {
@@ -384,10 +396,10 @@ export default function ServiceRecordsPage() {
 
             <div className="space-y-2">
               <label className="block text-sm font-medium">
-                Service Date and Time
+                Admission Date
               </label>
               <Input
-                type="datetime-local"
+                type="date"
                 value={filters.serviceDate}
                 onChange={(e) =>
                   setFilters({ ...filters, serviceDate: e.target.value })
@@ -447,7 +459,7 @@ export default function ServiceRecordsPage() {
                       Patient
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Service Start Date
+                      Admission Date
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
@@ -485,9 +497,11 @@ export default function ServiceRecordsPage() {
                             }`}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {new Date(service.serviceDate)
-                              .toISOString()
-                              .slice(0, 10)}
+                            {formatFullDate(
+                              new Date(service.serviceDate)
+                                .toISOString()
+                                .slice(0, 10)
+                            )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             <span

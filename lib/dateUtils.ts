@@ -117,6 +117,235 @@ export function formatDateTime(date: Date | string | null | undefined): string {
 }
 
 /**
+ * Parses flexible date input formats and returns a standardized YYYY-MM-DD string
+ * Supports various formats including:
+ * - 22 Feb 1961, Feb 23 1961 (with month names)
+ * - 23/02/1961, 02/23/1961 (with slashes)
+ * - 1961-02-23 (ISO format)
+ * - 22-02-1961 (dash separated)
+ *
+ * @param dateInput - Flexible date string input
+ * @returns Standardized YYYY-MM-DD string or empty string if invalid
+ */
+export function parseFlexibleDate(dateInput: string): string {
+  if (!dateInput || typeof dateInput !== "string") return "";
+
+  const trimmedInput = dateInput.trim();
+  if (!trimmedInput) return "";
+
+  // Month name mappings (both full and abbreviated)
+  const monthMap: { [key: string]: number } = {
+    january: 1,
+    jan: 1,
+    february: 2,
+    feb: 2,
+    march: 3,
+    mar: 3,
+    april: 4,
+    apr: 4,
+    may: 5,
+    june: 6,
+    jun: 6,
+    july: 7,
+    jul: 7,
+    august: 8,
+    aug: 8,
+    september: 9,
+    sep: 9,
+    sept: 9,
+    october: 10,
+    oct: 10,
+    november: 11,
+    nov: 11,
+    december: 12,
+    dec: 12,
+  };
+
+  try {
+    // Try parsing as ISO format first (YYYY-MM-DD)
+    if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(trimmedInput)) {
+      const date = new Date(trimmedInput);
+      if (!isNaN(date.getTime())) {
+        return formatDateInput(date);
+      }
+    }
+
+    // Try parsing formats with month names
+    const monthNamePattern =
+      /(\d{1,2})\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{4})/i;
+    const monthNameMatch = trimmedInput.match(monthNamePattern);
+
+    if (monthNameMatch) {
+      const day = parseInt(monthNameMatch[1], 10);
+      const monthName = monthNameMatch[2].toLowerCase();
+      const year = parseInt(monthNameMatch[3], 10);
+      const month = monthMap[monthName];
+
+      if (month && day >= 1 && day <= 31 && year >= 1900 && year <= 2100) {
+        const date = new Date(year, month - 1, day);
+        if (
+          !isNaN(date.getTime()) &&
+          date.getDate() === day &&
+          date.getMonth() === month - 1 &&
+          date.getFullYear() === year
+        ) {
+          return formatDateInput(date);
+        }
+      }
+    }
+
+    // Try parsing formats with month names (month first)
+    const monthFirstPattern =
+      /(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})\s+(\d{4})/i;
+    const monthFirstMatch = trimmedInput.match(monthFirstPattern);
+
+    if (monthFirstMatch) {
+      const monthName = monthFirstMatch[1].toLowerCase();
+      const day = parseInt(monthFirstMatch[2], 10);
+      const year = parseInt(monthFirstMatch[3], 10);
+      const month = monthMap[monthName];
+
+      if (month && day >= 1 && day <= 31 && year >= 1900 && year <= 2100) {
+        const date = new Date(year, month - 1, day);
+        if (
+          !isNaN(date.getTime()) &&
+          date.getDate() === day &&
+          date.getMonth() === month - 1 &&
+          date.getFullYear() === year
+        ) {
+          return formatDateInput(date);
+        }
+      }
+    }
+
+    // Try parsing slash-separated formats (DD/MM/YYYY or MM/DD/YYYY)
+    const slashPattern = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+    const slashMatch = trimmedInput.match(slashPattern);
+
+    if (slashMatch) {
+      const first = parseInt(slashMatch[1], 10);
+      const second = parseInt(slashMatch[2], 10);
+      const year = parseInt(slashMatch[3], 10);
+
+      // Try both DD/MM/YYYY and MM/DD/YYYY
+      for (const [day, month] of [
+        [first, second],
+        [second, first],
+      ]) {
+        if (
+          month >= 1 &&
+          month <= 12 &&
+          day >= 1 &&
+          day <= 31 &&
+          year >= 1900 &&
+          year <= 2100
+        ) {
+          const date = new Date(year, month - 1, day);
+          if (
+            !isNaN(date.getTime()) &&
+            date.getDate() === day &&
+            date.getMonth() === month - 1 &&
+            date.getFullYear() === year
+          ) {
+            return formatDateInput(date);
+          }
+        }
+      }
+    }
+
+    // Try parsing dash-separated formats (DD-MM-YYYY or MM-DD-YYYY)
+    const dashPattern = /^(\d{1,2})-(\d{1,2})-(\d{4})$/;
+    const dashMatch = trimmedInput.match(dashPattern);
+
+    if (dashMatch) {
+      const first = parseInt(dashMatch[1], 10);
+      const second = parseInt(dashMatch[2], 10);
+      const year = parseInt(dashMatch[3], 10);
+
+      // Try both DD-MM-YYYY and MM-DD-YYYY
+      for (const [day, month] of [
+        [first, second],
+        [second, first],
+      ]) {
+        if (
+          month >= 1 &&
+          month <= 12 &&
+          day >= 1 &&
+          day <= 31 &&
+          year >= 1900 &&
+          year <= 2100
+        ) {
+          const date = new Date(year, month - 1, day);
+          if (
+            !isNaN(date.getTime()) &&
+            date.getDate() === day &&
+            date.getMonth() === month - 1 &&
+            date.getFullYear() === year
+          ) {
+            return formatDateInput(date);
+          }
+        }
+      }
+    }
+
+    // Try parsing with spaces and different separators
+    const spacePattern = /^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/;
+    const spaceMatch = trimmedInput.match(spacePattern);
+
+    if (spaceMatch) {
+      const first = parseInt(spaceMatch[1], 10);
+      const second = parseInt(spaceMatch[2], 10);
+      const year = parseInt(spaceMatch[3], 10);
+
+      // Try both DD-MM-YYYY and MM-DD-YYYY
+      for (const [day, month] of [
+        [first, second],
+        [second, first],
+      ]) {
+        if (
+          month >= 1 &&
+          month <= 12 &&
+          day >= 1 &&
+          day <= 31 &&
+          year >= 1900 &&
+          year <= 2100
+        ) {
+          const date = new Date(year, month - 1, day);
+          if (
+            !isNaN(date.getTime()) &&
+            date.getDate() === day &&
+            date.getMonth() === month - 1 &&
+            date.getFullYear() === year
+          ) {
+            return formatDateInput(date);
+          }
+        }
+      }
+    }
+
+    // Fallback: try JavaScript's built-in date parsing
+    const fallbackDate = new Date(trimmedInput);
+    if (!isNaN(fallbackDate.getTime())) {
+      return formatDateInput(fallbackDate);
+    }
+
+    return "";
+  } catch (error) {
+    console.error("Error parsing flexible date:", error);
+    return "";
+  }
+}
+
+/**
+ * Validates if a date string is in a valid format and returns a boolean
+ * @param dateInput - Date string to validate
+ * @returns True if the date is valid, false otherwise
+ */
+export function isValidFlexibleDate(dateInput: string): boolean {
+  return parseFlexibleDate(dateInput) !== "";
+}
+
+/**
  * Legacy function for backward compatibility
  * @deprecated Use formatFullDate instead
  */

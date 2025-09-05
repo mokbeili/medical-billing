@@ -11,6 +11,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  formatFullDate,
+  isValidFlexibleDate,
+  parseFlexibleDate,
+} from "@/lib/dateUtils";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import { useSession } from "next-auth/react";
@@ -145,6 +150,7 @@ interface NewPatientErrors {
   dateOfBirth: boolean;
   sex: boolean;
   billingNumberCheckDigit: boolean;
+  billingNumberDuplicate: boolean;
 }
 
 export default function ServiceForm({
@@ -219,7 +225,10 @@ export default function ServiceForm({
     dateOfBirth: false,
     sex: false,
     billingNumberCheckDigit: false,
+    billingNumberDuplicate: false,
   });
+
+  const [duplicatePatient, setDuplicatePatient] = useState<any>(null);
 
   // Add state for discharge date modal
   const [showDischargeDateModal, setShowDischargeDateModal] = useState(false);
@@ -470,6 +479,21 @@ export default function ServiceForm({
     return () => clearTimeout(debounceTimer);
   }, [referringPhysicianSearchQuery]);
 
+  const handleSelectDuplicatePatient = () => {
+    if (duplicatePatient) {
+      setFormData({ ...formData, patientId: duplicatePatient.id });
+      setIsCreatingPatient(false);
+      setDuplicatePatient(null);
+      setNewPatientErrors({
+        billingNumber: false,
+        dateOfBirth: false,
+        sex: false,
+        billingNumberCheckDigit: false,
+        billingNumberDuplicate: false,
+      });
+    }
+  };
+
   const handleCreatePatient = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -492,7 +516,23 @@ export default function ServiceForm({
         return;
       }
 
-      if (!newPatient.dateOfBirth) {
+      // Check for duplicate billing number in physician's patient list
+      const existingPatient = patients.find(
+        (patient) => patient.billingNumber === newPatient.billingNumber
+      );
+      if (existingPatient) {
+        setDuplicatePatient(existingPatient);
+        setNewPatientErrors({
+          ...newPatientErrors,
+          billingNumberDuplicate: true,
+        });
+        return;
+      }
+
+      if (
+        !newPatient.dateOfBirth ||
+        !isValidFlexibleDate(newPatient.dateOfBirth)
+      ) {
         setNewPatientErrors({ ...newPatientErrors, dateOfBirth: true });
         return;
       }
@@ -518,7 +558,7 @@ export default function ServiceForm({
           firstName: newPatient.firstName,
           lastName: newPatient.lastName,
           billingNumber: newPatient.billingNumber,
-          date_of_birth: newPatient.dateOfBirth,
+          date_of_birth: parseFlexibleDate(newPatient.dateOfBirth),
           sex: newPatient.sex,
           physicianId: formData.physicianId,
           jurisdictionId: selectedPhysician.jurisdictionId,
@@ -540,6 +580,13 @@ export default function ServiceForm({
         billingNumber: "",
         dateOfBirth: "",
         sex: "",
+      });
+      setNewPatientErrors({
+        billingNumber: false,
+        dateOfBirth: false,
+        sex: false,
+        billingNumberCheckDigit: false,
+        billingNumberDuplicate: false,
       });
     } catch (error) {
       console.error("Error creating patient:", error);
@@ -2785,28 +2832,101 @@ export default function ServiceForm({
                     </label>
                     <Input
                       value={newPatient.billingNumber}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const value = e.target.value;
                         setNewPatient({
                           ...newPatient,
-                          billingNumber: e.target.value,
-                        })
-                      }
-                      placeholder="hsn (8 characters)"
+                          billingNumber: value,
+                        });
+
+                        // Clear duplicate error when user starts typing
+                        if (newPatientErrors.billingNumberDuplicate) {
+                          setNewPatientErrors({
+                            ...newPatientErrors,
+                            billingNumberDuplicate: false,
+                          });
+                        }
+
+                        // Validate length and check digit
+                        if (value.length === 9) {
+                          if (checkDigit(value)) {
+                            // Check for duplicate in physician's patient list
+                            const existingPatient = patients.find(
+                              (patient) => patient.billingNumber === value
+                            );
+                            setDuplicatePatient(existingPatient || null);
+                            setNewPatientErrors({
+                              ...newPatientErrors,
+                              billingNumber: false,
+                              billingNumberCheckDigit: false,
+                              billingNumberDuplicate: !!existingPatient,
+                            });
+                          } else {
+                            setNewPatientErrors({
+                              ...newPatientErrors,
+                              billingNumber: false,
+                              billingNumberCheckDigit: true,
+                              billingNumberDuplicate: false,
+                            });
+                          }
+                        } else {
+                          setNewPatientErrors({
+                            ...newPatientErrors,
+                            billingNumber:
+                              value.length > 0 && value.length !== 9,
+                            billingNumberCheckDigit: false,
+                            billingNumberDuplicate: false,
+                          });
+                        }
+                      }}
+                      placeholder="9-digit HSN (e.g., 123456789)"
                       maxLength={9}
                       className={
                         newPatientErrors.billingNumber ||
-                        newPatientErrors.billingNumberCheckDigit
+                        newPatientErrors.billingNumberCheckDigit ||
+                        newPatientErrors.billingNumberDuplicate
                           ? "border-red-500"
                           : ""
                       }
                     />
                     {(newPatientErrors.billingNumber ||
-                      newPatientErrors.billingNumberCheckDigit) && (
-                      <p className="text-sm text-red-500">
-                        {newPatientErrors.billingNumber
-                          ? "Billing number must be exactly 9 characters long"
-                          : "Billing number is invalid"}
-                      </p>
+                      newPatientErrors.billingNumberCheckDigit ||
+                      newPatientErrors.billingNumberDuplicate) && (
+                      <div className="space-y-2">
+                        <p className="text-sm text-red-500">
+                          {newPatientErrors.billingNumber
+                            ? "Billing number must be exactly 9 characters long"
+                            : newPatientErrors.billingNumberCheckDigit
+                            ? "Not a valid Health Services Number"
+                            : "A patient with this billing number already exists in your patient list"}
+                        </p>
+                        {newPatientErrors.billingNumberDuplicate &&
+                          duplicatePatient && (
+                            <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+                              <p className="text-sm text-blue-800 font-medium mb-2">
+                                Existing Patient Found:
+                              </p>
+                              <p className="text-sm text-blue-700">
+                                {duplicatePatient.firstName}{" "}
+                                {duplicatePatient.lastName}
+                                {duplicatePatient.middleInitial &&
+                                  ` ${duplicatePatient.middleInitial}`}
+                              </p>
+                              <p className="text-xs text-blue-600">
+                                DOB:{" "}
+                                {formatFullDate(duplicatePatient.dateOfBirth)} |
+                                Sex: {duplicatePatient.sex}
+                              </p>
+                              <Button
+                                type="button"
+                                onClick={handleSelectDuplicatePatient}
+                                className="mt-2 bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 py-1"
+                              >
+                                Use This Patient
+                              </Button>
+                            </div>
+                          )}
+                      </div>
                     )}
                   </div>
                   <div className="space-y-2">
@@ -2814,14 +2934,43 @@ export default function ServiceForm({
                       Date of Birth
                     </label>
                     <Input
-                      type="date"
+                      type="text"
+                      placeholder="e.g., 22 Feb 1961, Feb 23 1961, 23/02/1961, 1961-02-23"
                       value={newPatient.dateOfBirth}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const inputValue = e.target.value;
                         setNewPatient({
                           ...newPatient,
-                          dateOfBirth: e.target.value,
-                        })
-                      }
+                          dateOfBirth: inputValue,
+                        });
+
+                        // Clear error when user starts typing
+                        if (newPatientErrors.dateOfBirth && inputValue.trim()) {
+                          setNewPatientErrors({
+                            ...newPatientErrors,
+                            dateOfBirth: false,
+                          });
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const inputValue = e.target.value.trim();
+                        if (inputValue) {
+                          const parsedDate = parseFlexibleDate(inputValue);
+                          if (parsedDate) {
+                            setNewPatient({
+                              ...newPatient,
+                              dateOfBirth: parsedDate,
+                            });
+                            // Display the formatted date in the input
+                            e.target.value = formatFullDate(parsedDate);
+                          } else {
+                            setNewPatientErrors({
+                              ...newPatientErrors,
+                              dateOfBirth: true,
+                            });
+                          }
+                        }
+                      }}
                       className={
                         newPatientErrors.dateOfBirth ? "border-red-500" : ""
                       }
@@ -2829,9 +2978,14 @@ export default function ServiceForm({
                     />
                     {newPatientErrors.dateOfBirth && (
                       <p className="text-sm text-red-500">
-                        Date of birth is required
+                        Please enter a valid date (e.g., 22 Feb 1961, Feb 23
+                        1961, 23/02/1961, 1961-02-23)
                       </p>
                     )}
+                    <p className="text-xs text-gray-500">
+                      Accepts various formats: month names (Feb, February),
+                      slashes (23/02/1961), dashes (1961-02-23)
+                    </p>
                   </div>
                   <div className="space-y-2">
                     <label className="block text-sm font-medium">Sex</label>
@@ -2881,7 +3035,9 @@ export default function ServiceForm({
                       !newPatient.billingNumber ||
                       newPatient.billingNumber.length !== 9 ||
                       !checkDigit(newPatient.billingNumber) ||
+                      newPatientErrors.billingNumberDuplicate ||
                       !newPatient.dateOfBirth ||
+                      !isValidFlexibleDate(newPatient.dateOfBirth) ||
                       !newPatient.sex
                     }
                   >

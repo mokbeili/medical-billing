@@ -32,7 +32,7 @@ import {
   ServiceCode,
   ServiceFormData,
 } from "../types";
-import { formatFullDate } from "../utils/dateUtils";
+import { formatFullDate, parseFlexibleDate } from "../utils/dateUtils";
 
 // Using the imported formatDateToMonthDay function from dateUtils
 
@@ -114,7 +114,9 @@ const ServiceFormScreen = ({ navigation }: any) => {
     dateOfBirth: false,
     sex: false,
     billingNumberCheckDigit: false,
+    billingNumberDuplicate: false,
   });
+  const [duplicatePatient, setDuplicatePatient] = useState<any>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [tempDateOfBirth, setTempDateOfBirth] = useState({
     year: "",
@@ -188,6 +190,11 @@ const ServiceFormScreen = ({ navigation }: any) => {
     }
 
     if (!checkDigit(newPatient.billingNumber)) {
+      return false;
+    }
+
+    // Check for duplicate patient error
+    if (newPatientErrors.billingNumberDuplicate) {
       return false;
     }
 
@@ -585,7 +592,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
         `${newPatient.firstName} ${newPatient.lastName} (#${newPatient.billingNumber})`
       );
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error("Error creating patient:", error);
       Alert.alert("Error", "Failed to create patient");
     },
@@ -624,6 +631,25 @@ const ServiceFormScreen = ({ navigation }: any) => {
     },
   });
 
+  const handleSelectDuplicatePatient = () => {
+    if (duplicatePatient) {
+      setFormData((prev) => ({ ...prev, patientId: duplicatePatient.id }));
+      setIsCreatingPatient(false);
+      setDuplicatePatient(null);
+      setNewPatientErrors({
+        billingNumber: false,
+        dateOfBirth: false,
+        sex: false,
+        billingNumberCheckDigit: false,
+        billingNumberDuplicate: false,
+      });
+      // Update patient search query to show the selected patient
+      setPatientSearchQuery(
+        `${duplicatePatient.firstName} ${duplicatePatient.lastName} (#${duplicatePatient.billingNumber})`
+      );
+    }
+  };
+
   const handleCreatePatient = () => {
     // Reset errors
     setNewPatientErrors({
@@ -631,6 +657,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
       dateOfBirth: false,
       sex: false,
       billingNumberCheckDigit: false,
+      billingNumberDuplicate: false,
     });
 
     // Validate required fields
@@ -639,6 +666,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
       dateOfBirth: !newPatient.dateOfBirth,
       sex: !newPatient.sex,
       billingNumberCheckDigit: false,
+      billingNumberDuplicate: false,
     };
 
     // Check for required fields
@@ -673,10 +701,9 @@ const ServiceFormScreen = ({ navigation }: any) => {
         (patient) => patient.billingNumber === newPatient.billingNumber
       );
       if (existingPatient) {
-        Alert.alert(
-          "Error",
-          "A patient with this billing number already exists"
-        );
+        setDuplicatePatient(existingPatient);
+        errors.billingNumberDuplicate = true;
+        setNewPatientErrors(errors);
         return;
       }
     }
@@ -691,6 +718,8 @@ const ServiceFormScreen = ({ navigation }: any) => {
     // Add physicianId to the patient data
     const patientDataWithPhysician = {
       ...newPatient,
+      dateOfBirth:
+        parseFlexibleDate(newPatient.dateOfBirth) || newPatient.dateOfBirth,
       physicianId: formData.physicianId,
     };
 
@@ -1084,11 +1113,13 @@ const ServiceFormScreen = ({ navigation }: any) => {
   };
 
   const formatDate = (date: Date) => {
-    return date.toISOString().split("T")[0];
+    return formatFullDate(date);
   };
 
   const isSameDate = (date1: Date, date2: Date) => {
-    return formatDate(date1) === formatDate(date2);
+    return (
+      date1.toISOString().split("T")[0] === date2.toISOString().split("T")[0]
+    );
   };
 
   const handleCalendarDateSelect = (date: Date) => {
@@ -2785,12 +2816,36 @@ const ServiceFormScreen = ({ navigation }: any) => {
                         ...prev,
                         billingNumber: numericText,
                       }));
-                      // Clear error when user starts typing
-                      if (newPatientErrors.billingNumber) {
+                      // Clear errors when user starts typing
+                      if (
+                        newPatientErrors.billingNumber ||
+                        newPatientErrors.billingNumberDuplicate
+                      ) {
                         setNewPatientErrors((prev) => ({
                           ...prev,
                           billingNumber: false,
+                          billingNumberDuplicate: false,
                         }));
+                      }
+
+                      // Real-time duplicate check when billing number is complete
+                      if (
+                        numericText.length === 9 &&
+                        checkDigit(numericText) &&
+                        patients
+                      ) {
+                        const existingPatient = patients.find(
+                          (patient) => patient.billingNumber === numericText
+                        );
+                        if (existingPatient) {
+                          setDuplicatePatient(existingPatient);
+                          setNewPatientErrors((prev) => ({
+                            ...prev,
+                            billingNumberDuplicate: true,
+                          }));
+                        } else {
+                          setDuplicatePatient(null);
+                        }
                       }
                     }}
                     keyboardType="numeric"
@@ -2803,8 +2858,41 @@ const ServiceFormScreen = ({ navigation }: any) => {
                   )}
                   {newPatientErrors.billingNumberCheckDigit && (
                     <Text style={styles.errorText}>
-                      Invalid billing number check digit
+                      Billing number check digit is invalid
                     </Text>
+                  )}
+                  {newPatientErrors.billingNumberDuplicate && (
+                    <View style={styles.duplicatePatientContainer}>
+                      <Text style={styles.errorText}>
+                        A patient with this billing number already exists in
+                        your patient list
+                      </Text>
+                      {duplicatePatient && (
+                        <View style={styles.duplicatePatientCard}>
+                          <Text style={styles.duplicatePatientTitle}>
+                            Existing Patient Found:
+                          </Text>
+                          <Text style={styles.duplicatePatientName}>
+                            {duplicatePatient.firstName}{" "}
+                            {duplicatePatient.lastName}
+                            {duplicatePatient.middleInitial &&
+                              ` ${duplicatePatient.middleInitial}`}
+                          </Text>
+                          <Text style={styles.duplicatePatientDetails}>
+                            DOB: {formatFullDate(duplicatePatient.dateOfBirth)}{" "}
+                            | Sex: {duplicatePatient.sex}
+                          </Text>
+                          <Button
+                            mode="contained"
+                            onPress={handleSelectDuplicatePatient}
+                            style={styles.selectDuplicateButton}
+                            labelStyle={styles.selectDuplicateButtonText}
+                          >
+                            Use This Patient
+                          </Button>
+                        </View>
+                      )}
+                    </View>
                   )}
 
                   <Button
@@ -3152,6 +3240,39 @@ const styles = StyleSheet.create({
   createPatientButton: {
     marginTop: 12,
     backgroundColor: "#059669",
+  },
+  duplicatePatientContainer: {
+    marginTop: 8,
+  },
+  duplicatePatientCard: {
+    marginTop: 8,
+    padding: 12,
+    backgroundColor: "#eff6ff",
+    borderColor: "#bfdbfe",
+    borderWidth: 1,
+    borderRadius: 8,
+  },
+  duplicatePatientTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1e40af",
+    marginBottom: 4,
+  },
+  duplicatePatientName: {
+    fontSize: 14,
+    color: "#1e3a8a",
+    marginBottom: 2,
+  },
+  duplicatePatientDetails: {
+    fontSize: 12,
+    color: "#3730a3",
+    marginBottom: 8,
+  },
+  selectDuplicateButton: {
+    backgroundColor: "#2563eb",
+  },
+  selectDuplicateButtonText: {
+    fontSize: 12,
   },
   searchResult: {
     padding: 12,
