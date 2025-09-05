@@ -309,14 +309,14 @@ export async function POST(request: Request) {
 
             const birthYear = date.getFullYear();
             if (birthYear >= 1900 && birthYear < 2000) {
-              return 1; // 19xx
+              return "    1"; // 19xx
             } else if (birthYear >= 2000) {
-              return 2; // 20xx
+              return "    2"; // 20xx
             } else {
-              return 1; // Default to 1 for years before 1900
+              return "    1"; // Default to 1 for years before 1900
             }
           })()
-        : 1; // Default to 1 if no date of birth
+        : "00001"; // Default to 1 if no date of birth
       const sex = (service.patient?.sex || "M") as "M" | "F";
       const name = `${decryptedPatient.lastName || ""}, ${
         decryptedPatient.firstName || ""

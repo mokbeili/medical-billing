@@ -36,7 +36,7 @@ type ServiceRecord = {
   claimType?: string;
   serviceLocation?: string;
   billingRecordType: "50" | "57";
-  centuryIndicator: number; // 1 for 19xx, 2 for 20xx
+  centuryIndicator: string; // 1 for 19xx, 2 for 20xx
 };
 
 function pad(
@@ -92,7 +92,7 @@ function formatService50(practitionerNumber: string, s: ServiceRecord): string {
     (s.facilityNumber || "     ") +
     (s.claimType || " ") +
     (s.serviceLocation || " ") +
-    pad(s.centuryIndicator, 1)
+    s.centuryIndicator
   );
 }
 
@@ -119,7 +119,7 @@ function formatService57(practitionerNumber: string, s: ServiceRecord): string {
     (s.facilityNumber || "     ") +
     (s.claimType || " ") +
     (s.serviceLocation || " ") +
-    pad(s.centuryIndicator, 1)
+    s.centuryIndicator
   );
 }
 
