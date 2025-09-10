@@ -924,8 +924,7 @@ const ServicesScreen = ({ navigation }: any) => {
 
       const age = service.patient.dateOfBirth
         ? new Date().getFullYear() -
-          new Date(service.patient.dateOfBirth).getFullYear() -
-          1
+          new Date(service.patient.dateOfBirth).getFullYear()
         : null;
 
       const sex = service.patient.sex || "unknown";

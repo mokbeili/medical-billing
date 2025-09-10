@@ -30,7 +30,8 @@ export class PhysicianService {
 
   constructor() {
     // Use environment variable or default to local development
-    this.baseUrl = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000";
+    this.baseUrl =
+      process.env.EXPO_PUBLIC_API_URL || "http://10.195.228.139:3000";
   }
 
   /**
@@ -124,12 +125,6 @@ export class PhysicianService {
         );
         if (attendingPhysician) {
           attendingPhysicianId = attendingPhysician.id;
-          console.log("Found attending physician:", attendingPhysician.name);
-        } else {
-          console.log(
-            "No matching attending physician found for:",
-            patientData.attendingPhysician
-          );
         }
       }
 
@@ -140,12 +135,6 @@ export class PhysicianService {
         );
         if (familyPhysician) {
           familyPhysicianId = familyPhysician.id;
-          console.log("Found family physician:", familyPhysician.name);
-        } else {
-          console.log(
-            "No matching family physician found for:",
-            patientData.familyPhysician
-          );
         }
       }
 

@@ -13,9 +13,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   const awsSecretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
   const awsRegion = process.env.AWS_REGION || "ca-central-1";
   const apiBaseUrl =
-    process.env.EXPO_PUBLIC_API_BASE_URL ||
-    process.env.API_BASE_URL ||
-    "https://www.myonhealth.ca";
+    process.env.EXPO_PUBLIC_API_BASE_URL || "https://www.myonhealth.ca";
   const appEnv = process.env.APP_ENV || "development";
 
   const isDev = appEnv === "development";

@@ -38,19 +38,30 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
   const device = useCameraDevice("back");
   const { hasPermission, requestPermission } = useCameraPermission();
   const [liveText, setLiveText] = useState<string>("");
-  const [isProcessing, setIsProcessing] = useState(false);
   const [scannedData, setScannedData] = useState<ScannedPatientData | null>(
     null
   );
-  const [isScanning, setIsScanning] = useState(true);
+  const [isScanning, setIsScanning] = useState(false);
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
+  const [isScanningEnabled, setIsScanningEnabled] = useState(false);
+  const [scanTimer, setScanTimer] = useState<NodeJS.Timeout | null>(null);
+  const [scanTimeRemaining, setScanTimeRemaining] = useState(0);
 
   React.useEffect(() => {
     if (!hasPermission) {
       requestPermission();
     }
   }, [hasPermission]);
+
+  // Cleanup timer on unmount
+  React.useEffect(() => {
+    return () => {
+      if (scanTimer) {
+        clearInterval(scanTimer);
+      }
+    };
+  }, [scanTimer]);
 
   const autoSubmit = React.useCallback(
     async (text: string) => {
@@ -59,8 +70,16 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
         const parsed = textRecognitionService.parsePatientData(text);
         if (parsed) {
           setHasSubmitted(true);
-          setIsScanning(false); // stop scanning
-          setIsClosing(true); // show closing state & unmount camera
+          setIsScanning(false);
+          setIsScanningEnabled(false);
+          setIsClosing(true);
+
+          // Clear the scan timer
+          if (scanTimer) {
+            clearInterval(scanTimer);
+            setScanTimer(null);
+          }
+
           await AsyncStorage.setItem(
             "scannedPatientData",
             JSON.stringify(parsed)
@@ -74,7 +93,7 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
         // ignore and keep scanning
       }
     },
-    [hasSubmitted, navigation]
+    [hasSubmitted, navigation, scanTimer]
   );
 
   // Create runOnJS callbacks compatible with VisionCamera's Worklets runtime
@@ -90,9 +109,9 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
   const frameProcessor = useFrameProcessor(
     (frame) => {
       "worklet";
-      if (!isScanning) return;
+      if (!isScanning || !isScanningEnabled) return;
 
-      runAtTargetFps(5, () => {
+      runAtTargetFps(10, () => {
         "worklet";
         const ocr = scanOCR(frame);
         if (ocr?.result?.text?.length > 3) {
@@ -101,7 +120,7 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
         }
       });
     },
-    [isScanning, onSetLiveText, onAutoSubmit]
+    [isScanning, isScanningEnabled, onSetLiveText, onAutoSubmit]
   );
 
   const processExtractedText = async (text: string) => {
@@ -127,7 +146,8 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
           {
             text: "Continue Scanning",
             onPress: () => {
-              setIsScanning(true);
+              setIsScanning(false);
+              setIsScanningEnabled(false);
               setScannedData(null);
             },
           },
@@ -138,29 +158,40 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
     }
   };
 
-  const handleProcessCurrentText = async () => {
-    if (liveText.length > 0) {
-      setIsProcessing(true);
-      try {
-        await processExtractedText(liveText);
-      } catch (error) {
-        console.error("Error processing text:", error);
-        Alert.alert("Error", "Failed to process text. Please try again.");
-      } finally {
-        setIsProcessing(false);
-      }
-    }
-  };
-
   const handleRetry = () => {
     setLiveText("");
     setScannedData(null);
-    setIsScanning(true);
+    setIsScanning(false);
+    setIsScanningEnabled(false);
     setHasSubmitted(false);
+    setScanTimeRemaining(0);
+    if (scanTimer) {
+      clearInterval(scanTimer);
+      setScanTimer(null);
+    }
   };
 
-  const handleToggleScanning = () => {
-    setIsScanning(!isScanning);
+  const handleStartScanning = () => {
+    setIsScanningEnabled(true);
+    setIsScanning(true);
+    setScanTimeRemaining(5);
+
+    // Start 5-second countdown timer
+    const timer = setInterval(() => {
+      setScanTimeRemaining((prev) => {
+        if (prev <= 1) {
+          // Time's up, stop scanning
+          clearInterval(timer);
+          setIsScanning(false);
+          setIsScanningEnabled(false);
+          setScanTimer(null);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    setScanTimer(timer);
   };
 
   if (device == null || !hasPermission) {
@@ -168,9 +199,9 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color="#1e293b" />
+            <Ionicons name="arrow-back" size={24} color="#ffffff" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Live Document Scanner</Text>
+          <Text style={styles.headerTitle}>Admission Scanner</Text>
           <View style={{ width: 24 }} />
         </View>
         <View style={styles.permissionContainer}>
@@ -189,25 +220,19 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#1e293b" />
+          <Ionicons name="arrow-back" size={24} color="#ffffff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Live Document Scanner</Text>
-        <TouchableOpacity onPress={handleToggleScanning}>
-          <Ionicons
-            name={isScanning ? "pause" : "play"}
-            size={24}
-            color="#1e293b"
-          />
-        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Admission Scanner</Text>
+        <View style={{ width: 24 }} />
       </View>
 
       <View style={styles.cameraContainer}>
-        {isScanning && !hasSubmitted ? (
+        {!hasSubmitted ? (
           <Camera
             style={StyleSheet.absoluteFill}
             device={device}
-            isActive={isScanning}
-            frameProcessor={frameProcessor}
+            isActive={true}
+            frameProcessor={isScanningEnabled ? frameProcessor : undefined}
             pixelFormat="yuv"
           />
         ) : (
@@ -226,26 +251,20 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
               <View style={[styles.corner, styles.cornerBottomRight]} />
             </View>
             <Text style={styles.scanText}>
-              Position document within the frame
+              {isScanningEnabled
+                ? `Scanning... ${scanTimeRemaining}s remaining`
+                : "Position document then scan"}
             </Text>
-          </View>
-        )}
-
-        {/* Live text display */}
-        {!isClosing && liveText.length > 0 && (
-          <View style={styles.liveTextContainer}>
-            <Text style={styles.liveTextLabel}>Detected Text:</Text>
-            <Text style={styles.liveText} numberOfLines={3}>
-              {liveText}
-            </Text>
-            <Button
-              mode="contained"
-              onPress={handleProcessCurrentText}
-              disabled={isProcessing}
-              style={styles.processButton}
-            >
-              {isProcessing ? "Processing..." : "Process Text"}
-            </Button>
+            {!isScanningEnabled && (
+              <Button
+                mode="contained"
+                onPress={handleStartScanning}
+                style={styles.startScanButton}
+                icon="camera"
+              >
+                Start Scan
+              </Button>
+            )}
           </View>
         )}
       </View>
@@ -408,6 +427,10 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 8,
   },
+  startScanButton: {
+    marginTop: 20,
+    backgroundColor: "#00ff88",
+  },
   liveTextContainer: {
     position: "absolute",
     bottom: 20,
@@ -428,9 +451,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 12,
     lineHeight: 20,
-  },
-  processButton: {
-    marginTop: 8,
   },
   dataCard: {
     margin: 16,

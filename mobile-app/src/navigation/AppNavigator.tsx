@@ -71,12 +71,12 @@ const MainTabs = () => {
       <Tab.Screen
         name="Search"
         component={SearchScreen}
-        options={{ title: "AI Search" }}
+        options={{ title: "Code Search" }}
       />
       <Tab.Screen
         name="Services"
         component={ServicesStack}
-        options={{ title: "Services" }}
+        options={{ title: "Claims" }}
       />
       <Tab.Screen
         name="ICDCodes"

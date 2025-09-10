@@ -14,7 +14,19 @@ export function formatFullDate(date: Date | string | null | undefined): string {
   if (!date) return "";
 
   try {
-    const dateObj = typeof date === "string" ? new Date(date) : date;
+    let dateObj: Date;
+
+    if (typeof date === "string") {
+      // Handle YYYY-MM-DD format as local date to avoid timezone issues
+      if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        const [year, month, day] = date.split("-").map(Number);
+        dateObj = new Date(year, month - 1, day); // month is 0-indexed
+      } else {
+        dateObj = new Date(date);
+      }
+    } else {
+      dateObj = date;
+    }
 
     // Check if date is valid
     if (isNaN(dateObj.getTime())) {
@@ -73,13 +85,29 @@ export function formatDateInput(
   if (!date) return "";
 
   try {
-    const dateObj = typeof date === "string" ? new Date(date) : date;
+    let dateObj: Date;
+
+    if (typeof date === "string") {
+      // Handle YYYY-MM-DD format as local date to avoid timezone issues
+      if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        const [year, month, day] = date.split("-").map(Number);
+        dateObj = new Date(year, month - 1, day); // month is 0-indexed
+      } else {
+        dateObj = new Date(date);
+      }
+    } else {
+      dateObj = date;
+    }
 
     if (isNaN(dateObj.getTime())) {
       return "";
     }
 
-    return dateObj.toISOString().split("T")[0];
+    // Use local date components to avoid timezone conversion
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+    const day = String(dateObj.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
   } catch (error) {
     console.error("Error formatting date for input:", error);
     return "";
@@ -97,7 +125,19 @@ export function formatDateTime(date: Date | string | null | undefined): string {
   if (!date) return "";
 
   try {
-    const dateObj = typeof date === "string" ? new Date(date) : date;
+    let dateObj: Date;
+
+    if (typeof date === "string") {
+      // Handle YYYY-MM-DD format as local date to avoid timezone issues
+      if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        const [year, month, day] = date.split("-").map(Number);
+        dateObj = new Date(year, month - 1, day); // month is 0-indexed
+      } else {
+        dateObj = new Date(date);
+      }
+    } else {
+      dateObj = date;
+    }
 
     if (isNaN(dateObj.getTime())) {
       return "";
