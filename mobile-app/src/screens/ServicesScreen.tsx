@@ -169,6 +169,27 @@ const ServicesScreen = ({ navigation }: any) => {
     return hasType57BilledToday || hasNonType57BilledToday;
   };
 
+  // Helper function to get non-type57 codes billed for today
+  const getNonType57CodesBilledToday = (service: Service): BillingCode[] => {
+    const today = new Date().toISOString().split("T")[0];
+
+    return service.serviceCodes
+      .filter((serviceCode) => {
+        const billingCode = serviceCode.billingCode;
+        if (billingCode.billing_record_type !== 57) {
+          if (serviceCode.serviceDate) {
+            // Convert the service date to date only for comparison
+            const serviceDateOnly = new Date(serviceCode.serviceDate)
+              .toISOString()
+              .split("T")[0];
+            return serviceDateOnly === today;
+          }
+        }
+        return false;
+      })
+      .map((serviceCode) => serviceCode.billingCode);
+  };
+
   // Helper function to sort services
   const sortServices = (services: Service[], sortBy: string): Service[] => {
     const sorted = [...services];
@@ -720,44 +741,6 @@ const ServicesScreen = ({ navigation }: any) => {
       Alert.alert("Error", "Failed to discharge service. Please try again.");
     }
   };
-
-  const handleSelectAll = () => {
-    if (filteredServices.length === 0) return;
-
-    // If all filtered services are already selected, deselect all
-    if (
-      filteredServices.every((service) => selectedServices.includes(service.id))
-    ) {
-      setSelectedServices([]);
-      return;
-    }
-
-    // Get the first service to use as reference for validation
-    const firstService = filteredServices[0];
-    const firstServiceCode = firstService.serviceCodes[0];
-
-    // Only select services that match the first service's physician and jurisdiction and have the current status filter
-    const validServices = filteredServices.filter((service) => {
-      const serviceCode = service.serviceCodes[0];
-      const hasMatchingStatus =
-        statusFilter === "OPEN_PENDING"
-          ? service.status === "OPEN" || service.status === "PENDING"
-          : statusFilter === "BILLED_TODAY"
-          ? isBilledToday(service)
-          : service.status === statusFilter;
-      return (
-        serviceCode &&
-        firstServiceCode &&
-        hasMatchingStatus &&
-        service.physician?.id === firstService.physician?.id &&
-        serviceCode.billingCode.section.code ===
-          firstServiceCode.billingCode.section.code
-      );
-    });
-
-    setSelectedServices(validServices.map((service) => service.id));
-  };
-
   // Function to check if service has been rounded
   const hasRounding = (service: Service): boolean => {
     return service.serviceCodes.some((serviceCode) =>
@@ -1150,9 +1133,37 @@ const ServicesScreen = ({ navigation }: any) => {
                 </Text>
               </View>
             )}
-            {roundingInfo && (
+            {(roundingInfo ||
+              getNonType57CodesBilledToday(service).length > 0) && (
               <View style={styles.roundingInfoContainer}>
-                <Text style={styles.roundingInfo}>{roundingInfo}</Text>
+                <View style={styles.roundingAndCodesRow}>
+                  {roundingInfo ? (
+                    <Text style={styles.roundingInfo}>{roundingInfo}</Text>
+                  ) : (
+                    <View style={styles.emptyRoundingInfo} />
+                  )}
+                  {(() => {
+                    const nonType57CodesToday =
+                      getNonType57CodesBilledToday(service);
+                    if (nonType57CodesToday.length > 0) {
+                      return (
+                        <View style={styles.nonType57CodesList}>
+                          {nonType57CodesToday.map((code, index) => (
+                            <View
+                              key={code.id}
+                              style={styles.nonType57CodeChip}
+                            >
+                              <Text style={styles.nonType57CodeText}>
+                                {code.code}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      );
+                    }
+                    return <View style={styles.emptyCodesList} />;
+                  })()}
+                </View>
               </View>
             )}
           </Card.Content>
@@ -2568,7 +2579,12 @@ const styles = StyleSheet.create({
   },
   roundingInfoContainer: {
     marginTop: 8,
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
+  },
+  roundingAndCodesRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   roundingInfo: {
     fontSize: 12,
@@ -3090,6 +3106,36 @@ const styles = StyleSheet.create({
   clearFiltersButtonSmall: {
     padding: 4,
     marginLeft: 8,
+  },
+  // Styles for non-type57 codes billed today display
+  nonType57CodesList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "flex-start",
+    justifyContent: "flex-end",
+    maxWidth: 180, // Constrain width to stay within card boundaries
+  },
+  nonType57CodeChip: {
+    backgroundColor: "#e0f2fe",
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginLeft: 2,
+    marginBottom: 2,
+    borderWidth: 1,
+    borderColor: "#0891b2",
+  },
+  nonType57CodeText: {
+    fontSize: 12,
+    color: "#0e7490",
+    fontWeight: "500",
+    textAlign: "center",
+  },
+  emptyRoundingInfo: {
+    flex: 1,
+  },
+  emptyCodesList: {
+    width: 0,
   },
 });
 
