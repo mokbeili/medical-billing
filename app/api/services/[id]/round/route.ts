@@ -287,6 +287,7 @@ export async function POST(
           }),
           changedBy: parseInt(user.id),
           notes: "Service code created during rounding operation",
+          roundingDate: today,
         },
       });
 
@@ -329,6 +330,7 @@ export async function POST(
                   }),
                   changedBy: parseInt(user.id),
                   notes: "Units increased during rounding operation",
+                  roundingDate: today,
                 },
               });
 
@@ -395,6 +397,7 @@ export async function POST(
                     }),
                     changedBy: parseInt(user.id),
                     notes: "Service end date set during rounding operation",
+                    roundingDate: today,
                   },
                 });
 
@@ -435,6 +438,7 @@ export async function POST(
                   }),
                   changedBy: parseInt(user.id),
                   notes: "Service code created during rounding operation",
+                  roundingDate: today,
                 },
               });
 

@@ -31,7 +31,7 @@ export class PhysicianService {
   constructor() {
     // Use environment variable or default to local development
     this.baseUrl =
-      process.env.EXPO_PUBLIC_API_URL || "http://10.195.228.139:3000";
+      process.env.EXPO_PUBLIC_API_URL || "http://172.16.1.172:3000";
   }
 
   /**

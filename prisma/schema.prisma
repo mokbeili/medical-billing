@@ -475,6 +475,7 @@ model ServiceCodeChangeLog {
   changedBy     Int?                  @map("changed_by")
   changedAt     DateTime              @default(now()) @map("changed_at")
   notes         String?
+  roundingDate  DateTime?             @map("rounding_date")
 
   serviceCode ServiceCodes @relation(fields: [serviceCodeId], references: [id], onDelete: Cascade)
   user        User?        @relation(fields: [changedBy], references: [id])
