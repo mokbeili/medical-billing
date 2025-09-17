@@ -14,6 +14,8 @@ import {
 } from "react-native-vision-camera";
 import { Worklets } from "react-native-worklets-core";
 
+import ServiceCreationModal from "../components/ServiceCreationModal";
+import { useAuth } from "../contexts/AuthContext";
 import { formatFullDate } from "../utils/dateUtils";
 import textRecognitionService from "../utils/expoTextRecognitionService";
 
@@ -46,6 +48,7 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
 }) => {
   const device = useCameraDevice("back");
   const { hasPermission, requestPermission } = useCameraPermission();
+  const { user } = useAuth();
   const [liveText, setLiveText] = useState<string>("");
   const [scannedData, setScannedData] = useState<ScannedPatientData | null>(
     null
@@ -72,12 +75,40 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
     gender: 0,
     admitDate: 0,
   });
+  const [showServiceModal, setShowServiceModal] = useState(false);
+  const [physicianId, setPhysicianId] = useState<string>("");
 
   React.useEffect(() => {
     if (!hasPermission) {
       requestPermission();
     }
   }, [hasPermission]);
+
+  // Get physician ID from route params, AsyncStorage, or user ID
+  React.useEffect(() => {
+    const getPhysicianId = async () => {
+      try {
+        // Priority: route params > AsyncStorage > user ID
+        if (route?.params?.physicianId) {
+          setPhysicianId(route.params.physicianId);
+        } else {
+          const storedPhysicianId = await AsyncStorage.getItem("physicianId");
+          if (storedPhysicianId) {
+            setPhysicianId(storedPhysicianId);
+          } else if (user?.id) {
+            setPhysicianId(user.id);
+          } else {
+            console.log(
+              "No physician ID found in route params, storage, or user"
+            );
+          }
+        }
+      } catch (error) {
+        console.error("Error getting physician ID:", error);
+      }
+    };
+    getPhysicianId();
+  }, [route?.params?.physicianId, user?.id]);
 
   // Cleanup timer on unmount
   React.useEffect(() => {
@@ -180,17 +211,13 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
 
               // Build final patient data from most common occurrences
               const finalData = buildPatientDataFromOccurrences(newOccurrences);
+              setScannedData(finalData);
 
-              // Store data and navigate back asynchronously
-              AsyncStorage.setItem(
-                "scannedPatientData",
-                JSON.stringify(finalData)
-              ).then(() => {
-                // Allow UI to update (unmount Camera) before navigating back
-                setTimeout(() => {
-                  navigation.goBack();
-                }, 50);
-              });
+              // Show service creation modal instead of automatically creating service
+              setTimeout(() => {
+                setShowServiceModal(true);
+                setIsClosing(false);
+              }, 1000);
             }
 
             return newOccurrences;
@@ -245,15 +272,9 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
         setIsScanning(false);
         Alert.alert("Success", "Patient information extracted successfully!", [
           {
-            text: "Use This Data",
-            onPress: async () => {
-              // Store scanned data in AsyncStorage
-              await AsyncStorage.setItem(
-                "scannedPatientData",
-                JSON.stringify(parsedData)
-              );
-              // Go back to the previous screen
-              navigation.goBack();
+            text: "Create Service",
+            onPress: () => {
+              setShowServiceModal(true);
             },
           },
           {
@@ -304,6 +325,20 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
     setIsScanningEnabled(true);
     setIsScanning(true);
     setScanTimeRemaining(0); // No timer - scan until we have enough occurrences
+  };
+
+  const handleServiceModalClose = () => {
+    setShowServiceModal(false);
+    setScannedData(null);
+    handleRetry(); // Reset the scan state
+  };
+
+  const handleServiceSuccess = () => {
+    setShowServiceModal(false);
+    setScannedData(null);
+    handleRetry(); // Reset the scan state
+    // Navigate back to services screen
+    navigation.goBack();
   };
 
   if (device == null || !hasPermission) {
@@ -428,17 +463,13 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
             <View style={styles.buttonContainer}>
               <Button
                 mode="contained"
-                onPress={async () => {
-                  await AsyncStorage.setItem(
-                    "scannedPatientData",
-                    JSON.stringify(scannedData)
-                  );
-                  navigation.goBack();
+                onPress={() => {
+                  setShowServiceModal(true);
                 }}
                 style={styles.button}
                 icon="check"
               >
-                Use This Data
+                Create Service
               </Button>
               <Button
                 mode="outlined"
@@ -451,6 +482,17 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
             </View>
           </Card.Content>
         </Card>
+      )}
+
+      {/* Service Creation Modal */}
+      {scannedData && (
+        <ServiceCreationModal
+          visible={showServiceModal}
+          onClose={handleServiceModalClose}
+          onSuccess={handleServiceSuccess}
+          scannedData={scannedData}
+          physicianId={physicianId}
+        />
       )}
     </SafeAreaView>
   );

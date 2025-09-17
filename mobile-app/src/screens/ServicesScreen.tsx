@@ -283,13 +283,17 @@ const ServicesScreen = ({ navigation }: any) => {
   }, [services, searchQuery, statusFilter, sortBy]);
 
   const handleCameraScan = () => {
-    navigation.navigate("CameraScan");
+    const currentPhysician = physicians?.[0];
+    if (currentPhysician) {
+      navigation.navigate("CameraScan", { physicianId: currentPhysician.id });
+    } else {
+      Alert.alert("Error", "No physician found. Please contact support.");
+    }
   };
 
   const handleScannedPatientData = async (scannedData: any) => {
     try {
       // Validate that all required patient information is present
-      console.log(scannedData);
       if (
         !scannedData.firstName ||
         !scannedData.lastName ||

@@ -29,6 +29,7 @@
     "@tanstack/react-query": "^5.83.0",
     "axios": "^1.10.0",
     "crypto-js": "^4.2.0",
+    "date-fns": "^4.1.0",
     "expo": "~53.0.20",
     "expo-camera": "^16.1.11",
     "expo-constants": "~17.1.7",
@@ -39,6 +40,7 @@
     "expo-media-library": "^17.1.7",
     "expo-status-bar": "~2.2.3",
     "expo-text-recognition": "^0.1.1",
+    "expo-updates": "~0.28.17",
     "mime": "^3.0.0",
     "react": "19.0.0",
     "react-native": "0.79.5",
@@ -50,8 +52,7 @@
     "react-native-screens": "~4.11.1",
     "react-native-vector-icons": "^10.2.0",
     "react-native-vision-camera": "^4.7.1",
-    "react-native-worklets-core": "^1.6.2",
-    "expo-updates": "~0.28.17"
+    "react-native-worklets-core": "^1.6.2"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

@@ -452,7 +452,6 @@ const ServiceFormScreen = ({ navigation }: any) => {
       if (params?.scannedPatientData && !isEditing) {
         const scannedData = params.scannedPatientData;
 
-        // Check if patient already exists
         if (patients) {
           const existingPatient = patients.find(
             (patient) => patient.billingNumber === scannedData.billingNumber
