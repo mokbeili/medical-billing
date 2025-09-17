@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { ActivityIndicator, Button, Card } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
+import ServiceCreationModal from "../components/ServiceCreationModal";
 import {
   billingCodesAPI,
   patientsAPI,
@@ -72,6 +73,11 @@ const ServicesScreen = ({ navigation }: any) => {
   const [physicianFrequentCodes, setPhysicianFrequentCodes] = useState<
     BillingCode[]
   >([]);
+
+  // Service creation modal state
+  const [showServiceCreationModal, setShowServiceCreationModal] =
+    useState(false);
+  const [scannedPatientData, setScannedPatientData] = useState<any>(null);
 
   // Sub-selection flow state (mirrors BillingCodeSearchScreen)
   interface CodeSubSelection {
@@ -356,41 +362,17 @@ const ServicesScreen = ({ navigation }: any) => {
       );
 
       if (!openServices || openServices.length === 0) {
-        // Create a new service for the patient
-        try {
-          const serviceData = {
-            physicianId: currentPhysician.id,
-            patientId: patientId,
-            serviceDate: scannedData.serviceDate || getLocalYMD(new Date()),
-            referringPhysicianId: null,
-            icdCodeId: null,
-            healthInstitutionId: null,
-            summary: "",
-            serviceLocation: null,
-            locationOfService: null,
-            serviceStatus: "OPEN",
-            billingCodes: [],
-          };
-
-          const newService = await servicesAPI.create(serviceData);
-          await refetch();
-          Alert.alert("Success", "New service created for patient!");
-
-          // Navigate to service form to add billing codes
-          navigation.navigate("ServiceForm", { serviceId: newService.id });
-        } catch (error) {
-          console.error("Error creating service:", error);
-          Alert.alert(
-            "Error",
-            "Failed to create new service. Please try again."
-          );
-          return;
-        }
+        // No open services found - show service creation modal
+        setScannedPatientData(scannedData);
+        setShowServiceCreationModal(true);
+      } else {
+        // Patient already has open services - set search query to billing number
+        setSearchQuery(scannedData.billingNumber);
+        Alert.alert(
+          "Patient Found",
+          `Patient already has ${openServices.length} open service(s). Showing in search results.`
+        );
       }
-
-      // Set search query to patient's full name
-      const fullName = `${scannedData.firstName} ${scannedData.lastName}`;
-      setSearchQuery(fullName);
     } catch (error) {
       console.error("Error handling scanned patient data:", error);
       Alert.alert(
@@ -578,50 +560,12 @@ const ServicesScreen = ({ navigation }: any) => {
       setShowSuggestionsModal(true);
     } catch (e) {
       console.error("Error preparing suggestions:", e);
-      // fallback to search screen
-      navigation.navigate("BillingCodeSearch", {
-        onSelect: async (
-          selectedCodes: BillingCode[],
-          subSelections?: any[]
-        ) => {
-          try {
-            const duplicateCodes = selectedCodes.filter((selectedCode) =>
-              todaysCodes.some(
-                (existingCode) =>
-                  existingCode.billingCode.id === selectedCode.id
-              )
-            );
-
-            if (duplicateCodes.length > 0) {
-              const duplicateNames = duplicateCodes
-                .map((code) => code.code)
-                .join(", ");
-              Alert.alert(
-                "Duplicate Codes Detected",
-                `The following codes have already been added today: ${duplicateNames}. Do you want to continue?`,
-                [
-                  { text: "Cancel", style: "cancel" },
-                  {
-                    text: "Continue",
-                    onPress: () =>
-                      addCodesToService(service, selectedCodes, subSelections),
-                  },
-                ]
-              );
-            } else {
-              await addCodesToService(service, selectedCodes, subSelections);
-            }
-          } catch (error) {
-            console.error("Error adding service codes:", error);
-            Alert.alert(
-              "Error",
-              "Failed to add service codes. Please try again."
-            );
-          }
-        },
-        existingCodes: todaysCodes.map((code) => code.billingCode),
-        serviceDate: today,
-      });
+      // Show error message instead of navigating away
+      Alert.alert(
+        "Error",
+        "Unable to load billing code suggestions. Please try again later.",
+        [{ text: "OK" }]
+      );
     }
   };
 
@@ -700,6 +644,17 @@ const ServicesScreen = ({ navigation }: any) => {
       console.error("Error creating claim:", error);
       Alert.alert("Error", "Failed to create submission");
     }
+  };
+
+  const handleServiceCreationModalClose = () => {
+    setShowServiceCreationModal(false);
+    setScannedPatientData(null);
+  };
+
+  const handleServiceCreationSuccess = () => {
+    setShowServiceCreationModal(false);
+    setScannedPatientData(null);
+    refetch(); // Refresh the services list
   };
 
   const handleDischarge = async (service: Service) => {
@@ -2367,6 +2322,17 @@ const ServicesScreen = ({ navigation }: any) => {
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+
+      {/* Service Creation Modal */}
+      {scannedPatientData && (
+        <ServiceCreationModal
+          visible={showServiceCreationModal}
+          onClose={handleServiceCreationModalClose}
+          onSuccess={handleServiceCreationSuccess}
+          scannedData={scannedPatientData}
+          physicianId={physicians?.[0]?.id || ""}
+        />
+      )}
     </SafeAreaView>
   );
 };

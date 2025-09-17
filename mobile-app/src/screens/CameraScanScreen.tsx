@@ -14,7 +14,6 @@ import {
 } from "react-native-vision-camera";
 import { Worklets } from "react-native-worklets-core";
 
-import ServiceCreationModal from "../components/ServiceCreationModal";
 import { useAuth } from "../contexts/AuthContext";
 import { formatFullDate } from "../utils/dateUtils";
 import textRecognitionService from "../utils/expoTextRecognitionService";
@@ -75,7 +74,6 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
     gender: 0,
     admitDate: 0,
   });
-  const [showServiceModal, setShowServiceModal] = useState(false);
   const [physicianId, setPhysicianId] = useState<string>("");
 
   React.useEffect(() => {
@@ -213,10 +211,19 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
               const finalData = buildPatientDataFromOccurrences(newOccurrences);
               setScannedData(finalData);
 
-              // Show service creation modal instead of automatically creating service
-              setTimeout(() => {
-                setShowServiceModal(true);
-                setIsClosing(false);
+              // Store scanned data in AsyncStorage for ServicesScreen to process
+              setTimeout(async () => {
+                try {
+                  await AsyncStorage.setItem(
+                    "scannedPatientData",
+                    JSON.stringify(finalData)
+                  );
+                  setIsClosing(false);
+                  navigation.navigate("ServicesList"); // Navigate to ServicesScreen
+                } catch (error) {
+                  console.error("Error storing scanned data:", error);
+                  setIsClosing(false);
+                }
               }, 1000);
             }
 
@@ -273,8 +280,16 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
         Alert.alert("Success", "Patient information extracted successfully!", [
           {
             text: "Create Service",
-            onPress: () => {
-              setShowServiceModal(true);
+            onPress: async () => {
+              try {
+                await AsyncStorage.setItem(
+                  "scannedPatientData",
+                  JSON.stringify(parsedData)
+                );
+                navigation.navigate("ServicesList"); // Navigate to ServicesScreen
+              } catch (error) {
+                console.error("Error storing scanned data:", error);
+              }
             },
           },
           {
@@ -325,20 +340,6 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
     setIsScanningEnabled(true);
     setIsScanning(true);
     setScanTimeRemaining(0); // No timer - scan until we have enough occurrences
-  };
-
-  const handleServiceModalClose = () => {
-    setShowServiceModal(false);
-    setScannedData(null);
-    handleRetry(); // Reset the scan state
-  };
-
-  const handleServiceSuccess = () => {
-    setShowServiceModal(false);
-    setScannedData(null);
-    handleRetry(); // Reset the scan state
-    // Navigate back to services screen
-    navigation.goBack();
   };
 
   if (device == null || !hasPermission) {
@@ -463,8 +464,16 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
             <View style={styles.buttonContainer}>
               <Button
                 mode="contained"
-                onPress={() => {
-                  setShowServiceModal(true);
+                onPress={async () => {
+                  try {
+                    await AsyncStorage.setItem(
+                      "scannedPatientData",
+                      JSON.stringify(scannedData)
+                    );
+                    navigation.navigate("ServicesList"); // Navigate to ServicesScreen
+                  } catch (error) {
+                    console.error("Error storing scanned data:", error);
+                  }
                 }}
                 style={styles.button}
                 icon="check"
@@ -482,17 +491,6 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
             </View>
           </Card.Content>
         </Card>
-      )}
-
-      {/* Service Creation Modal */}
-      {scannedData && (
-        <ServiceCreationModal
-          visible={showServiceModal}
-          onClose={handleServiceModalClose}
-          onSuccess={handleServiceSuccess}
-          scannedData={scannedData}
-          physicianId={physicianId}
-        />
       )}
     </SafeAreaView>
   );
