@@ -26,6 +26,15 @@ interface ScannedPatientData {
   serviceDate?: string;
 }
 
+interface FieldOccurrences {
+  billingNumber: string[];
+  firstName: string[];
+  lastName: string[];
+  dateOfBirth: string[];
+  gender: string[];
+  admitDate: string[];
+}
+
 interface CameraScanScreenProps {
   navigation: any;
   route: any;
@@ -47,6 +56,22 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
   const [isScanningEnabled, setIsScanningEnabled] = useState(false);
   const [scanTimer, setScanTimer] = useState<NodeJS.Timeout | null>(null);
   const [scanTimeRemaining, setScanTimeRemaining] = useState(0);
+  const [fieldOccurrences, setFieldOccurrences] = useState<FieldOccurrences>({
+    billingNumber: [],
+    firstName: [],
+    lastName: [],
+    dateOfBirth: [],
+    gender: [],
+    admitDate: [],
+  });
+  const [scanProgress, setScanProgress] = useState({
+    billingNumber: 0,
+    firstName: 0,
+    lastName: 0,
+    dateOfBirth: 0,
+    gender: 0,
+    admitDate: 0,
+  });
 
   React.useEffect(() => {
     if (!hasPermission) {
@@ -63,37 +88,125 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
     };
   }, [scanTimer]);
 
-  const autoSubmit = React.useCallback(
+  // Helper function to find the most common occurrence in an array
+  const findMostCommon = (arr: string[]): string => {
+    if (arr.length === 0) return "";
+
+    const frequency: { [key: string]: number } = {};
+    arr.forEach((item) => {
+      frequency[item] = (frequency[item] || 0) + 1;
+    });
+
+    return Object.keys(frequency).reduce((a, b) =>
+      frequency[a] > frequency[b] ? a : b
+    );
+  };
+
+  // Helper function to check if we have enough occurrences for all required fields
+  const hasEnoughOccurrences = (occurrences: FieldOccurrences): boolean => {
+    const requiredFields = [
+      "billingNumber",
+      "firstName",
+      "lastName",
+      "dateOfBirth",
+      "gender",
+      "admitDate",
+    ];
+    return requiredFields.every(
+      (field) => occurrences[field as keyof FieldOccurrences].length >= 5
+    );
+  };
+
+  // Helper function to build final patient data from occurrences
+  const buildPatientDataFromOccurrences = (
+    occurrences: FieldOccurrences
+  ): ScannedPatientData => {
+    return {
+      billingNumber: findMostCommon(occurrences.billingNumber),
+      firstName: findMostCommon(occurrences.firstName),
+      lastName: findMostCommon(occurrences.lastName),
+      dateOfBirth: findMostCommon(occurrences.dateOfBirth),
+      gender: findMostCommon(occurrences.gender),
+      serviceDate: findMostCommon(occurrences.admitDate) || undefined,
+    };
+  };
+
+  const processScannedText = React.useCallback(
     async (text: string) => {
       if (hasSubmitted) return;
       try {
         const parsed = textRecognitionService.parsePatientData(text);
         if (parsed) {
-          setHasSubmitted(true);
-          setIsScanning(false);
-          setIsScanningEnabled(false);
-          setIsClosing(true);
+          // Update field occurrences
+          setFieldOccurrences((prev) => {
+            const newOccurrences = {
+              billingNumber: [
+                ...prev.billingNumber,
+                parsed.billingNumber,
+              ].filter(Boolean),
+              firstName: [...prev.firstName, parsed.firstName].filter(Boolean),
+              lastName: [...prev.lastName, parsed.lastName].filter(Boolean),
+              dateOfBirth: [...prev.dateOfBirth, parsed.dateOfBirth].filter(
+                Boolean
+              ),
+              gender: [...prev.gender, parsed.gender].filter(Boolean),
+              admitDate: [...prev.admitDate, parsed.serviceDate || ""].filter(
+                Boolean
+              ),
+            };
 
-          // Clear the scan timer
-          if (scanTimer) {
-            clearInterval(scanTimer);
-            setScanTimer(null);
-          }
+            // Update progress
+            setScanProgress({
+              billingNumber: newOccurrences.billingNumber.length,
+              firstName: newOccurrences.firstName.length,
+              lastName: newOccurrences.lastName.length,
+              dateOfBirth: newOccurrences.dateOfBirth.length,
+              gender: newOccurrences.gender.length,
+              admitDate: newOccurrences.admitDate.length,
+            });
 
-          await AsyncStorage.setItem(
-            "scannedPatientData",
-            JSON.stringify(parsed)
-          );
-          // Allow UI to update (unmount Camera) before navigating back
-          setTimeout(() => {
-            navigation.goBack();
-          }, 50);
+            // Check if we have enough occurrences
+            if (hasEnoughOccurrences(newOccurrences)) {
+              setHasSubmitted(true);
+              setIsScanning(false);
+              setIsScanningEnabled(false);
+              setIsClosing(true);
+
+              // Clear the scan timer
+              if (scanTimer) {
+                clearInterval(scanTimer);
+                setScanTimer(null);
+              }
+
+              // Build final patient data from most common occurrences
+              const finalData = buildPatientDataFromOccurrences(newOccurrences);
+
+              // Store data and navigate back asynchronously
+              AsyncStorage.setItem(
+                "scannedPatientData",
+                JSON.stringify(finalData)
+              ).then(() => {
+                // Allow UI to update (unmount Camera) before navigating back
+                setTimeout(() => {
+                  navigation.goBack();
+                }, 50);
+              });
+            }
+
+            return newOccurrences;
+          });
         }
       } catch (e) {
         // ignore and keep scanning
       }
     },
-    [hasSubmitted, navigation, scanTimer]
+    [
+      hasSubmitted,
+      navigation,
+      scanTimer,
+      hasEnoughOccurrences,
+      buildPatientDataFromOccurrences,
+    ]
   );
 
   // Create runOnJS callbacks compatible with VisionCamera's Worklets runtime
@@ -101,9 +214,9 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
     () => Worklets.createRunOnJS(setLiveText),
     []
   );
-  const onAutoSubmit = React.useMemo(
-    () => Worklets.createRunOnJS(autoSubmit),
-    [autoSubmit]
+  const onProcessScannedText = React.useMemo(
+    () => Worklets.createRunOnJS(processScannedText),
+    [processScannedText]
   );
 
   const frameProcessor = useFrameProcessor(
@@ -116,11 +229,11 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
         const ocr = scanOCR(frame);
         if (ocr?.result?.text?.length > 3) {
           onSetLiveText(ocr.result.text);
-          onAutoSubmit(ocr.result.text);
+          onProcessScannedText(ocr.result.text);
         }
       });
     },
-    [isScanning, isScanningEnabled, onSetLiveText, onAutoSubmit]
+    [isScanning, isScanningEnabled, onSetLiveText, onProcessScannedText]
   );
 
   const processExtractedText = async (text: string) => {
@@ -165,6 +278,22 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
     setIsScanningEnabled(false);
     setHasSubmitted(false);
     setScanTimeRemaining(0);
+    setFieldOccurrences({
+      billingNumber: [],
+      firstName: [],
+      lastName: [],
+      dateOfBirth: [],
+      gender: [],
+      admitDate: [],
+    });
+    setScanProgress({
+      billingNumber: 0,
+      firstName: 0,
+      lastName: 0,
+      dateOfBirth: 0,
+      gender: 0,
+      admitDate: 0,
+    });
     if (scanTimer) {
       clearInterval(scanTimer);
       setScanTimer(null);
@@ -174,24 +303,7 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
   const handleStartScanning = () => {
     setIsScanningEnabled(true);
     setIsScanning(true);
-    setScanTimeRemaining(5);
-
-    // Start 5-second countdown timer
-    const timer = setInterval(() => {
-      setScanTimeRemaining((prev) => {
-        if (prev <= 1) {
-          // Time's up, stop scanning
-          clearInterval(timer);
-          setIsScanning(false);
-          setIsScanningEnabled(false);
-          setScanTimer(null);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    setScanTimer(timer);
+    setScanTimeRemaining(0); // No timer - scan until we have enough occurrences
   };
 
   if (device == null || !hasPermission) {
@@ -252,7 +364,7 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
             </View>
             <Text style={styles.scanText}>
               {isScanningEnabled
-                ? `Scanning... ${scanTimeRemaining}s remaining`
+                ? "Scanning..."
                 : "Position document then scan"}
             </Text>
             {!isScanningEnabled && (
@@ -489,6 +601,38 @@ const styles = StyleSheet.create({
   },
   button: {
     marginBottom: 8,
+  },
+  progressContainer: {
+    marginTop: 20,
+    backgroundColor: "rgba(0,0,0,0.8)",
+    padding: 16,
+    borderRadius: 8,
+    minWidth: 250,
+  },
+  progressTitle: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  progressItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  progressLabel: {
+    color: "#ffffff",
+    fontSize: 14,
+    flex: 1,
+  },
+  progressValue: {
+    color: "#00ff88",
+    fontSize: 14,
+    fontWeight: "600",
+    minWidth: 40,
+    textAlign: "right",
   },
 });
 

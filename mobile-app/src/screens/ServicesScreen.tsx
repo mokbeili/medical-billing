@@ -289,6 +289,7 @@ const ServicesScreen = ({ navigation }: any) => {
   const handleScannedPatientData = async (scannedData: any) => {
     try {
       // Validate that all required patient information is present
+      console.log(scannedData);
       if (
         !scannedData.firstName ||
         !scannedData.lastName ||
@@ -311,11 +312,7 @@ const ServicesScreen = ({ navigation }: any) => {
 
       // Check if patient exists in physician's list
       const existingPatient = patients?.find(
-        (patient) =>
-          patient.billingNumber === scannedData.billingNumber &&
-          patient.firstName.toLowerCase() ===
-            scannedData.firstName.toLowerCase() &&
-          patient.lastName.toLowerCase() === scannedData.lastName.toLowerCase()
+        (patient) => patient.billingNumber === scannedData.billingNumber
       );
 
       let patientId: string;
