@@ -28,8 +28,19 @@ const ServicesScreen = ({ navigation }: any) => {
   const [filteredServices, setFilteredServices] = useState<Service[]>([]);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"OPEN" | "PENDING">("OPEN");
+  const [statusFilter, setStatusFilter] = useState<
+    "OPEN" | "PENDING" | "OPEN_PENDING" | "BILLED_TODAY"
+  >("OPEN");
+  const [sortBy, setSortBy] = useState<
+    | "lastNameAsc"
+    | "lastNameDesc"
+    | "firstNameAsc"
+    | "firstNameDesc"
+    | "admitDateAsc"
+    | "admitDateDesc"
+  >("lastNameAsc");
   const [showSearch, setShowSearch] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   const [showDischargeModal, setShowDischargeModal] = useState(false);
   const [dischargeDate, setDischargeDate] = useState("");
   const [pendingDischargeService, setPendingDischargeService] =
@@ -115,6 +126,87 @@ const ServicesScreen = ({ navigation }: any) => {
     retry: 1,
   });
 
+  // Helper function to check if a service was billed today
+  const isBilledToday = (service: Service): boolean => {
+    const today = new Date().toISOString().split("T")[0];
+
+    // Check for type 57 billing codes with roundingDate being today
+    const hasType57BilledToday = service.serviceCodes.some((serviceCode) => {
+      const billingCode = serviceCode.billingCode;
+      if (billingCode.billing_record_type === 57) {
+        // Check if there's a change log with roundingDate being today
+        return (
+          serviceCode.changeLogs?.some((log) => {
+            if (log.changeType === "ROUND" && log.roundingDate) {
+              // Convert the ISO datetime string to date only for comparison
+              const roundingDateOnly = new Date(log.roundingDate)
+                .toISOString()
+                .split("T")[0];
+              return roundingDateOnly === today;
+            }
+            return false;
+          }) || false
+        );
+      }
+      return false;
+    });
+
+    // Check for non-type 57 codes with service date being today
+    const hasNonType57BilledToday = service.serviceCodes.some((serviceCode) => {
+      const billingCode = serviceCode.billingCode;
+      if (billingCode.billing_record_type !== 57) {
+        if (serviceCode.serviceDate) {
+          // Convert the service date to date only for comparison
+          const serviceDateOnly = new Date(serviceCode.serviceDate)
+            .toISOString()
+            .split("T")[0];
+          return serviceDateOnly === today;
+        }
+      }
+      return false;
+    });
+
+    return hasType57BilledToday || hasNonType57BilledToday;
+  };
+
+  // Helper function to sort services
+  const sortServices = (services: Service[], sortBy: string): Service[] => {
+    const sorted = [...services];
+
+    switch (sortBy) {
+      case "lastNameAsc":
+        return sorted.sort((a, b) =>
+          a.patient.lastName.localeCompare(b.patient.lastName)
+        );
+      case "lastNameDesc":
+        return sorted.sort((a, b) =>
+          b.patient.lastName.localeCompare(a.patient.lastName)
+        );
+      case "firstNameAsc":
+        return sorted.sort((a, b) =>
+          a.patient.firstName.localeCompare(b.patient.firstName)
+        );
+      case "firstNameDesc":
+        return sorted.sort((a, b) =>
+          b.patient.firstName.localeCompare(a.patient.firstName)
+        );
+      case "admitDateAsc":
+        return sorted.sort(
+          (a, b) =>
+            new Date(a.serviceDate).getTime() -
+            new Date(b.serviceDate).getTime()
+        );
+      case "admitDateDesc":
+        return sorted.sort(
+          (a, b) =>
+            new Date(b.serviceDate).getTime() -
+            new Date(a.serviceDate).getTime()
+        );
+      default:
+        return sorted;
+    }
+  };
+
   useEffect(() => {
     if (services) {
       let filtered = [...services];
@@ -126,7 +218,17 @@ const ServicesScreen = ({ navigation }: any) => {
       filtered = filtered.filter((service) => service.patient != null);
 
       // Filter by status based on statusFilter
-      filtered = filtered.filter((service) => service.status === statusFilter);
+      if (statusFilter === "OPEN_PENDING") {
+        filtered = filtered.filter(
+          (service) => service.status === "OPEN" || service.status === "PENDING"
+        );
+      } else if (statusFilter === "BILLED_TODAY") {
+        filtered = filtered.filter((service) => isBilledToday(service));
+      } else {
+        filtered = filtered.filter(
+          (service) => service.status === statusFilter
+        );
+      }
 
       // Apply search filter
       if (searchQuery.trim()) {
@@ -152,9 +254,12 @@ const ServicesScreen = ({ navigation }: any) => {
         });
       }
 
+      // Apply sorting
+      filtered = sortServices(filtered, sortBy);
+
       setFilteredServices(filtered);
     }
-  }, [services, searchQuery, statusFilter]);
+  }, [services, searchQuery, statusFilter, sortBy]);
 
   const handleCameraScan = () => {
     navigation.navigate("CameraScan");
@@ -305,10 +410,17 @@ const ServicesScreen = ({ navigation }: any) => {
     }
 
     // Don't allow selection of services that don't match the current status filter
-    if (service.status !== statusFilter) {
+    const isValidStatus =
+      statusFilter === "OPEN_PENDING"
+        ? service.status === "OPEN" || service.status === "PENDING"
+        : statusFilter === "BILLED_TODAY"
+        ? isBilledToday(service)
+        : service.status === statusFilter;
+
+    if (!isValidStatus) {
       Alert.alert(
         "Error",
-        `Cannot select service that is not in ${statusFilter} status`
+        `Cannot select service that doesn't match current filter`
       );
       return;
     }
@@ -627,7 +739,12 @@ const ServicesScreen = ({ navigation }: any) => {
     // Only select services that match the first service's physician and jurisdiction and have the current status filter
     const validServices = filteredServices.filter((service) => {
       const serviceCode = service.serviceCodes[0];
-      const hasMatchingStatus = service.status === statusFilter;
+      const hasMatchingStatus =
+        statusFilter === "OPEN_PENDING"
+          ? service.status === "OPEN" || service.status === "PENDING"
+          : statusFilter === "BILLED_TODAY"
+          ? isBilledToday(service)
+          : service.status === statusFilter;
       return (
         serviceCode &&
         firstServiceCode &&
@@ -748,8 +865,6 @@ const ServicesScreen = ({ navigation }: any) => {
       mostRecentRounding.roundingDate
     );
     const nowDateStr = getLocalYMD(new Date());
-
-    console.log("Rounding date:", roundingDateStr, "Today:", nowDateStr);
 
     return roundingDateStr === nowDateStr;
   };
@@ -1068,73 +1183,252 @@ const ServicesScreen = ({ navigation }: any) => {
         </View>
       </View>
 
-      <View style={styles.searchContainer}>
-        <View style={styles.searchHeader}>
+      {/* Collapsible Filter Section */}
+      <View style={styles.filterSection}>
+        <View style={styles.filterSectionHeader}>
           <TouchableOpacity
-            style={styles.searchToggle}
-            onPress={() => {
-              setShowSearch(!showSearch);
-              if (showSearch) {
-                setSearchQuery(""); // Clear search when hiding
-              }
-            }}
+            style={styles.filterSectionTitleContainer}
+            onPress={() => setShowFilters(!showFilters)}
           >
+            <Text style={styles.filterSectionTitle}>Search, Sort & Filter</Text>
             <Ionicons
-              name={showSearch ? "chevron-up" : "search"}
+              name={showFilters ? "chevron-up" : "chevron-down"}
               size={20}
               color="#64748b"
             />
-            <Text style={styles.searchToggleText}>
-              {showSearch ? "Hide Search" : "Search"}
-            </Text>
           </TouchableOpacity>
+          {!showFilters &&
+            (searchQuery ||
+              statusFilter !== "OPEN" ||
+              sortBy !== "lastNameAsc") && (
+              <TouchableOpacity
+                style={styles.clearFiltersButtonSmall}
+                onPress={() => {
+                  setSearchQuery("");
+                  setStatusFilter("OPEN");
+                  setSortBy("lastNameAsc");
+                }}
+              >
+                <Ionicons name="close-circle" size={20} color="#ef4444" />
+              </TouchableOpacity>
+            )}
         </View>
 
-        {showSearch && (
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search by patient name, billing number, or ICD description..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
+        {showFilters && (
+          <View style={styles.filterContent}>
+            {/* Search Section */}
+            <View style={styles.filterGroup}>
+              <Text style={styles.filterGroupTitle}>Search</Text>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search by patient name, billing number, or ICD description..."
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+            </View>
+
+            {/* Sort Section */}
+            <View style={styles.filterGroup}>
+              <Text style={styles.filterGroupTitle}>Sort By</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.sortOptions}
+              >
+                <TouchableOpacity
+                  style={[
+                    styles.sortButton,
+                    sortBy === "lastNameAsc" && styles.sortButtonActive,
+                  ]}
+                  onPress={() => setSortBy("lastNameAsc")}
+                >
+                  <Text
+                    style={[
+                      styles.sortButtonText,
+                      sortBy === "lastNameAsc" && styles.sortButtonTextActive,
+                    ]}
+                  >
+                    Last Name (A-Z)
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.sortButton,
+                    sortBy === "lastNameDesc" && styles.sortButtonActive,
+                  ]}
+                  onPress={() => setSortBy("lastNameDesc")}
+                >
+                  <Text
+                    style={[
+                      styles.sortButtonText,
+                      sortBy === "lastNameDesc" && styles.sortButtonTextActive,
+                    ]}
+                  >
+                    Last Name (Z-A)
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.sortButton,
+                    sortBy === "firstNameAsc" && styles.sortButtonActive,
+                  ]}
+                  onPress={() => setSortBy("firstNameAsc")}
+                >
+                  <Text
+                    style={[
+                      styles.sortButtonText,
+                      sortBy === "firstNameAsc" && styles.sortButtonTextActive,
+                    ]}
+                  >
+                    First Name (A-Z)
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.sortButton,
+                    sortBy === "firstNameDesc" && styles.sortButtonActive,
+                  ]}
+                  onPress={() => setSortBy("firstNameDesc")}
+                >
+                  <Text
+                    style={[
+                      styles.sortButtonText,
+                      sortBy === "firstNameDesc" && styles.sortButtonTextActive,
+                    ]}
+                  >
+                    First Name (Z-A)
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.sortButton,
+                    sortBy === "admitDateAsc" && styles.sortButtonActive,
+                  ]}
+                  onPress={() => setSortBy("admitDateAsc")}
+                >
+                  <Text
+                    style={[
+                      styles.sortButtonText,
+                      sortBy === "admitDateAsc" && styles.sortButtonTextActive,
+                    ]}
+                  >
+                    Admit Date (Oldest)
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.sortButton,
+                    sortBy === "admitDateDesc" && styles.sortButtonActive,
+                  ]}
+                  onPress={() => setSortBy("admitDateDesc")}
+                >
+                  <Text
+                    style={[
+                      styles.sortButtonText,
+                      sortBy === "admitDateDesc" && styles.sortButtonTextActive,
+                    ]}
+                  >
+                    Admit Date (Newest)
+                  </Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+
+            {/* Filter Section */}
+            <View style={styles.filterGroup}>
+              <Text style={styles.filterGroupTitle}>Status Filter</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.filterOptions}
+              >
+                <TouchableOpacity
+                  style={[
+                    styles.filterButton,
+                    statusFilter === "OPEN" && styles.filterButtonActive,
+                  ]}
+                  onPress={() => setStatusFilter("OPEN")}
+                >
+                  <Text
+                    style={[
+                      styles.filterButtonText,
+                      statusFilter === "OPEN" && styles.filterButtonTextActive,
+                    ]}
+                  >
+                    Open
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.filterButton,
+                    statusFilter === "PENDING" && styles.filterButtonActive,
+                  ]}
+                  onPress={() => setStatusFilter("PENDING")}
+                >
+                  <Text
+                    style={[
+                      styles.filterButtonText,
+                      statusFilter === "PENDING" &&
+                        styles.filterButtonTextActive,
+                    ]}
+                  >
+                    Pending
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.filterButton,
+                    statusFilter === "OPEN_PENDING" &&
+                      styles.filterButtonActive,
+                  ]}
+                  onPress={() => setStatusFilter("OPEN_PENDING")}
+                >
+                  <Text
+                    style={[
+                      styles.filterButtonText,
+                      statusFilter === "OPEN_PENDING" &&
+                        styles.filterButtonTextActive,
+                    ]}
+                  >
+                    Open/Pending
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.filterButton,
+                    statusFilter === "BILLED_TODAY" &&
+                      styles.filterButtonActive,
+                  ]}
+                  onPress={() => setStatusFilter("BILLED_TODAY")}
+                >
+                  <Text
+                    style={[
+                      styles.filterButtonText,
+                      statusFilter === "BILLED_TODAY" &&
+                        styles.filterButtonTextActive,
+                    ]}
+                  >
+                    Billed Today
+                  </Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+
+            {/* Clear Filters Button */}
+            <TouchableOpacity
+              style={styles.clearFiltersButton}
+              onPress={() => {
+                setSearchQuery("");
+                setStatusFilter("OPEN");
+                setSortBy("lastNameAsc");
+              }}
+            >
+              <Text style={styles.clearFiltersButtonText}>
+                Clear All Filters
+              </Text>
+            </TouchableOpacity>
+          </View>
         )}
-      </View>
-
-      <View style={styles.filterContainer}>
-        <View style={styles.filterToggle}>
-          <TouchableOpacity
-            style={[
-              styles.filterButton,
-              statusFilter === "OPEN" && styles.filterButtonActive,
-            ]}
-            onPress={() => setStatusFilter("OPEN")}
-          >
-            <Text
-              style={[
-                styles.filterButtonText,
-                statusFilter === "OPEN" && styles.filterButtonTextActive,
-              ]}
-            >
-              Open
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.filterButton,
-              statusFilter === "PENDING" && styles.filterButtonActive,
-            ]}
-            onPress={() => setStatusFilter("PENDING")}
-          >
-            <Text
-              style={[
-                styles.filterButtonText,
-                statusFilter === "PENDING" && styles.filterButtonTextActive,
-              ]}
-            >
-              Pending
-            </Text>
-          </TouchableOpacity>
-        </View>
       </View>
 
       {selectedServices.length > 0 && (
@@ -2716,6 +3010,86 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     paddingHorizontal: 8,
+  },
+  // New collapsible filter section styles
+  filterSection: {
+    backgroundColor: "#ffffff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+  },
+  filterSectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+  },
+  filterSectionTitleContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  filterSectionTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1f2937",
+  },
+  filterContent: {
+    padding: 16,
+    paddingTop: 0,
+  },
+  filterGroup: {
+    marginBottom: 20,
+  },
+  filterGroupTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#374151",
+    marginBottom: 8,
+  },
+  sortOptions: {
+    flexDirection: "row",
+  },
+  sortButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginRight: 8,
+    backgroundColor: "#f1f5f9",
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  sortButtonActive: {
+    backgroundColor: "#dbeafe",
+    borderColor: "#2563eb",
+  },
+  sortButtonText: {
+    fontSize: 12,
+    color: "#64748b",
+    fontWeight: "500",
+  },
+  sortButtonTextActive: {
+    color: "#1e40af",
+    fontWeight: "600",
+  },
+  filterOptions: {
+    flexDirection: "row",
+  },
+  clearFiltersButton: {
+    backgroundColor: "#f3f4f6",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: "center",
+    marginTop: 8,
+  },
+  clearFiltersButtonText: {
+    fontSize: 14,
+    color: "#6b7280",
+    fontWeight: "500",
+  },
+  clearFiltersButtonSmall: {
+    padding: 4,
+    marginLeft: 8,
   },
 });
 

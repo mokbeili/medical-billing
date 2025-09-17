@@ -169,7 +169,7 @@ export async function POST(request: Request) {
             serviceEndDate: code.serviceEndDate
               ? new Date(code.serviceEndDate)
               : null,
-            bilateralIndicator: code.billingCode.bilateralIndicator,
+            bilateralIndicator: code.bilateralIndicator,
             numberOfUnits: code.numberOfUnits || 1,
             specialCircumstances: code.specialCircumstances,
             serviceLocation: code.serviceLocation || defaults.serviceLocation,
