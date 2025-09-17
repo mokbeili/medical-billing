@@ -644,7 +644,9 @@ const ServicesScreen = ({ navigation }: any) => {
   // Function to check if service has been rounded
   const hasRounding = (service: Service): boolean => {
     return service.serviceCodes.some((serviceCode) =>
-      serviceCode.changeLogs.some((log) => log.changeType === "ROUND")
+      serviceCode.changeLogs.some(
+        (log) => log.changeType === "ROUND" && log.roundingDate
+      )
     );
   };
 
@@ -654,10 +656,11 @@ const ServicesScreen = ({ navigation }: any) => {
 
     for (const serviceCode of service.serviceCodes) {
       for (const log of serviceCode.changeLogs) {
-        if (log.changeType === "ROUND") {
+        if (log.changeType === "ROUND" && log.roundingDate) {
           if (
             !mostRecentRounding ||
-            new Date(log.changedAt) > new Date(mostRecentRounding.changedAt)
+            new Date(log.roundingDate) >
+              new Date(mostRecentRounding.roundingDate!)
           ) {
             mostRecentRounding = log;
           }
@@ -665,26 +668,23 @@ const ServicesScreen = ({ navigation }: any) => {
       }
     }
 
-    if (!mostRecentRounding) return null;
+    if (!mostRecentRounding || !mostRecentRounding.roundingDate) return null;
 
-    const roundingDate = new Date(mostRecentRounding.changedAt);
-    const now = new Date();
-
-    // Compare local device dates (YYYY-MM-DD) to determine if rounded today
-    const localDateKey = (date: Date) => {
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const day = String(date.getDate()).padStart(2, "0");
-      return `${year}-${month}-${day}`;
-    };
-
-    const roundingDateStr = localDateKey(roundingDate);
-    const nowDateStr = localDateKey(now);
+    // Treat rounding date as local date to avoid timezone issues
+    const roundingDateStr = normalizeToLocalYMD(
+      mostRecentRounding.roundingDate
+    );
+    const nowDateStr = getLocalYMD(new Date());
     if (roundingDateStr === nowDateStr) {
       // Today
       return "Rounded Today";
     } else {
       // Calculate days difference for other cases
+      // Parse the rounding date string as local date to avoid timezone issues
+      const [year, month, day] = roundingDateStr.split("-").map(Number);
+      const roundingDate = new Date(year, month - 1, day);
+      const now = new Date();
+
       const diffTime = Math.abs(now.getTime() - roundingDate.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
@@ -729,10 +729,11 @@ const ServicesScreen = ({ navigation }: any) => {
 
     for (const serviceCode of service.serviceCodes) {
       for (const log of serviceCode.changeLogs) {
-        if (log.changeType === "ROUND") {
+        if (log.changeType === "ROUND" && log.roundingDate) {
           if (
             !mostRecentRounding ||
-            new Date(log.changedAt) > new Date(mostRecentRounding.changedAt)
+            new Date(log.roundingDate) >
+              new Date(mostRecentRounding.roundingDate!)
           ) {
             mostRecentRounding = log;
           }
@@ -740,19 +741,17 @@ const ServicesScreen = ({ navigation }: any) => {
       }
     }
 
-    if (!mostRecentRounding) return false;
+    if (!mostRecentRounding || !mostRecentRounding.roundingDate) return false;
 
-    const roundingDate = new Date(mostRecentRounding.changedAt);
-    const now = new Date();
+    // Treat rounding date as local date to avoid timezone issues
+    const roundingDateStr = normalizeToLocalYMD(
+      mostRecentRounding.roundingDate
+    );
+    const nowDateStr = getLocalYMD(new Date());
 
-    const localDateKey = (date: Date) => {
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const day = String(date.getDate()).padStart(2, "0");
-      return `${year}-${month}-${day}`;
-    };
+    console.log("Rounding date:", roundingDateStr, "Today:", nowDateStr);
 
-    return localDateKey(roundingDate) === localDateKey(now);
+    return roundingDateStr === nowDateStr;
   };
 
   // Helpers to ignore timezone and treat stored dates as local dates

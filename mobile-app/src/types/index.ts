@@ -209,6 +209,7 @@ export interface ServiceCodeChangeLog {
   changedBy: number | null;
   changedAt: string;
   notes: string | null;
+  roundingDate: string | null;
 }
 
 export interface ServiceCode {
