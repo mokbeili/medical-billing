@@ -187,6 +187,13 @@ export const billingCodesAPI = {
       },
     }));
   },
+
+  getFrequentlyUsed: async (physicianId: string): Promise<BillingCode[]> => {
+    const response = await api.get(
+      `/api/billing-codes/frequently-used/${physicianId}`
+    );
+    return response.data;
+  },
 };
 
 export const aiPromptsAPI = {

@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import React, { useState } from "react";
@@ -12,8 +13,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Button, Card, RadioButton, TextInput } from "react-native-paper";
+import { Card, TextInput } from "react-native-paper";
 import {
+  billingCodesAPI,
   healthInstitutionsAPI,
   icdCodesAPI,
   patientsAPI,
@@ -43,6 +45,16 @@ interface ICDCode {
   description: string;
 }
 
+interface BillingCode {
+  id: number;
+  code: string;
+  title: string;
+  description: string | null;
+  billing_record_type: number;
+  fee_determinant: string;
+  multiple_unit_indicator: string | null;
+}
+
 interface ServiceCreationModalProps {
   visible: boolean;
   onClose: () => void;
@@ -53,6 +65,7 @@ interface ServiceCreationModalProps {
 
 type Step =
   | "patient"
+  | "billingCodes"
   | "serviceDate"
   | "serviceLocation"
   | "locationOfService"
@@ -66,6 +79,15 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
   scannedData,
   physicianId,
 }) => {
+  // Clear AsyncStorage when modal is closed
+  const handleClose = async () => {
+    try {
+      await AsyncStorage.removeItem("scannedPatientData");
+    } catch (error) {
+      console.error("Error clearing scanned patient data on close:", error);
+    }
+    onClose();
+  };
   const [currentStep, setCurrentStep] = useState<Step>("patient");
   const [patientData, setPatientData] =
     useState<ScannedPatientData>(scannedData);
@@ -77,6 +99,11 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
   const [selectedICDCode, setSelectedICDCode] = useState<ICDCode | null>(null);
   const [icdSearchQuery, setIcdSearchQuery] = useState<string>("");
   const [isPatientConfirmed, setIsPatientConfirmed] = useState<boolean>(false);
+  const [selectedBillingCodes, setSelectedBillingCodes] = useState<
+    BillingCode[]
+  >([]);
+  const [showBillingCodeDetails, setShowBillingCodeDetails] =
+    useState<BillingCode | null>(null);
 
   // Service location options (based on ServiceFormScreen)
   const serviceLocationOptions = [
@@ -142,6 +169,18 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
     enabled: icdSearchQuery.length >= 2,
   });
 
+  // Fetch frequently used billing codes for the physician
+  const {
+    data: frequentBillingCodes,
+    isLoading: frequentCodesLoading,
+    error: frequentCodesError,
+  } = useQuery({
+    queryKey: ["frequentBillingCodes", physicianId],
+    queryFn: () => billingCodesAPI.getFrequentlyUsed(physicianId),
+    enabled: !!physicianId,
+    retry: false, // Don't retry on error
+  });
+
   // Create patient mutation
   const createPatientMutation = useMutation({
     mutationFn: (patientData: ScannedPatientData) =>
@@ -181,9 +220,20 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
       case "patient":
         if (existingPatient) {
           setIsPatientConfirmed(true);
+          setCurrentStep("billingCodes");
+        } else {
+          // For new patients, they must create the patient first
+          // This should not be reachable due to canProceed() logic
+          return;
+        }
+        break;
+      case "billingCodes":
+        // If billing codes are selected, go to service location steps
+        // If no billing codes selected, skip to ICD code
+        if (selectedBillingCodes.length > 0) {
           setCurrentStep("serviceDate");
         } else {
-          setCurrentStep("serviceDate");
+          setCurrentStep("icdCode");
         }
         break;
       case "serviceDate":
@@ -203,8 +253,11 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
 
   const handleBack = () => {
     switch (currentStep) {
-      case "serviceDate":
+      case "billingCodes":
         setCurrentStep("patient");
+        break;
+      case "serviceDate":
+        setCurrentStep("billingCodes");
         break;
       case "serviceLocation":
         setCurrentStep("serviceDate");
@@ -213,7 +266,13 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
         setCurrentStep("serviceLocation");
         break;
       case "icdCode":
-        setCurrentStep("locationOfService");
+        // If we have billing codes, go back to locationOfService
+        // If no billing codes, go back to billingCodes
+        if (selectedBillingCodes.length > 0) {
+          setCurrentStep("locationOfService");
+        } else {
+          setCurrentStep("billingCodes");
+        }
         break;
       case "summary":
         setCurrentStep("icdCode");
@@ -225,7 +284,12 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
     try {
       await createPatientMutation.mutateAsync(patientData);
       setIsPatientConfirmed(true);
-      Alert.alert("Success", "Patient created successfully");
+      Alert.alert("Success", "Patient created successfully", [
+        {
+          text: "Continue",
+          onPress: () => setCurrentStep("serviceDate"),
+        },
+      ]);
     } catch (error) {
       Alert.alert("Error", "Failed to create patient");
     }
@@ -233,20 +297,46 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
 
   const handleCreateService = async () => {
     try {
+      // Prepare billing codes data
+      const billingCodesData = selectedBillingCodes.map((code) => ({
+        codeId: code.id,
+        status: "ACTIVE",
+        billing_record_type: code.billing_record_type || 1,
+        serviceStartTime: null,
+        serviceEndTime: null,
+        numberOfUnits: 1,
+        bilateralIndicator: null,
+        specialCircumstances: null,
+        serviceDate: serviceDate,
+        serviceEndDate: null,
+        fee_determinant: code.fee_determinant || "A",
+        multiple_unit_indicator: code.multiple_unit_indicator || null,
+      }));
+
       const serviceData = {
         physicianId,
         patientId: existingPatient?.id || createPatientMutation.data?.id,
         serviceDate,
-        serviceLocation,
-        locationOfService,
+        serviceLocation:
+          selectedBillingCodes.length > 0 ? serviceLocation : null,
+        locationOfService:
+          selectedBillingCodes.length > 0 ? locationOfService : null,
         icdCodeId: selectedICDCode?.id,
         summary: `Service created from camera scan - ${patientData.firstName} ${patientData.lastName}`,
         serviceStatus: "OPEN",
-        billingCodes: [], // Empty for now, can be added later
+        billingCodes: billingCodesData,
       };
 
       await createServiceMutation.mutateAsync(serviceData);
-      Alert.alert("Success", "Service created successfully", [
+
+      // Clear scanned patient data from AsyncStorage to prevent re-triggering
+      try {
+        await AsyncStorage.removeItem("scannedPatientData");
+      } catch (error) {
+        console.error("Error clearing scanned patient data:", error);
+      }
+
+      Alert.alert("Success", "Claim created successfully", [
         {
           text: "OK",
           onPress: () => {
@@ -256,6 +346,7 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
         },
       ]);
     } catch (error) {
+      console.error("Error creating service:", error);
       Alert.alert("Error", "Failed to create claim");
     }
   };
@@ -265,7 +356,7 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
       <Text style={styles.stepTitle}>Patient Information</Text>
       <Card style={styles.card}>
         <Card.Content>
-          <Text style={styles.fieldLabel}>Billing Number:</Text>
+          <Text style={styles.fieldLabel}>Health Service Number:</Text>
           <Text style={styles.fieldValue}>{patientData.billingNumber}</Text>
 
           <Text style={styles.fieldLabel}>Name:</Text>
@@ -282,38 +373,161 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
       </Card>
 
       {checkingPatient ? (
-        <ActivityIndicator size="small" style={styles.loading} />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" style={styles.loading} />
+          <Text style={styles.loadingText}>Checking patient records...</Text>
+        </View>
       ) : existingPatient ? (
-        <View>
-          <Text style={styles.infoText}>✓ You've seen ths patient before</Text>
+        <View style={styles.patientStatusContainer}>
+          <Text style={styles.infoText}>✓ You've seen this patient before</Text>
           <Text style={styles.debugText}>
             Found: {existingPatient.firstName} {existingPatient.lastName}
           </Text>
         </View>
       ) : (
-        <View>
+        <View style={styles.newPatientContainer}>
           <Text style={styles.infoText}>
-            Patient not found. Create new patient?
+            This is a new patient. Please confirm the information above and
+            create the patient to continue.
           </Text>
           <Text style={styles.debugText}>
             Searching for billing number: {patientData.billingNumber}
           </Text>
-          <Button
-            mode="contained"
+          <TouchableOpacity
             onPress={handleCreatePatient}
-            loading={createPatientMutation.isPending}
-            style={styles.button}
+            disabled={createPatientMutation.isPending}
+            style={[
+              styles.createPatientButton,
+              createPatientMutation.isPending && styles.disabledButton,
+            ]}
           >
-            Create Patient
-          </Button>
+            {createPatientMutation.isPending ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.createPatientButtonText}>Create Patient</Text>
+            )}
+          </TouchableOpacity>
         </View>
       )}
     </View>
   );
 
+  const renderBillingCodesStep = () => (
+    <View style={styles.stepContainer}>
+      <Text style={styles.stepTitle}>Billing Codes</Text>
+      <Text style={styles.stepSubtitle}>
+        Select frequently used billing codes (optional)
+      </Text>
+      <Text style={styles.stepNote}>
+        If you select billing codes, you'll be asked to set service location and
+        location of service for all selected codes.
+      </Text>
+
+      {frequentCodesLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" style={styles.loading} />
+          <Text style={styles.loadingText}>Loading billing codes...</Text>
+        </View>
+      ) : frequentCodesError ? (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>Unable to load billing codes</Text>
+          <Text style={styles.errorSubtext}>
+            You can still proceed without selecting codes
+          </Text>
+        </View>
+      ) : (frequentBillingCodes || []).length === 0 ? (
+        <View style={styles.noCodesContainer}>
+          <Text style={styles.noCodesText}>No frequently used codes found</Text>
+          <Text style={styles.noCodesSubtext}>
+            You can still proceed without selecting codes
+          </Text>
+        </View>
+      ) : (
+        <ScrollView
+          style={styles.billingCodesList}
+          showsVerticalScrollIndicator={false}
+        >
+          {(frequentBillingCodes || []).map((code: BillingCode) => (
+            <TouchableOpacity
+              key={code.id}
+              style={[
+                styles.billingCodeItem,
+                selectedBillingCodes.some(
+                  (selected) => selected.id === code.id
+                ) && styles.selectedBillingCodeItem,
+              ]}
+              onPress={() => {
+                const isSelected = selectedBillingCodes.some(
+                  (selected) => selected.id === code.id
+                );
+                if (isSelected) {
+                  setSelectedBillingCodes(
+                    selectedBillingCodes.filter(
+                      (selected) => selected.id !== code.id
+                    )
+                  );
+                } else {
+                  setSelectedBillingCodes([...selectedBillingCodes, code]);
+                }
+              }}
+              onLongPress={() => setShowBillingCodeDetails(code)}
+            >
+              <View style={styles.billingCodeHeader}>
+                <Text style={styles.billingCodeCode}>{code.code}</Text>
+                <Text style={styles.billingCodeTitle}>{code.title}</Text>
+              </View>
+              <Text style={styles.billingCodeDescription} numberOfLines={2}>
+                {code.description || "No description available"}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
+
+      {selectedBillingCodes.length > 0 && (
+        <View style={styles.selectedCodesContainer}>
+          <Text style={styles.selectedCodesTitle}>Selected Codes:</Text>
+          {selectedBillingCodes.map((code) => (
+            <View key={code.id} style={styles.selectedCodeItem}>
+              <Text style={styles.selectedCodeText}>
+                {code.code} - {code.title}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* Billing Code Details Modal */}
+      <Modal
+        visible={!!showBillingCodeDetails}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowBillingCodeDetails(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.detailsModal}>
+            <Text style={styles.detailsModalTitle}>
+              {showBillingCodeDetails?.code} - {showBillingCodeDetails?.title}
+            </Text>
+            <Text style={styles.detailsModalDescription}>
+              {showBillingCodeDetails?.description ||
+                "No description available"}
+            </Text>
+            <TouchableOpacity
+              style={styles.closeDetailsButton}
+              onPress={() => setShowBillingCodeDetails(null)}
+            >
+              <Text style={styles.closeDetailsButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+
   const renderServiceDateStep = () => (
     <View style={styles.stepContainer}>
-      <Text style={styles.stepTitle}>Service Date</Text>
+      <Text style={styles.stepTitle}>Admission Date</Text>
       <Card style={styles.card}>
         <Card.Content>
           <TextInput
@@ -331,44 +545,62 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
   const renderServiceLocationStep = () => (
     <View style={styles.stepContainer}>
       <Text style={styles.stepTitle}>Service Location</Text>
-      <Card style={styles.card}>
-        <Card.Content>
-          {serviceLocationOptions.map((option) => (
-            <View key={option.value} style={styles.radioOption}>
-              <RadioButton
-                value={option.value}
-                status={
-                  serviceLocation === option.value ? "checked" : "unchecked"
-                }
-                onPress={() => setServiceLocation(option.value)}
-              />
-              <Text style={styles.radioLabel}>{option.label}</Text>
-            </View>
-          ))}
-        </Card.Content>
-      </Card>
+      <View style={styles.buttonGrid}>
+        {serviceLocationOptions.map((option) => (
+          <TouchableOpacity
+            key={option.value}
+            style={[
+              styles.optionButton,
+              serviceLocation === option.value && styles.selectedOptionButton,
+            ]}
+            onPress={() => setServiceLocation(option.value)}
+          >
+            <Text
+              style={[
+                styles.optionButtonText,
+                serviceLocation === option.value &&
+                  styles.selectedOptionButtonText,
+              ]}
+            >
+              {option.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
     </View>
   );
 
   const renderLocationOfServiceStep = () => (
     <View style={styles.stepContainer}>
       <Text style={styles.stepTitle}>Location of Service</Text>
-      <Card style={styles.card}>
-        <Card.Content>
+      <ScrollView
+        style={styles.scrollableButtonGrid}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.buttonGrid}>
           {locationOfServiceOptions.map((option) => (
-            <View key={option.value} style={styles.radioOption}>
-              <RadioButton
-                value={option.value}
-                status={
-                  locationOfService === option.value ? "checked" : "unchecked"
-                }
-                onPress={() => setLocationOfService(option.value)}
-              />
-              <Text style={styles.radioLabel}>{option.label}</Text>
-            </View>
+            <TouchableOpacity
+              key={option.value}
+              style={[
+                styles.optionButton,
+                locationOfService === option.value &&
+                  styles.selectedOptionButton,
+              ]}
+              onPress={() => setLocationOfService(option.value)}
+            >
+              <Text
+                style={[
+                  styles.optionButtonText,
+                  locationOfService === option.value &&
+                    styles.selectedOptionButtonText,
+                ]}
+              >
+                {option.label}
+              </Text>
+            </TouchableOpacity>
           ))}
-        </Card.Content>
-      </Card>
+        </View>
+      </ScrollView>
     </View>
   );
 
@@ -432,23 +664,40 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
           <Text style={styles.fieldLabel}>Service Date:</Text>
           <Text style={styles.fieldValue}>{serviceDate}</Text>
 
-          <Text style={styles.fieldLabel}>Service Location:</Text>
-          <Text style={styles.fieldValue}>
-            {
-              serviceLocationOptions.find(
-                (opt) => opt.value === serviceLocation
-              )?.label
-            }
-          </Text>
+          {selectedBillingCodes.length > 0 && (
+            <>
+              <Text style={styles.fieldLabel}>Billing Codes:</Text>
+              {selectedBillingCodes.map((code) => (
+                <Text key={code.id} style={styles.fieldValue}>
+                  {code.code} - {code.title}
+                </Text>
+              ))}
+            </>
+          )}
 
-          <Text style={styles.fieldLabel}>Location of Service:</Text>
-          <Text style={styles.fieldValue}>
-            {
-              locationOfServiceOptions.find(
-                (opt) => opt.value === locationOfService
-              )?.label
-            }
-          </Text>
+          {selectedBillingCodes.length > 0 && (
+            <>
+              <Text style={styles.fieldLabel}>Service Location:</Text>
+              <Text style={styles.fieldValue}>
+                {
+                  serviceLocationOptions.find(
+                    (opt) => opt.value === serviceLocation
+                  )?.label
+                }{" "}
+                (will be applied to all billing codes)
+              </Text>
+
+              <Text style={styles.fieldLabel}>Location of Service:</Text>
+              <Text style={styles.fieldValue}>
+                {
+                  locationOfServiceOptions.find(
+                    (opt) => opt.value === locationOfService
+                  )?.label
+                }{" "}
+                (will be applied to all billing codes)
+              </Text>
+            </>
+          )}
 
           {selectedICDCode && (
             <>
@@ -467,6 +716,8 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
     switch (currentStep) {
       case "patient":
         return renderPatientStep();
+      case "billingCodes":
+        return renderBillingCodesStep();
       case "serviceDate":
         return renderServiceDateStep();
       case "serviceLocation":
@@ -485,7 +736,14 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
   const canProceed = () => {
     switch (currentStep) {
       case "patient":
-        return existingPatient || isPatientConfirmed;
+        // For new patients, require explicit confirmation
+        if (!existingPatient) {
+          return isPatientConfirmed;
+        }
+        // For existing patients, can proceed immediately
+        return true;
+      case "billingCodes":
+        return true; // Billing codes are optional
       case "serviceDate":
         return serviceDate.length > 0;
       case "serviceLocation":
@@ -507,34 +765,44 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
     <Modal
       visible={visible}
       animationType="slide"
-      presentationStyle="pageSheet"
+      presentationStyle="fullScreen"
     >
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={onClose}>
+          <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
             <Ionicons name="close" size={24} color="#000" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Create Claim</Text>
           <View style={{ width: 24 }} />
         </View>
 
-        <ScrollView style={styles.content}>{renderCurrentStep()}</ScrollView>
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {renderCurrentStep()}
+        </ScrollView>
 
         <View style={styles.footer}>
           {currentStep !== "patient" && (
-            <Button mode="outlined" onPress={handleBack} style={styles.button}>
-              Back
-            </Button>
+            <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+              <Text style={styles.backButtonText}>Back</Text>
+            </TouchableOpacity>
           )}
-          <Button
-            mode="contained"
+          <TouchableOpacity
             onPress={isLastStep ? handleCreateService : handleNext}
             disabled={!canProceed() || createServiceMutation.isPending}
-            loading={createServiceMutation.isPending}
-            style={[styles.button, styles.primaryButton]}
+            style={[
+              styles.nextButton,
+              (!canProceed() || createServiceMutation.isPending) &&
+                styles.disabledButton,
+            ]}
           >
-            {isLastStep ? "Create Claim" : "Next"}
-          </Button>
+            {createServiceMutation.isPending ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.nextButtonText}>
+                {isLastStep ? "Create Claim" : "Next"}
+              </Text>
+            )}
+          </TouchableOpacity>
         </View>
       </View>
     </Modal>
@@ -550,121 +818,423 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    paddingTop: 50, // Account for status bar
     backgroundColor: "#fff",
     borderBottomWidth: 1,
     borderBottomColor: "#e0e0e0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  closeButton: {
+    padding: 8,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "bold",
+    color: "#333",
   },
   content: {
     flex: 1,
-    padding: 16,
+    padding: 20,
   },
   stepContainer: {
     flex: 1,
+    minHeight: 400, // Ensure minimum height for better space utilization
   },
   stepTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: "bold",
-    marginBottom: 16,
+    marginBottom: 24,
     color: "#333",
+    textAlign: "center",
   },
   card: {
-    marginBottom: 16,
+    marginBottom: 20,
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   fieldLabel: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: "600",
     color: "#666",
-    marginTop: 12,
-    marginBottom: 4,
+    marginTop: 16,
+    marginBottom: 8,
   },
   fieldValue: {
-    fontSize: 16,
+    fontSize: 18,
     color: "#333",
-    marginBottom: 8,
+    marginBottom: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: "#f8f9fa",
+    borderRadius: 8,
   },
   input: {
-    marginBottom: 16,
+    marginBottom: 20,
   },
-  radioOption: {
+  // New button grid styles
+  buttonGrid: {
     flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 8,
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    gap: 12,
   },
-  radioLabel: {
-    marginLeft: 8,
+  scrollableButtonGrid: {
+    flex: 1,
+    maxHeight: 500,
+  },
+  optionButton: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    marginBottom: 12,
+    minWidth: "45%",
+    flex: 1,
+    marginHorizontal: 6,
+    borderWidth: 2,
+    borderColor: "#e0e0e0",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  selectedOptionButton: {
+    backgroundColor: "#2196f3",
+    borderColor: "#1976d2",
+    shadowColor: "#2196f3",
+    shadowOpacity: 0.3,
+  },
+  optionButtonText: {
     fontSize: 16,
+    fontWeight: "600",
+    color: "#333",
+    textAlign: "center",
+  },
+  selectedOptionButtonText: {
+    color: "#fff",
   },
   icdList: {
-    maxHeight: 200,
-    marginTop: 8,
+    maxHeight: 300,
+    marginTop: 12,
   },
   icdItem: {
-    padding: 12,
+    padding: 16,
     borderWidth: 1,
     borderColor: "#e0e0e0",
-    borderRadius: 8,
-    marginBottom: 8,
+    borderRadius: 12,
+    marginBottom: 12,
+    backgroundColor: "#fff",
   },
   selectedIcdItem: {
     backgroundColor: "#e3f2fd",
     borderColor: "#2196f3",
+    borderWidth: 2,
   },
   icdCode: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "bold",
     color: "#333",
   },
   icdDescription: {
-    fontSize: 14,
+    fontSize: 16,
     color: "#666",
-    marginTop: 4,
+    marginTop: 6,
   },
   selectedIcdContainer: {
-    marginTop: 12,
-    padding: 12,
+    marginTop: 16,
+    padding: 16,
     backgroundColor: "#e8f5e8",
-    borderRadius: 8,
+    borderRadius: 12,
   },
   selectedIcdText: {
-    fontSize: 14,
+    fontSize: 16,
     color: "#2e7d32",
     fontWeight: "600",
   },
   infoText: {
-    fontSize: 14,
+    fontSize: 16,
     color: "#666",
     textAlign: "center",
-    marginVertical: 8,
+    marginVertical: 12,
+    lineHeight: 24,
   },
   debugText: {
-    fontSize: 12,
+    fontSize: 14,
     color: "#999",
     textAlign: "center",
-    marginVertical: 4,
+    marginVertical: 6,
     fontStyle: "italic",
   },
   loading: {
-    marginVertical: 8,
+    marginVertical: 12,
   },
   footer: {
     flexDirection: "row",
     justifyContent: "space-between",
-    padding: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
     backgroundColor: "#fff",
     borderTopWidth: 1,
     borderTopColor: "#e0e0e0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  button: {
+  backButton: {
     flex: 1,
-    marginHorizontal: 4,
+    marginRight: 8,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: "#e0e0e0",
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  primaryButton: {
+  backButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#666",
+  },
+  nextButton: {
+    flex: 2,
+    marginLeft: 8,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
     backgroundColor: "#2196f3",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#2196f3",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  nextButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#fff",
+  },
+  disabledButton: {
+    backgroundColor: "#ccc",
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  // Patient step specific styles
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 40,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: "#666",
+    marginTop: 12,
+  },
+  patientStatusContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 40,
+  },
+  newPatientContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 40,
+  },
+  createPatientButton: {
+    marginTop: 24,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    backgroundColor: "#4caf50",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#4caf50",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  createPatientButtonText: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#fff",
+  },
+  // Billing codes step styles
+  stepSubtitle: {
+    fontSize: 16,
+    color: "#666",
+    textAlign: "center",
+    marginBottom: 12,
+  },
+  stepNote: {
+    fontSize: 14,
+    color: "#999",
+    textAlign: "center",
+    marginBottom: 20,
+    fontStyle: "italic",
+  },
+  billingCodesList: {
+    flex: 1,
+    maxHeight: 400,
+  },
+  billingCodeItem: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: "#e0e0e0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  selectedBillingCodeItem: {
+    backgroundColor: "#e3f2fd",
+    borderColor: "#2196f3",
+  },
+  billingCodeHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  billingCodeCode: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#2196f3",
+  },
+  billingCodeTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#333",
+    flex: 1,
+    marginLeft: 12,
+  },
+  billingCodeDescription: {
+    fontSize: 14,
+    color: "#666",
+    lineHeight: 20,
+  },
+  selectedCodesContainer: {
+    marginTop: 20,
+    padding: 16,
+    backgroundColor: "#f8f9fa",
+    borderRadius: 12,
+  },
+  selectedCodesTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: 12,
+  },
+  selectedCodeItem: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  selectedCodeText: {
+    fontSize: 14,
+    color: "#333",
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  detailsModal: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 24,
+    maxWidth: "90%",
+    maxHeight: "80%",
+  },
+  detailsModalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#333",
+    marginBottom: 16,
+  },
+  detailsModalDescription: {
+    fontSize: 16,
+    color: "#666",
+    lineHeight: 24,
+    marginBottom: 24,
+  },
+  closeDetailsButton: {
+    backgroundColor: "#2196f3",
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  closeDetailsButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#fff",
+  },
+  // Error styles
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 40,
+  },
+  errorText: {
+    fontSize: 16,
+    color: "#d32f2f",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  errorSubtext: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
+  },
+  // No codes styles
+  noCodesContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 40,
+  },
+  noCodesText: {
+    fontSize: 16,
+    color: "#666",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  noCodesSubtext: {
+    fontSize: 14,
+    color: "#999",
+    textAlign: "center",
   },
 });
 

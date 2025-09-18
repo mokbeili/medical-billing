@@ -214,7 +214,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       service,
-      message: "Service created successfully from camera data",
+      message: "Claim created successfully from camera data",
     });
   } catch (error) {
     console.error("Error creating service from camera data:", error);

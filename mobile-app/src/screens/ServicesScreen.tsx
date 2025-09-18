@@ -325,53 +325,32 @@ const ServicesScreen = ({ navigation }: any) => {
         (patient) => patient.billingNumber === scannedData.billingNumber
       );
 
-      let patientId: string;
-
       if (!existingPatient) {
-        // Create new patient
-        try {
-          const newPatient = await patientsAPI.create({
-            firstName: scannedData.firstName,
-            lastName: scannedData.lastName,
-            billingNumber: scannedData.billingNumber,
-            dateOfBirth: scannedData.dateOfBirth,
-            sex: scannedData.gender === "M" ? "M" : "F",
-            physicianId: currentPhysician.id,
-          });
-          patientId = newPatient.id;
-          await refetchPatients();
-          Alert.alert("Success", "New patient created successfully!");
-        } catch (error) {
-          console.error("Error creating patient:", error);
-          Alert.alert(
-            "Error",
-            "Failed to create new patient. Please try again."
-          );
-          return;
-        }
-      } else {
-        patientId = existingPatient.id;
-      }
-
-      // Check if there are open services for this physician/patient combination
-      const openServices = services?.filter(
-        (service) =>
-          service.patient.id === patientId &&
-          service.physician.id === currentPhysician.id &&
-          service.status === "OPEN"
-      );
-
-      if (!openServices || openServices.length === 0) {
-        // No open services found - show service creation modal
+        // Show service creation modal for new patient confirmation
         setScannedPatientData(scannedData);
         setShowServiceCreationModal(true);
       } else {
-        // Patient already has open services - set search query to billing number
-        setSearchQuery(scannedData.billingNumber);
-        Alert.alert(
-          "Patient Found",
-          `Patient already has ${openServices.length} open service(s). Showing in search results.`
+        // Existing patient - check for open services
+        const patientId = existingPatient.id;
+        const openServices = services?.filter(
+          (service) =>
+            service.patient.id === patientId &&
+            service.physician.id === currentPhysician.id &&
+            service.status === "OPEN"
         );
+
+        if (!openServices || openServices.length === 0) {
+          // No open services found - show service creation modal
+          setScannedPatientData(scannedData);
+          setShowServiceCreationModal(true);
+        } else {
+          // Patient already has open services - set search query to billing number
+          setSearchQuery(scannedData.billingNumber);
+          Alert.alert(
+            "Patient Found",
+            `Patient already has ${openServices.length} open service(s). Showing in search results.`
+          );
+        }
       }
     } catch (error) {
       console.error("Error handling scanned patient data:", error);
