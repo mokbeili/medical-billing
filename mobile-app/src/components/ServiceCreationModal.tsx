@@ -23,6 +23,7 @@ import {
   servicesAPI,
 } from "../services/api";
 import { BillingCode } from "../types";
+import { formatFullDate } from "../utils/dateUtils";
 import BillingCodeConfigurationModal from "./BillingCodeConfigurationModal";
 
 interface ScannedPatientData {
@@ -62,12 +63,14 @@ interface ServiceCreationModalProps {
   visible: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  scannedData: ScannedPatientData;
+  scannedData: ScannedPatientData | null;
   physicianId: string;
 }
 
 type Step =
   | "patient"
+  | "patientSearch"
+  | "patientCreation"
   | "billingCodes"
   | "serviceDate"
   | "serviceLocation"
@@ -82,6 +85,53 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
   scannedData,
   physicianId,
 }) => {
+  // Clear all state function
+  const clearAllState = () => {
+    setCurrentStep(getInitialStep());
+    setSelectedPatient(null);
+    setSelectedBillingCodes([]);
+    setCodeSubSelections([]);
+    setSelectedICDCode(null);
+    setIcdSearchQuery("");
+    setServiceDate(format(new Date(), "yyyy-MM-dd"));
+    setServiceLocation("X"); // Default to Rural/Northern
+    setLocationOfService("1"); // Default to Office
+    setIsPatientConfirmed(false);
+    setShowBillingCodeDetails(null);
+    setShowBillingCodeConfigModal(false);
+    setCurrentCodeForConfig(null);
+
+    // Clear patient search and creation state
+    setPatientSearchQuery("");
+    setFilteredPatients([]);
+    setShowPatientDropdown(false);
+    setIsCreatingPatient(false);
+    setNewPatient({
+      firstName: "",
+      lastName: "",
+      billingNumber: "",
+      dateOfBirth: "",
+      sex: "",
+    });
+    setNewPatientErrors({
+      billingNumber: false,
+      dateOfBirth: false,
+      sex: false,
+      billingNumberCheckDigit: false,
+      billingNumberDuplicate: false,
+    });
+    setDuplicatePatient(null);
+
+    // Clear date picker state
+    setShowDatePicker(false);
+    setSelectedCalendarDate(null);
+    setCurrentCalendarMonth(new Date());
+    setSelectedDecade(0);
+    setSelectedYear(0);
+    setSelectedMonth(0);
+    setDatePickerStep("decade");
+  };
+
   // Clear AsyncStorage when modal is closed
   const handleClose = async () => {
     try {
@@ -89,13 +139,25 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
     } catch (error) {
       console.error("Error clearing scanned patient data on close:", error);
     }
+    clearAllState(); // Clear all state when modal is closed
     onClose();
   };
-  const [currentStep, setCurrentStep] = useState<Step>("patient");
-  const [patientData, setPatientData] =
-    useState<ScannedPatientData>(scannedData);
+
+  // Determine initial step based on whether we have scanned data
+  const getInitialStep = (): Step => {
+    if (scannedData) {
+      return "patient";
+    }
+    return "patientSearch";
+  };
+
+  const [currentStep, setCurrentStep] = useState<Step>(getInitialStep());
+  const [patientData, setPatientData] = useState<ScannedPatientData | null>(
+    scannedData
+  );
+  const [selectedPatient, setSelectedPatient] = useState<any>(null);
   const [serviceDate, setServiceDate] = useState<string>(
-    scannedData.serviceDate || format(new Date(), "yyyy-MM-dd")
+    scannedData?.serviceDate || format(new Date(), "yyyy-MM-dd")
   );
   const [serviceLocation, setServiceLocation] = useState<string>("X"); // Default to Rural/Northern
   const [locationOfService, setLocationOfService] = useState<string>("1"); // Default to Office
@@ -114,6 +176,44 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
     useState(false);
   const [currentCodeForConfig, setCurrentCodeForConfig] =
     useState<BillingCode | null>(null);
+
+  // Patient search and creation state
+  const [patientSearchQuery, setPatientSearchQuery] = useState("");
+  const [filteredPatients, setFilteredPatients] = useState<any[]>([]);
+  const [showPatientDropdown, setShowPatientDropdown] = useState(false);
+  const [isCreatingPatient, setIsCreatingPatient] = useState(false);
+  const [newPatient, setNewPatient] = useState({
+    firstName: "",
+    lastName: "",
+    billingNumber: "",
+    dateOfBirth: "",
+    sex: "",
+  });
+  const [newPatientErrors, setNewPatientErrors] = useState({
+    billingNumber: false,
+    dateOfBirth: false,
+    sex: false,
+    billingNumberCheckDigit: false,
+    billingNumberDuplicate: false,
+  });
+  const [duplicatePatient, setDuplicatePatient] = useState<any>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [tempDateOfBirth, setTempDateOfBirth] = useState({
+    year: "",
+    month: "",
+    day: "",
+  });
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | null>(
+    null
+  );
+  const [currentCalendarMonth, setCurrentCalendarMonth] = useState(new Date());
+  const [showYearPicker, setShowYearPicker] = useState(false);
+  const [datePickerStep, setDatePickerStep] = useState<
+    "decade" | "year" | "month" | "day"
+  >("decade");
+  const [selectedDecade, setSelectedDecade] = useState<number>(0);
+  const [selectedYear, setSelectedYear] = useState<number>(0);
+  const [selectedMonth, setSelectedMonth] = useState<number>(0);
 
   // Service location options (based on ServiceFormScreen)
   const serviceLocationOptions = [
@@ -146,6 +246,13 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
   const { data: healthInstitutions = [] } = useQuery<HealthInstitution[]>({
     queryKey: ["healthInstitutions"],
     queryFn: healthInstitutionsAPI.getAll,
+  });
+
+  // Fetch patients for search functionality
+  const { data: patients, isLoading: patientsLoading } = useQuery<any[]>({
+    queryKey: ["patients"],
+    queryFn: patientsAPI.getAll,
+    enabled: visible && currentStep === "patientSearch",
   });
 
   // Fetch physician information to auto-set service location
@@ -206,14 +313,14 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
     mutationFn: (serviceData: any) => servicesAPI.create(serviceData),
   });
 
-  // Check if patient exists
+  // Check if patient exists (only for scanned data)
   const { data: existingPatient, isLoading: checkingPatient } = useQuery({
-    queryKey: ["patient", patientData.billingNumber, physicianId],
+    queryKey: ["patient", patientData?.billingNumber, physicianId],
     queryFn: async () => {
       try {
         const patients = await patientsAPI.getAll();
         const foundPatient = patients.find(
-          (p: any) => p.billingNumber === patientData.billingNumber
+          (p: any) => p.billingNumber === patientData?.billingNumber
         );
         return foundPatient || null; // Always return a value, null if not found
       } catch (error) {
@@ -222,8 +329,359 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
       }
     },
     enabled:
-      visible && patientData.billingNumber.length > 0 && physicianId.length > 0,
+      visible &&
+      !!patientData?.billingNumber &&
+      patientData.billingNumber.length > 0 &&
+      physicianId.length > 0,
   });
+
+  // Get the current patient (either from scanned data or selected patient)
+  const currentPatient =
+    selectedPatient ||
+    (scannedData
+      ? {
+          id: "scanned", // Temporary ID for scanned data
+          firstName: scannedData.firstName,
+          lastName: scannedData.lastName,
+          billingNumber: scannedData.billingNumber,
+          dateOfBirth: scannedData.dateOfBirth,
+          sex: scannedData.gender,
+        }
+      : existingPatient);
+
+  // Filter patients based on search query
+  React.useEffect(() => {
+    if (!patients || !patientSearchQuery.trim()) {
+      setFilteredPatients([]);
+      return;
+    }
+
+    const searchLower = patientSearchQuery.toLowerCase();
+    const filtered = patients.filter(
+      (patient) =>
+        patient.firstName.toLowerCase().includes(searchLower) ||
+        patient.lastName.toLowerCase().includes(searchLower) ||
+        patient.billingNumber.includes(searchLower)
+    );
+    setFilteredPatients(filtered);
+  }, [patients, patientSearchQuery]);
+
+  // Billing number validation function
+  const checkDigit = (value: string): boolean => {
+    if (value.length !== 9) return false;
+    const weights = [9, 8, 7, 6, 5, 4, 3, 2];
+    const sum = value
+      .slice(0, 8)
+      .split("")
+      .reduce((acc, digit, index) => {
+        const product = parseInt(digit) * weights[index];
+        return acc + product;
+      }, 0);
+    const remainder = sum % 11 > 0 ? 11 - (sum % 11) : 0;
+    return remainder === parseInt(value[8]);
+  };
+
+  const isNewPatientFormValid = (): boolean => {
+    // Check if all required fields are filled
+    if (
+      !newPatient.firstName.trim() ||
+      !newPatient.lastName.trim() ||
+      !newPatient.billingNumber ||
+      !newPatient.dateOfBirth ||
+      !newPatient.sex
+    ) {
+      return false;
+    }
+
+    // Validate billing number format
+    if (
+      newPatient.billingNumber.length !== 9 ||
+      !/^\d{9}$/.test(newPatient.billingNumber)
+    ) {
+      return false;
+    }
+
+    if (!checkDigit(newPatient.billingNumber)) {
+      return false;
+    }
+
+    // Check for duplicate patient error
+    if (newPatientErrors.billingNumberDuplicate) {
+      return false;
+    }
+
+    // Check for duplicate patient
+    if (patients) {
+      const existingPatient = patients.find(
+        (patient) => patient.billingNumber === newPatient.billingNumber
+      );
+      if (existingPatient) {
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  // Calendar utility functions
+  const getDaysInMonth = (date: Date) => {
+    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  };
+
+  const getFirstDayOfMonth = (date: Date) => {
+    return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+  };
+
+  const generateCalendarDays = (date: Date) => {
+    const daysInMonth = getDaysInMonth(date);
+    const firstDay = getFirstDayOfMonth(date);
+    const days = [];
+    const today = new Date();
+
+    // Add empty cells for days before the first day of the month
+    for (let i = 0; i < firstDay; i++) {
+      days.push(null);
+    }
+
+    // Add days of the month
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dayDate = new Date(date.getFullYear(), date.getMonth(), day);
+      const isFuture = dayDate > today;
+
+      days.push({
+        date: dayDate,
+        day: day,
+        isFuture: isFuture,
+      });
+    }
+
+    return days;
+  };
+
+  const isSameDate = (date1: Date, date2: Date) => {
+    return (
+      date1.toISOString().split("T")[0] === date2.toISOString().split("T")[0]
+    );
+  };
+
+  const formatDate = (date: Date) => {
+    return formatFullDate(date);
+  };
+
+  const handleCalendarDateSelect = (date: Date) => {
+    setSelectedCalendarDate(date);
+  };
+
+  const handleCalendarConfirm = () => {
+    if (selectedCalendarDate) {
+      // Format date as YYYY-MM-DD for storage
+      const year = selectedCalendarDate.getFullYear();
+      const month = String(selectedCalendarDate.getMonth() + 1).padStart(
+        2,
+        "0"
+      );
+      const day = String(selectedCalendarDate.getDate()).padStart(2, "0");
+      const formattedDate = `${year}-${month}-${day}`;
+
+      setNewPatient((prev) => ({ ...prev, dateOfBirth: formattedDate }));
+      if (newPatientErrors.dateOfBirth) {
+        setNewPatientErrors((prev) => ({ ...prev, dateOfBirth: false }));
+      }
+    }
+    setShowDatePicker(false);
+  };
+
+  // Step-by-step date picker functions
+  const handleDecadeSelect = (decade: number) => {
+    setSelectedDecade(decade);
+    setDatePickerStep("year");
+  };
+
+  const handleYearSelectStep = (year: number) => {
+    setSelectedYear(year);
+    setDatePickerStep("month");
+  };
+
+  const handleMonthSelect = (month: number) => {
+    setSelectedMonth(month);
+    setDatePickerStep("day");
+    // Set the calendar to the selected year/month
+    setCurrentCalendarMonth(new Date(selectedYear, month - 1, 1));
+  };
+
+  const handleBackToDecade = () => {
+    setDatePickerStep("decade");
+  };
+
+  const handleBackToYear = () => {
+    setDatePickerStep("year");
+  };
+
+  const handleBackToMonth = () => {
+    setDatePickerStep("month");
+  };
+
+  const generateDecades = () => {
+    const currentYear = new Date().getFullYear();
+    const decades = [];
+    // Start with the current decade (e.g., 2020s for 2024)
+    const currentDecade = Math.floor(currentYear / 10) * 10;
+    for (let i = 0; i < 12; i++) {
+      const decadeStart = currentDecade - i * 10;
+      decades.push(decadeStart);
+    }
+    return decades;
+  };
+
+  const generateYearsInDecade = (decade: number) => {
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let i = 0; i < 10; i++) {
+      const year = decade + i;
+      if (year <= currentYear) {
+        years.push(year);
+      }
+    }
+    return years;
+  };
+
+  const generateMonths = () => {
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth() + 1; // getMonth() returns 0-11
+
+    const allMonths = [
+      { value: 1, label: "January" },
+      { value: 2, label: "February" },
+      { value: 3, label: "March" },
+      { value: 4, label: "April" },
+      { value: 5, label: "May" },
+      { value: 6, label: "June" },
+      { value: 7, label: "July" },
+      { value: 8, label: "August" },
+      { value: 9, label: "September" },
+      { value: 10, label: "October" },
+      { value: 11, label: "November" },
+      { value: 12, label: "December" },
+    ];
+
+    // If we're selecting a year that's the current year, only show months up to current month
+    if (selectedYear === currentYear) {
+      return allMonths.filter((month) => month.value <= currentMonth);
+    }
+
+    return allMonths;
+  };
+
+  // Create new patient mutation
+  const createNewPatientMutation = useMutation({
+    mutationFn: (patientData: {
+      firstName: string;
+      lastName: string;
+      billingNumber: string;
+      dateOfBirth: string;
+      sex: string;
+      physicianId: string;
+    }) => patientsAPI.create(patientData),
+    onSuccess: (newPatient) => {
+      Alert.alert("Success", "Patient created successfully!");
+      setSelectedPatient(newPatient);
+      setPatientSearchQuery(
+        `${newPatient.firstName} ${newPatient.lastName} (#${newPatient.billingNumber})`
+      );
+      setIsCreatingPatient(false);
+      setNewPatient({
+        firstName: "",
+        lastName: "",
+        billingNumber: "",
+        dateOfBirth: "",
+        sex: "",
+      });
+      setNewPatientErrors({
+        billingNumber: false,
+        dateOfBirth: false,
+        sex: false,
+        billingNumberCheckDigit: false,
+        billingNumberDuplicate: false,
+      });
+      setDuplicatePatient(null);
+    },
+    onError: (error: any) => {
+      console.error("Error creating patient:", error);
+      Alert.alert("Error", "Failed to create patient");
+    },
+  });
+
+  const handleCreateNewPatient = () => {
+    // Reset errors
+    setNewPatientErrors({
+      billingNumber: false,
+      dateOfBirth: false,
+      sex: false,
+      billingNumberCheckDigit: false,
+      billingNumberDuplicate: false,
+    });
+
+    // Validate required fields
+    const errors = {
+      billingNumber: !newPatient.billingNumber,
+      dateOfBirth: !newPatient.dateOfBirth,
+      sex: !newPatient.sex,
+      billingNumberCheckDigit: false,
+      billingNumberDuplicate: false,
+    };
+
+    // Check for required fields
+    if (!newPatient.firstName || !newPatient.lastName) {
+      Alert.alert("Error", "Please fill in all required patient fields");
+      return;
+    }
+
+    // Validate billing number format and check digit
+    if (newPatient.billingNumber) {
+      if (
+        newPatient.billingNumber.length !== 9 ||
+        !/^\d{9}$/.test(newPatient.billingNumber)
+      ) {
+        errors.billingNumber = true;
+        Alert.alert("Error", "Billing number must be exactly 9 digits");
+        setNewPatientErrors(errors);
+        return;
+      }
+
+      if (!checkDigit(newPatient.billingNumber)) {
+        errors.billingNumberCheckDigit = true;
+        Alert.alert("Error", "Invalid billing number check digit");
+        setNewPatientErrors(errors);
+        return;
+      }
+    }
+
+    // Check for duplicate patient
+    if (patients) {
+      const existingPatient = patients.find(
+        (patient) => patient.billingNumber === newPatient.billingNumber
+      );
+      if (existingPatient) {
+        setDuplicatePatient(existingPatient);
+        errors.billingNumberDuplicate = true;
+        setNewPatientErrors(errors);
+        return;
+      }
+    }
+
+    // Check if any errors exist
+    if (errors.billingNumber || errors.dateOfBirth || errors.sex) {
+      Alert.alert("Error", "Please fill in all required patient fields");
+      setNewPatientErrors(errors);
+      return;
+    }
+
+    // Create the patient
+    createNewPatientMutation.mutate({
+      ...newPatient,
+      physicianId,
+    });
+  };
 
   const handleNext = () => {
     switch (currentStep) {
@@ -236,6 +694,15 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
           // This should not be reachable due to canProceed() logic
           return;
         }
+        break;
+      case "patientSearch":
+        // This step is now handled inline - just proceed to billing codes if patient is selected
+        if (currentPatient) {
+          setCurrentStep("billingCodes");
+        }
+        break;
+      case "patientCreation":
+        // This step is handled inline
         break;
       case "billingCodes":
         // If billing codes are selected, go to service location steps
@@ -264,7 +731,11 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
   const handleBack = () => {
     switch (currentStep) {
       case "billingCodes":
-        setCurrentStep("patient");
+        if (scannedData) {
+          setCurrentStep("patient");
+        } else {
+          setCurrentStep("patientSearch");
+        }
         break;
       case "serviceDate":
         setCurrentStep("billingCodes");
@@ -291,6 +762,11 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
   };
 
   const handleCreatePatient = async () => {
+    if (!patientData) {
+      Alert.alert("Error", "No patient data available");
+      return;
+    }
+
     try {
       await createPatientMutation.mutateAsync(patientData);
       setIsPatientConfirmed(true);
@@ -328,17 +804,30 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
 
       const serviceData = {
         physicianId,
-        patientId: existingPatient?.id || createPatientMutation.data?.id,
+        patientId:
+          currentPatient?.id === "scanned"
+            ? null
+            : currentPatient?.id || createPatientMutation.data?.id,
         serviceDate,
         serviceLocation:
           selectedBillingCodes.length > 0 ? serviceLocation : null,
         locationOfService:
           selectedBillingCodes.length > 0 ? locationOfService : null,
         icdCodeId: selectedICDCode?.id,
-        summary: `Service created from camera scan - ${patientData.firstName} ${patientData.lastName}`,
+        summary: `Service created ${
+          scannedData ? "from camera scan" : "manually"
+        } - ${currentPatient?.firstName || patientData?.firstName} ${
+          currentPatient?.lastName || patientData?.lastName
+        }`,
         serviceStatus: "OPEN",
         billingCodes: billingCodesData,
       };
+
+      // If we have scanned data and the patient doesn't exist, create the patient first
+      if (scannedData && currentPatient?.id === "scanned" && !existingPatient) {
+        const newPatient = await createPatientMutation.mutateAsync(scannedData);
+        serviceData.patientId = newPatient.id;
+      }
 
       await createServiceMutation.mutateAsync(serviceData);
 
@@ -348,6 +837,9 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
       } catch (error) {
         console.error("Error clearing scanned patient data:", error);
       }
+
+      // Clear all state after successful service creation
+      clearAllState();
 
       Alert.alert("Success", "Claim created successfully", [
         {
@@ -477,8 +969,12 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
     switch (currentStep) {
       case "patient":
         return existingPatient && !checkingPatient;
+      case "patientSearch":
+        return true; // Always allow proceeding to show patient selector
+      case "patientCreation":
+        return false; // This step is handled by PatientSelector
       case "billingCodes":
-        return true; // Billing codes are optional
+        return currentPatient !== null; // Need a patient selected
       case "serviceDate":
         return serviceDate.length > 0;
       case "serviceLocation":
@@ -534,18 +1030,18 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
       <Card style={styles.card}>
         <Card.Content>
           <Text style={styles.fieldLabel}>Health Service Number:</Text>
-          <Text style={styles.fieldValue}>{patientData.billingNumber}</Text>
+          <Text style={styles.fieldValue}>{patientData?.billingNumber}</Text>
 
           <Text style={styles.fieldLabel}>Name:</Text>
           <Text style={styles.fieldValue}>
-            {patientData.firstName} {patientData.lastName}
+            {patientData?.firstName} {patientData?.lastName}
           </Text>
 
           <Text style={styles.fieldLabel}>Date of Birth:</Text>
-          <Text style={styles.fieldValue}>{patientData.dateOfBirth}</Text>
+          <Text style={styles.fieldValue}>{patientData?.dateOfBirth}</Text>
 
           <Text style={styles.fieldLabel}>Gender:</Text>
-          <Text style={styles.fieldValue}>{patientData.gender}</Text>
+          <Text style={styles.fieldValue}>{patientData?.gender}</Text>
         </Card.Content>
       </Card>
 
@@ -568,7 +1064,7 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
             create the patient to continue.
           </Text>
           <Text style={styles.debugText}>
-            Searching for billing number: {patientData.billingNumber}
+            Searching for billing number: {patientData?.billingNumber}
           </Text>
           <TouchableOpacity
             onPress={handleCreatePatient}
@@ -585,6 +1081,360 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
             )}
           </TouchableOpacity>
         </View>
+      )}
+    </View>
+  );
+
+  const renderPatientSearchStep = () => (
+    <View style={styles.stepContainer}>
+      <Text style={styles.stepTitle}>Select Patient</Text>
+      <Text style={styles.stepSubtitle}>
+        Choose a patient from your existing patients or create a new one.
+      </Text>
+
+      {/* Patient Search Input */}
+      <Card style={styles.card}>
+        <Card.Content>
+          <TextInput
+            style={styles.input}
+            placeholder="Search patients by name or hsn..."
+            placeholderTextColor="#6b7280"
+            value={patientSearchQuery}
+            onChangeText={(text) => {
+              setPatientSearchQuery(text);
+              setShowPatientDropdown(true);
+            }}
+            onFocus={() => {
+              setShowPatientDropdown(true);
+            }}
+          />
+
+          {/* Patient Search Results */}
+          {showPatientDropdown && patientSearchQuery.length > 0 && (
+            <View style={styles.patientSearchResults}>
+              {patientsLoading ? (
+                <ActivityIndicator size="small" color="#2563eb" />
+              ) : (
+                <ScrollView
+                  style={styles.patientSearchScroll}
+                  nestedScrollEnabled
+                >
+                  {filteredPatients.length > 0 ? (
+                    filteredPatients.map((patient) => (
+                      <TouchableOpacity
+                        key={patient.id}
+                        style={styles.patientOption}
+                        onPress={() => {
+                          setSelectedPatient(patient);
+                          setPatientSearchQuery(
+                            `${patient.firstName} ${patient.lastName} (#${patient.billingNumber})`
+                          );
+                          setShowPatientDropdown(false);
+                        }}
+                      >
+                        <Text style={styles.patientOptionText}>
+                          {patient.firstName} {patient.lastName} (#
+                          {patient.billingNumber})
+                        </Text>
+                      </TouchableOpacity>
+                    ))
+                  ) : (
+                    <Text style={styles.noResultsText}>
+                      No patients found. Try a different search term.
+                    </Text>
+                  )}
+                </ScrollView>
+              )}
+            </View>
+          )}
+
+          {/* Create New Patient Button */}
+          <TouchableOpacity
+            style={styles.createNewPatientButton}
+            onPress={() => setIsCreatingPatient(true)}
+          >
+            <Ionicons name="add" size={20} color="#ffffff" />
+            <Text style={styles.createNewPatientButtonText}>
+              Create New Patient
+            </Text>
+          </TouchableOpacity>
+
+          {/* Selected Patient Display */}
+          {currentPatient && (
+            <View style={styles.selectedPatientContainer}>
+              <Text style={styles.selectedPatientTitle}>Selected Patient:</Text>
+              <Text style={styles.selectedPatientText}>
+                {currentPatient.firstName} {currentPatient.lastName} (#
+                {currentPatient.billingNumber})
+              </Text>
+            </View>
+          )}
+        </Card.Content>
+      </Card>
+
+      {/* New Patient Creation Form */}
+      {isCreatingPatient && (
+        <Card style={styles.card}>
+          <Card.Content>
+            <Text style={styles.createPatientTitle}>Create New Patient</Text>
+
+            <TextInput
+              style={styles.input}
+              placeholder="First Name *"
+              placeholderTextColor="#6b7280"
+              value={newPatient.firstName}
+              onChangeText={(text) =>
+                setNewPatient((prev) => ({ ...prev, firstName: text }))
+              }
+            />
+
+            <TextInput
+              style={styles.input}
+              placeholder="Last Name *"
+              placeholderTextColor="#6b7280"
+              value={newPatient.lastName}
+              onChangeText={(text) =>
+                setNewPatient((prev) => ({ ...prev, lastName: text }))
+              }
+            />
+
+            <View style={styles.dateGenderRow}>
+              <View style={styles.dateInputContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.input,
+                    styles.dateInput,
+                    newPatientErrors.dateOfBirth && styles.inputError,
+                  ]}
+                  onPress={() => {
+                    setDatePickerStep("decade");
+                    setShowDatePicker(true);
+                    if (newPatient.dateOfBirth) {
+                      const [year, month, day] = newPatient.dateOfBirth
+                        .split("-")
+                        .map(Number);
+                      setSelectedYear(year);
+                      setSelectedMonth(month - 1);
+                      setSelectedDecade(Math.floor(year / 10) * 10);
+                      setSelectedCalendarDate(new Date(year, month - 1, day));
+                    }
+                  }}
+                >
+                  <Text
+                    style={
+                      newPatient.dateOfBirth
+                        ? styles.dateInputText
+                        : styles.placeholderText
+                    }
+                  >
+                    {newPatient.dateOfBirth
+                      ? formatFullDate(newPatient.dateOfBirth)
+                      : "Date of Birth *"}
+                  </Text>
+                  <Ionicons name="calendar" size={20} color="#6b7280" />
+                </TouchableOpacity>
+                {newPatientErrors.dateOfBirth && (
+                  <Text style={styles.errorText}>
+                    Date of birth is required
+                  </Text>
+                )}
+              </View>
+
+              <View style={styles.genderContainer}>
+                <View style={styles.genderButtons}>
+                  <TouchableOpacity
+                    style={[
+                      styles.genderCircleButton,
+                      newPatient.sex === "M" &&
+                        styles.selectedGenderCircleButton,
+                      newPatientErrors.sex && styles.inputError,
+                    ]}
+                    onPress={() => {
+                      setNewPatient((prev) => ({ ...prev, sex: "M" }));
+                      if (newPatientErrors.sex) {
+                        setNewPatientErrors((prev) => ({
+                          ...prev,
+                          sex: false,
+                        }));
+                      }
+                    }}
+                  >
+                    <Ionicons
+                      name="male"
+                      size={24}
+                      color={newPatient.sex === "M" ? "#ffffff" : "#6b7280"}
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.genderCircleButton,
+                      newPatient.sex === "F" &&
+                        styles.selectedGenderCircleButton,
+                      newPatientErrors.sex && styles.inputError,
+                    ]}
+                    onPress={() => {
+                      setNewPatient((prev) => ({ ...prev, sex: "F" }));
+                      if (newPatientErrors.sex) {
+                        setNewPatientErrors((prev) => ({
+                          ...prev,
+                          sex: false,
+                        }));
+                      }
+                    }}
+                  >
+                    <Ionicons
+                      name="female"
+                      size={24}
+                      color={newPatient.sex === "F" ? "#ffffff" : "#6b7280"}
+                    />
+                  </TouchableOpacity>
+                </View>
+                {newPatientErrors.sex && (
+                  <Text style={styles.errorText}>Please select a gender</Text>
+                )}
+              </View>
+            </View>
+
+            <TextInput
+              style={[
+                styles.input,
+                newPatientErrors.billingNumber && styles.inputError,
+              ]}
+              placeholder="Health Services Number (9 digits) *"
+              placeholderTextColor="#6b7280"
+              value={newPatient.billingNumber}
+              onChangeText={(text) => {
+                // Only allow digits and limit to 9 characters
+                const numericText = text.replace(/[^0-9]/g, "").slice(0, 9);
+                setNewPatient((prev) => ({
+                  ...prev,
+                  billingNumber: numericText,
+                }));
+                // Clear errors when user starts typing
+                if (
+                  newPatientErrors.billingNumber ||
+                  newPatientErrors.billingNumberDuplicate
+                ) {
+                  setNewPatientErrors((prev) => ({
+                    ...prev,
+                    billingNumber: false,
+                    billingNumberDuplicate: false,
+                  }));
+                }
+
+                // Real-time duplicate check when billing number is complete
+                if (
+                  numericText.length === 9 &&
+                  checkDigit(numericText) &&
+                  patients
+                ) {
+                  const existingPatient = patients.find(
+                    (patient) => patient.billingNumber === numericText
+                  );
+                  if (existingPatient) {
+                    setDuplicatePatient(existingPatient);
+                    setNewPatientErrors((prev) => ({
+                      ...prev,
+                      billingNumberDuplicate: true,
+                    }));
+                  } else {
+                    setDuplicatePatient(null);
+                  }
+                }
+              }}
+              keyboardType="numeric"
+            />
+            {newPatientErrors.billingNumber && (
+              <Text style={styles.errorText}>Billing number is required</Text>
+            )}
+            {newPatientErrors.billingNumberCheckDigit && (
+              <Text style={styles.errorText}>
+                Billing number check digit is invalid
+              </Text>
+            )}
+            {newPatientErrors.billingNumberDuplicate && (
+              <View style={styles.duplicatePatientContainer}>
+                <Text style={styles.errorText}>
+                  A patient with this billing number already exists in your
+                  patient list
+                </Text>
+                {duplicatePatient && (
+                  <View style={styles.duplicatePatientCard}>
+                    <Text style={styles.duplicatePatientTitle}>
+                      Existing Patient Found:
+                    </Text>
+                    <Text style={styles.duplicatePatientName}>
+                      {duplicatePatient.firstName} {duplicatePatient.lastName}
+                      {duplicatePatient.middleInitial &&
+                        ` ${duplicatePatient.middleInitial}`}
+                    </Text>
+                    <Text style={styles.duplicatePatientDetails}>
+                      DOB: {formatFullDate(duplicatePatient.dateOfBirth)} | Sex:{" "}
+                      {duplicatePatient.sex}
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.selectDuplicateButton}
+                      onPress={() => {
+                        setSelectedPatient(duplicatePatient);
+                        setPatientSearchQuery(
+                          `${duplicatePatient.firstName} ${duplicatePatient.lastName} (#${duplicatePatient.billingNumber})`
+                        );
+                        setIsCreatingPatient(false);
+                        setNewPatient({
+                          firstName: "",
+                          lastName: "",
+                          billingNumber: "",
+                          dateOfBirth: "",
+                          sex: "",
+                        });
+                        setNewPatientErrors({
+                          billingNumber: false,
+                          dateOfBirth: false,
+                          sex: false,
+                          billingNumberCheckDigit: false,
+                          billingNumberDuplicate: false,
+                        });
+                        setDuplicatePatient(null);
+                      }}
+                    >
+                      <Text style={styles.selectDuplicateButtonText}>
+                        Use This Patient
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            )}
+
+            <View style={styles.createPatientButtonContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.createPatientButton,
+                  !isNewPatientFormValid() && styles.disabledButton,
+                ]}
+                onPress={handleCreateNewPatient}
+                disabled={
+                  !isNewPatientFormValid() || createNewPatientMutation.isPending
+                }
+              >
+                {createNewPatientMutation.isPending ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.createPatientButtonText}>
+                    Create Patient
+                  </Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.backToSearchButton}
+                onPress={() => setIsCreatingPatient(false)}
+              >
+                <Text style={styles.backToSearchButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </Card.Content>
+        </Card>
       )}
     </View>
   );
@@ -895,7 +1745,8 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
         <Card.Content>
           <Text style={styles.fieldLabel}>Patient:</Text>
           <Text style={styles.fieldValue}>
-            {patientData.firstName} {patientData.lastName}
+            {currentPatient?.firstName || patientData?.firstName}{" "}
+            {currentPatient?.lastName || patientData?.lastName}
           </Text>
 
           <Text style={styles.fieldLabel}>Service Date:</Text>
@@ -953,6 +1804,10 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
     switch (currentStep) {
       case "patient":
         return renderPatientStep();
+      case "patientSearch":
+        return renderPatientSearchStep();
+      case "patientCreation":
+        return null; // Handled by PatientSelector modal
       case "billingCodes":
         return renderBillingCodesStep();
       case "serviceDate":
@@ -1032,6 +1887,206 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
         }}
         serviceDate={serviceDate}
       />
+
+      {/* Date Picker Modal */}
+      <Modal
+        visible={showDatePicker}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowDatePicker(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowDatePicker(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalContent}
+            activeOpacity={1}
+            onPress={() => {}}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Date of Birth</Text>
+              <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                <Ionicons name="close" size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.stepPickerContainer}>
+              {/* Step Header */}
+              <View style={styles.stepHeader}>
+                {datePickerStep !== "decade" && (
+                  <TouchableOpacity onPress={handleBackToDecade}>
+                    <Ionicons name="arrow-back" size={20} color="#6b7280" />
+                  </TouchableOpacity>
+                )}
+                <Text style={styles.stepTitle}>
+                  {datePickerStep === "decade" && "Select Decade"}
+                  {datePickerStep === "year" &&
+                    `Select Year (${selectedDecade}s)`}
+                  {datePickerStep === "month" &&
+                    `Select Month (${selectedYear})`}
+                  {datePickerStep === "day" &&
+                    `Select Day (${
+                      generateMonths().find((m) => m.value === selectedMonth)
+                        ?.label
+                    } ${selectedYear})`}
+                </Text>
+                {datePickerStep !== "decade" && <View style={{ width: 20 }} />}
+              </View>
+
+              {/* Decade Selection */}
+              {datePickerStep === "decade" && (
+                <ScrollView style={styles.stepScrollView}>
+                  {generateDecades().map((decade) => (
+                    <TouchableOpacity
+                      key={decade}
+                      style={styles.stepOption}
+                      onPress={() => handleDecadeSelect(decade)}
+                    >
+                      <Text style={styles.stepOptionText}>
+                        {decade}s ({decade} - {decade + 9})
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+
+              {/* Year Selection */}
+              {datePickerStep === "year" && (
+                <ScrollView style={styles.stepScrollView}>
+                  {generateYearsInDecade(selectedDecade).map((year) => (
+                    <TouchableOpacity
+                      key={year}
+                      style={[
+                        styles.stepOption,
+                        selectedYear === year && styles.selectedStepOption,
+                      ]}
+                      onPress={() => handleYearSelectStep(year)}
+                    >
+                      <Text
+                        style={[
+                          styles.stepOptionText,
+                          selectedYear === year &&
+                            styles.selectedStepOptionText,
+                        ]}
+                      >
+                        {year}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+
+              {/* Month Selection */}
+              {datePickerStep === "month" && (
+                <ScrollView style={styles.stepScrollView}>
+                  {generateMonths().map((month) => (
+                    <TouchableOpacity
+                      key={month.value}
+                      style={[
+                        styles.stepOption,
+                        selectedMonth === month.value &&
+                          styles.selectedStepOption,
+                      ]}
+                      onPress={() => handleMonthSelect(month.value)}
+                    >
+                      <Text
+                        style={[
+                          styles.stepOptionText,
+                          selectedMonth === month.value &&
+                            styles.selectedStepOptionText,
+                        ]}
+                      >
+                        {month.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+
+              {/* Day Selection */}
+              {datePickerStep === "day" && (
+                <View>
+                  {/* Calendar Days Header */}
+                  <View style={styles.calendarDaysHeader}>
+                    {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
+                      (day) => (
+                        <Text key={day} style={styles.calendarDayHeader}>
+                          {day}
+                        </Text>
+                      )
+                    )}
+                  </View>
+
+                  {/* Calendar Grid */}
+                  <View style={styles.calendarGrid}>
+                    {generateCalendarDays(currentCalendarMonth).map(
+                      (dayData, index) => (
+                        <TouchableOpacity
+                          key={index}
+                          style={[
+                            styles.calendarDay,
+                            dayData &&
+                              selectedCalendarDate &&
+                              isSameDate(dayData.date, selectedCalendarDate) &&
+                              styles.selectedCalendarDay,
+                            !dayData && styles.emptyCalendarDay,
+                            dayData?.isFuture && styles.futureCalendarDay,
+                          ]}
+                          onPress={() =>
+                            dayData &&
+                            !dayData.isFuture &&
+                            handleCalendarDateSelect(dayData.date)
+                          }
+                          disabled={!dayData || dayData.isFuture}
+                        >
+                          {dayData && (
+                            <Text
+                              style={[
+                                styles.calendarDayText,
+                                selectedCalendarDate &&
+                                  isSameDate(
+                                    dayData.date,
+                                    selectedCalendarDate
+                                  ) &&
+                                  styles.selectedCalendarDayText,
+                                dayData.isFuture &&
+                                  styles.futureCalendarDayText,
+                              ]}
+                            >
+                              {dayData.date.getDate()}
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      )
+                    )}
+                  </View>
+
+                  {/* Selected Date Display */}
+                  {selectedCalendarDate && (
+                    <View style={styles.selectedDateContainer}>
+                      <Text style={styles.selectedDateText}>
+                        Selected: {selectedCalendarDate.toLocaleDateString()}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Confirm Button */}
+                  {selectedCalendarDate && (
+                    <TouchableOpacity
+                      style={styles.confirmButton}
+                      onPress={handleCalendarConfirm}
+                    >
+                      <Text style={styles.confirmButtonText}>Confirm</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </Modal>
   );
 };
@@ -1491,6 +2546,312 @@ const styles = StyleSheet.create({
     color: "#6b7280",
     marginTop: 8,
     textAlign: "center",
+  },
+  // Patient search step styles
+  selectedPatientContainer: {
+    marginTop: 16,
+    padding: 16,
+    backgroundColor: "#e8f5e8",
+    borderRadius: 12,
+  },
+  selectedPatientTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#2e7d32",
+    marginBottom: 8,
+  },
+  selectedPatientText: {
+    fontSize: 16,
+    color: "#333",
+  },
+  // Inline patient search styles
+  patientSearchResults: {
+    maxHeight: 200,
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    marginTop: 8,
+  },
+  patientSearchScroll: {
+    maxHeight: 200,
+  },
+  patientOption: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3f4f6",
+  },
+  patientOptionText: {
+    fontSize: 16,
+    color: "#374151",
+  },
+  createNewPatientButton: {
+    backgroundColor: "#059669",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  createNewPatientButtonText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "600",
+    marginLeft: 8,
+  },
+  createPatientTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: 16,
+  },
+  createPatientButtonContainer: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 16,
+  },
+  backToSearchButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#6b7280",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  backToSearchButtonText: {
+    color: "#6b7280",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  selectDuplicateButton: {
+    backgroundColor: "#f59e0b",
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    alignItems: "center",
+    marginTop: 8,
+  },
+  selectDuplicateButtonText: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  noResultsText: {
+    textAlign: "center",
+    color: "#6b7280",
+    fontSize: 16,
+    padding: 20,
+  },
+  dateGenderRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 16,
+  },
+  dateInput: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 8,
+    backgroundColor: "#ffffff",
+    marginBottom: 0,
+  },
+  inputError: {
+    borderColor: "#ef4444",
+  },
+  dateInputText: {
+    fontSize: 16,
+    color: "#374151",
+  },
+  placeholderText: {
+    fontSize: 16,
+    color: "#6b7280",
+  },
+  genderContainer: {
+    alignItems: "center",
+  },
+  genderButtons: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  genderCircleButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: "#d1d5db",
+    backgroundColor: "#ffffff",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  selectedGenderCircleButton: {
+    backgroundColor: "#2563eb",
+    borderColor: "#2563eb",
+  },
+  duplicatePatientContainer: {
+    marginBottom: 16,
+  },
+  duplicatePatientCard: {
+    backgroundColor: "#fef3c7",
+    borderWidth: 1,
+    borderColor: "#f59e0b",
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 8,
+  },
+  duplicatePatientTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#92400e",
+    marginBottom: 4,
+  },
+  duplicatePatientName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#92400e",
+    marginBottom: 2,
+  },
+  duplicatePatientDetails: {
+    fontSize: 14,
+    color: "#92400e",
+    marginBottom: 12,
+  },
+  // Date picker styles (from ServiceFormScreen)
+  stepPickerContainer: {
+    maxHeight: 500,
+  },
+  stepHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb",
+    backgroundColor: "#f9fafb",
+  },
+  stepScrollView: {
+    maxHeight: 300,
+  },
+  stepOption: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3f4f6",
+    backgroundColor: "#ffffff",
+  },
+  selectedStepOption: {
+    backgroundColor: "#dbeafe",
+  },
+  stepOptionText: {
+    fontSize: 16,
+    color: "#374151",
+    textAlign: "center",
+  },
+  selectedStepOptionText: {
+    color: "#2563eb",
+    fontWeight: "600",
+  },
+  calendarDaysHeader: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    paddingVertical: 12,
+    backgroundColor: "#f9fafb",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb",
+  },
+  calendarDayHeader: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#6b7280",
+    textAlign: "center",
+    width: 40,
+  },
+  calendarGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-around",
+    padding: 8,
+  },
+  calendarDay: {
+    width: 40,
+    height: 40,
+    justifyContent: "center",
+    alignItems: "center",
+    marginVertical: 2,
+    borderRadius: 8,
+    backgroundColor: "#ffffff",
+  },
+  selectedCalendarDay: {
+    backgroundColor: "#2563eb",
+  },
+  emptyCalendarDay: {
+    backgroundColor: "transparent",
+  },
+  futureCalendarDay: {
+    backgroundColor: "#f3f4f6",
+  },
+  calendarDayText: {
+    fontSize: 16,
+    color: "#374151",
+    fontWeight: "500",
+  },
+  selectedCalendarDayText: {
+    color: "#ffffff",
+    fontWeight: "600",
+  },
+  futureCalendarDayText: {
+    color: "#9ca3af",
+  },
+  selectedDateContainer: {
+    padding: 16,
+    backgroundColor: "#f0f9ff",
+    borderTopWidth: 1,
+    borderTopColor: "#e5e7eb",
+    alignItems: "center",
+  },
+  selectedDateText: {
+    fontSize: 16,
+    color: "#0369a1",
+    fontWeight: "600",
+  },
+  confirmButton: {
+    backgroundColor: "#059669",
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: "center",
+    margin: 16,
+  },
+  confirmButtonText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  // Additional modal styles for date picker
+  modalContent: {
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    padding: 24,
+    width: "100%",
+    maxHeight: "80%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#374151",
   },
 });
 

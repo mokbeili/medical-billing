@@ -2914,7 +2914,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
                 <View style={styles.dropdownContainer}>
                   <TextInput
                     style={styles.input}
-                    placeholder="Search patients by name or billing number..."
+                    placeholder="Search patients by name or hsn..."
                     placeholderTextColor="#6b7280"
                     value={patientSearchQuery}
                     onChangeText={(text) => {

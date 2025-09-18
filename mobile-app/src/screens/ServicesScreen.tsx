@@ -1122,7 +1122,7 @@ const ServicesScreen = ({ navigation }: any) => {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.addButton}
-            onPress={() => navigation.navigate("ServiceForm")}
+            onPress={() => setShowServiceCreationModal(true)}
           >
             <Ionicons name="add" size={24} color="#ffffff" />
           </TouchableOpacity>
@@ -2303,15 +2303,13 @@ const ServicesScreen = ({ navigation }: any) => {
       </Modal>
 
       {/* Service Creation Modal */}
-      {scannedPatientData && (
-        <ServiceCreationModal
-          visible={showServiceCreationModal}
-          onClose={handleServiceCreationModalClose}
-          onSuccess={handleServiceCreationSuccess}
-          scannedData={scannedPatientData}
-          physicianId={physicians?.[0]?.id || ""}
-        />
-      )}
+      <ServiceCreationModal
+        visible={showServiceCreationModal}
+        onClose={handleServiceCreationModalClose}
+        onSuccess={handleServiceCreationSuccess}
+        scannedData={scannedPatientData}
+        physicianId={physicians?.[0]?.id || ""}
+      />
     </SafeAreaView>
   );
 };
