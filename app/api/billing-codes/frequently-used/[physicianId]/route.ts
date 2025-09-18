@@ -5,9 +5,11 @@ import { NextResponse } from "next/server";
 
 export async function GET(
   request: Request,
-  { params }: { params: { physicianId: string } }
+  { params }: { params: Promise<{ physicianId: string }> }
 ) {
   try {
+    const { physicianId } = await params;
+
     // Check for mobile app authentication first
     const userHeader = request.headers.get("x-user");
     const userId = request.headers.get("x-user-id");
@@ -38,8 +40,6 @@ export async function GET(
       }
       user = session.user;
     }
-
-    const physicianId = params.physicianId;
 
     // Verify the physician belongs to the user
     const physician = await prisma.physician.findFirst({
