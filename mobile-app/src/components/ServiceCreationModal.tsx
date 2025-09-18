@@ -22,6 +22,8 @@ import {
   physiciansAPI,
   servicesAPI,
 } from "../services/api";
+import { BillingCode } from "../types";
+import BillingCodeConfigurationModal from "./BillingCodeConfigurationModal";
 
 interface ScannedPatientData {
   billingNumber: string;
@@ -45,14 +47,15 @@ interface ICDCode {
   description: string;
 }
 
-interface BillingCode {
-  id: number;
-  code: string;
-  title: string;
-  description: string | null;
-  billing_record_type: number;
-  fee_determinant: string;
-  multiple_unit_indicator: string | null;
+interface CodeSubSelection {
+  codeId: number;
+  serviceDate: string | null;
+  serviceEndDate: string | null;
+  bilateralIndicator: string | null;
+  serviceStartTime: string | null;
+  serviceEndTime: string | null;
+  numberOfUnits: number | null;
+  specialCircumstances: string | null;
 }
 
 interface ServiceCreationModalProps {
@@ -103,6 +106,13 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
     BillingCode[]
   >([]);
   const [showBillingCodeDetails, setShowBillingCodeDetails] =
+    useState<BillingCode | null>(null);
+  const [codeSubSelections, setCodeSubSelections] = useState<
+    CodeSubSelection[]
+  >([]);
+  const [showBillingCodeConfigModal, setShowBillingCodeConfigModal] =
+    useState(false);
+  const [currentCodeForConfig, setCurrentCodeForConfig] =
     useState<BillingCode | null>(null);
 
   // Service location options (based on ServiceFormScreen)
@@ -297,21 +307,24 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
 
   const handleCreateService = async () => {
     try {
-      // Prepare billing codes data
-      const billingCodesData = selectedBillingCodes.map((code) => ({
-        codeId: code.id,
-        status: "ACTIVE",
-        billing_record_type: code.billing_record_type || 1,
-        serviceStartTime: null,
-        serviceEndTime: null,
-        numberOfUnits: 1,
-        bilateralIndicator: null,
-        specialCircumstances: null,
-        serviceDate: serviceDate,
-        serviceEndDate: null,
-        fee_determinant: code.fee_determinant || "A",
-        multiple_unit_indicator: code.multiple_unit_indicator || null,
-      }));
+      // Prepare billing codes data using configured sub-selections
+      const billingCodesData = selectedBillingCodes.map((code) => {
+        const subSelection = getSubSelectionForCode(code.id);
+        return {
+          codeId: code.id,
+          status: "ACTIVE",
+          billing_record_type: code.billing_record_type || 1,
+          serviceStartTime: subSelection?.serviceStartTime || null,
+          serviceEndTime: subSelection?.serviceEndTime || null,
+          numberOfUnits: subSelection?.numberOfUnits || 1,
+          bilateralIndicator: subSelection?.bilateralIndicator || null,
+          specialCircumstances: subSelection?.specialCircumstances || null,
+          serviceDate: subSelection?.serviceDate || serviceDate,
+          serviceEndDate: subSelection?.serviceEndDate || null,
+          fee_determinant: code.fee_determinant || "A",
+          multiple_unit_indicator: code.multiple_unit_indicator || null,
+        };
+      });
 
       const serviceData = {
         physicianId,
@@ -349,6 +362,170 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
       console.error("Error creating service:", error);
       Alert.alert("Error", "Failed to create claim");
     }
+  };
+
+  // Helper functions for billing code configuration
+  const isType57Code = (code: BillingCode) => {
+    return code.billing_record_type === 57;
+  };
+
+  const isWorXSection = (code: BillingCode) => {
+    return code.section.code === "W" || code.section.code === "X";
+  };
+
+  const isHSection = (code: BillingCode) => {
+    return code.section.code === "H";
+  };
+
+  const requiresExtraSelections = (code: BillingCode): boolean => {
+    // All codes except type 57 require service date input
+    if (!isType57Code(code)) {
+      return true;
+    }
+
+    // Check if multiple units are required
+    if (code.multiple_unit_indicator === "U") {
+      return true;
+    }
+
+    // Check if start/stop time is required
+    if (code.start_time_required === "Y" || code.stop_time_required === "Y") {
+      return true;
+    }
+
+    // Check if bilateral indicator is required
+    if (code.title.includes("Bilateral")) {
+      return true;
+    }
+
+    // Check if special circumstances are required (W/X section)
+    if (isWorXSection(code)) {
+      return true;
+    }
+
+    // Check if special circumstances are required (H section)
+    if (isHSection(code)) {
+      return true;
+    }
+
+    return false;
+  };
+
+  const calculateServiceDates = (
+    code: BillingCode
+  ): { serviceDate: string | null; serviceEndDate: string | null } => {
+    const today = new Date().toISOString().split("T")[0];
+    // For type 57 codes, calculate dates based on service date and existing codes
+    if (isType57Code(code)) {
+      // This would need more complex logic based on existing service codes
+      // For now, return basic dates
+      return {
+        serviceDate: today,
+        serviceEndDate: today,
+      };
+    }
+    return {
+      serviceDate: today,
+      serviceEndDate: null,
+    };
+  };
+
+  const getSubSelectionForCode = (
+    codeId: number
+  ): CodeSubSelection | undefined => {
+    return codeSubSelections.find((sub) => sub.codeId === codeId);
+  };
+
+  const handleUpdateSubSelection = (
+    codeId: number,
+    updates: Partial<CodeSubSelection>
+  ) => {
+    setCodeSubSelections((prev) =>
+      prev.map((sub) => (sub.codeId === codeId ? { ...sub, ...updates } : sub))
+    );
+  };
+
+  const handleBillingCodeConfiguration = (code: BillingCode) => {
+    // Create or get existing sub-selection for this code
+    let subSelection = getSubSelectionForCode(code.id);
+    if (!subSelection) {
+      const calculatedDates = calculateServiceDates(code);
+      const today = new Date().toISOString().split("T")[0];
+      const defaultServiceDate = !isType57Code(code)
+        ? today
+        : calculatedDates.serviceDate;
+
+      subSelection = {
+        codeId: code.id,
+        serviceDate: defaultServiceDate,
+        serviceEndDate: calculatedDates.serviceEndDate,
+        bilateralIndicator: null,
+        serviceStartTime: null,
+        serviceEndTime: null,
+        numberOfUnits: 1,
+        specialCircumstances: null,
+      };
+
+      setCodeSubSelections((prev) => [...prev, subSelection!]);
+    }
+
+    setCurrentCodeForConfig(code);
+    setShowBillingCodeConfigModal(true);
+  };
+
+  const canProceed = () => {
+    switch (currentStep) {
+      case "patient":
+        return existingPatient && !checkingPatient;
+      case "billingCodes":
+        return true; // Billing codes are optional
+      case "serviceDate":
+        return serviceDate.length > 0;
+      case "serviceLocation":
+        return serviceLocation.length > 0;
+      case "locationOfService":
+        return locationOfService.length > 0;
+      case "icdCode":
+        return selectedICDCode !== null;
+      case "summary":
+        return true;
+      default:
+        return false;
+    }
+  };
+
+  // Date navigation helpers for service date
+  const canDecrementServiceDate = () => {
+    if (!serviceDate) return false;
+    const currentDate = new Date(serviceDate + "T00:00:00");
+    const minDate = new Date("2020-01-01T00:00:00");
+    return currentDate > minDate; // Reasonable minimum date
+  };
+
+  const canIncrementServiceDate = () => {
+    if (!serviceDate) return false;
+    const currentDate = new Date(serviceDate + "T00:00:00");
+    const today = new Date();
+    const todayString = today.toISOString().split("T")[0];
+    const todayDate = new Date(todayString + "T00:00:00");
+    // Disable if current date is today or in the future
+    return currentDate < todayDate;
+  };
+
+  const decrementServiceDate = () => {
+    if (!serviceDate || !canDecrementServiceDate()) return;
+    const currentDate = new Date(serviceDate);
+    currentDate.setDate(currentDate.getDate() - 1);
+    const newDate = currentDate.toISOString().split("T")[0];
+    setServiceDate(newDate);
+  };
+
+  const incrementServiceDate = () => {
+    if (!serviceDate || !canIncrementServiceDate()) return;
+    const currentDate = new Date(serviceDate);
+    currentDate.setDate(currentDate.getDate() + 1);
+    const newDate = currentDate.toISOString().split("T")[0];
+    setServiceDate(newDate);
   };
 
   const renderPatientStep = () => (
@@ -461,13 +638,40 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
                   (selected) => selected.id === code.id
                 );
                 if (isSelected) {
+                  // Remove the code and its sub-selection
                   setSelectedBillingCodes(
                     selectedBillingCodes.filter(
                       (selected) => selected.id !== code.id
                     )
                   );
+                  setCodeSubSelections(
+                    codeSubSelections.filter((sub) => sub.codeId !== code.id)
+                  );
                 } else {
+                  // Add the code to selection
                   setSelectedBillingCodes([...selectedBillingCodes, code]);
+
+                  // If the code requires configuration, show the configuration modal
+                  if (requiresExtraSelections(code)) {
+                    handleBillingCodeConfiguration(code);
+                  } else {
+                    // For codes that don't require configuration, add default sub-selection
+                    const today = new Date().toISOString().split("T")[0];
+                    const defaultSubSelection: CodeSubSelection = {
+                      codeId: code.id,
+                      serviceDate: today,
+                      serviceEndDate: null,
+                      bilateralIndicator: null,
+                      serviceStartTime: null,
+                      serviceEndTime: null,
+                      numberOfUnits: 1,
+                      specialCircumstances: null,
+                    };
+                    setCodeSubSelections((prev) => [
+                      ...prev,
+                      defaultSubSelection,
+                    ]);
+                  }
                 }
               }}
               onLongPress={() => setShowBillingCodeDetails(code)}
@@ -530,13 +734,46 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
       <Text style={styles.stepTitle}>Admission Date</Text>
       <Card style={styles.card}>
         <Card.Content>
-          <TextInput
-            label="Service Date"
-            value={serviceDate}
-            onChangeText={setServiceDate}
-            mode="outlined"
-            style={styles.input}
-          />
+          <View style={styles.dateInputContainer}>
+            <TouchableOpacity
+              style={[
+                styles.dateArrowButton,
+                !canDecrementServiceDate() && styles.disabledDateArrowButton,
+              ]}
+              onPress={decrementServiceDate}
+              disabled={!canDecrementServiceDate()}
+            >
+              <Ionicons
+                name="chevron-back"
+                size={20}
+                color={canDecrementServiceDate() ? "#3b82f6" : "#d1d5db"}
+              />
+            </TouchableOpacity>
+            <TextInput
+              label="Service Date"
+              value={serviceDate}
+              onChangeText={setServiceDate}
+              mode="outlined"
+              style={[styles.input, styles.dateInputWithArrows]}
+            />
+            <TouchableOpacity
+              style={[
+                styles.dateArrowButton,
+                !canIncrementServiceDate() && styles.disabledDateArrowButton,
+              ]}
+              onPress={incrementServiceDate}
+              disabled={!canIncrementServiceDate()}
+            >
+              <Ionicons
+                name="chevron-forward"
+                size={20}
+                color={canIncrementServiceDate() ? "#3b82f6" : "#d1d5db"}
+              />
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.dateNote}>
+            Use arrows to adjust date by one day (max: today)
+          </Text>
         </Card.Content>
       </Card>
     </View>
@@ -733,32 +970,6 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
     }
   };
 
-  const canProceed = () => {
-    switch (currentStep) {
-      case "patient":
-        // For new patients, require explicit confirmation
-        if (!existingPatient) {
-          return isPatientConfirmed;
-        }
-        // For existing patients, can proceed immediately
-        return true;
-      case "billingCodes":
-        return true; // Billing codes are optional
-      case "serviceDate":
-        return serviceDate.length > 0;
-      case "serviceLocation":
-        return serviceLocation.length > 0;
-      case "locationOfService":
-        return locationOfService.length > 0;
-      case "icdCode":
-        return true; // ICD code is optional
-      case "summary":
-        return true;
-      default:
-        return false;
-    }
-  };
-
   const isLastStep = currentStep === "summary";
 
   return (
@@ -805,6 +1016,22 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Billing Code Configuration Modal */}
+      <BillingCodeConfigurationModal
+        visible={showBillingCodeConfigModal}
+        billingCode={currentCodeForConfig}
+        subSelection={
+          currentCodeForConfig
+            ? getSubSelectionForCode(currentCodeForConfig.id) || null
+            : null
+        }
+        onClose={() => setShowBillingCodeConfigModal(false)}
+        onSave={(subSelection) => {
+          handleUpdateSubSelection(subSelection.codeId, subSelection);
+        }}
+        serviceDate={serviceDate}
+      />
     </Modal>
   );
 };
@@ -1234,6 +1461,35 @@ const styles = StyleSheet.create({
   noCodesSubtext: {
     fontSize: 14,
     color: "#999",
+    textAlign: "center",
+  },
+  // Date navigation styles
+  dateInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  dateArrowButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: "#f8fafc",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  disabledDateArrowButton: {
+    backgroundColor: "#f1f5f9",
+    borderColor: "#e2e8f0",
+  },
+  dateInputWithArrows: {
+    flex: 1,
+  },
+  dateNote: {
+    fontSize: 12,
+    color: "#6b7280",
+    marginTop: 8,
     textAlign: "center",
   },
 });

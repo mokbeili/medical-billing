@@ -75,6 +75,29 @@ export async function GET(
             billing_record_type: true,
             fee_determinant: true,
             multiple_unit_indicator: true,
+            max_units: true,
+            start_time_required: true,
+            stop_time_required: true,
+            referring_practitioner_required: true,
+            section: {
+              select: {
+                code: true,
+                title: true,
+                jurisdiction: {
+                  select: {
+                    id: true,
+                    region: true,
+                    country: true,
+                    provider: {
+                      select: {
+                        id: true,
+                        name: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -89,6 +112,14 @@ export async function GET(
       billing_record_type: item.billingCode.billing_record_type,
       fee_determinant: item.billingCode.fee_determinant,
       multiple_unit_indicator: item.billingCode.multiple_unit_indicator,
+      max_units: item.billingCode.max_units,
+      start_time_required: item.billingCode.start_time_required,
+      stop_time_required: item.billingCode.stop_time_required,
+      section: item.billingCode.section,
+      jurisdiction: item.billingCode.section.jurisdiction,
+      provider: item.billingCode.section.jurisdiction.provider,
+      referring_practitioner_required:
+        item.billingCode.referring_practitioner_required,
     }));
 
     return NextResponse.json(billingCodes);
