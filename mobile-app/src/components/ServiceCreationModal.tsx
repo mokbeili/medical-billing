@@ -78,6 +78,84 @@ type Step =
   | "icdCode"
   | "summary";
 
+// Utility function to format birthdate in MMM-DD-YYYY format
+const formatBirthdate = (dateOfBirth: string | null | undefined): string => {
+  if (!dateOfBirth) return "";
+
+  try {
+    let date: Date;
+
+    // Handle YYYY-MM-DD format as local date to avoid timezone issues
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)) {
+      const [year, month, day] = dateOfBirth.split("-").map(Number);
+      date = new Date(year, month - 1, day); // month is 0-indexed
+    } else {
+      date = new Date(dateOfBirth);
+    }
+
+    if (isNaN(date.getTime())) return "";
+
+    const monthNames = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
+
+    const month = monthNames[date.getMonth()];
+    const day = String(date.getDate()).padStart(2, "0");
+    const year = date.getFullYear();
+
+    return `${month}-${day}-${year}`;
+  } catch (error) {
+    console.error("Error formatting birthdate:", error);
+    return "";
+  }
+};
+
+// Utility function to get patient age and gender description
+const getPatientDescription = (patient: any): string => {
+  if (!patient) return "Unknown patient";
+
+  let age: number | null = null;
+
+  if (patient.dateOfBirth) {
+    try {
+      let birthDate: Date;
+
+      // Handle YYYY-MM-DD format as local date to avoid timezone issues
+      if (/^\d{4}-\d{2}-\d{2}$/.test(patient.dateOfBirth)) {
+        const [year, month, day] = patient.dateOfBirth.split("-").map(Number);
+        birthDate = new Date(year, month - 1, day); // month is 0-indexed
+      } else {
+        birthDate = new Date(patient.dateOfBirth);
+      }
+
+      if (!isNaN(birthDate.getTime())) {
+        age = new Date().getFullYear() - birthDate.getFullYear();
+      }
+    } catch (error) {
+      console.error("Error calculating age:", error);
+    }
+  }
+
+  const sex = patient.sex || "unknown";
+  const sexText = sex === "M" ? "male" : sex === "F" ? "female" : "unknown";
+
+  if (age) {
+    return `${age} year old ${sexText}`;
+  }
+  return `${sexText}`;
+};
+
 const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
   visible,
   onClose,
@@ -1167,6 +1245,14 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
                 {currentPatient.firstName} {currentPatient.lastName} (#
                 {currentPatient.billingNumber})
               </Text>
+              <Text style={styles.selectedPatientDetails}>
+                {getPatientDescription(currentPatient)}
+              </Text>
+              {currentPatient.dateOfBirth && (
+                <Text style={styles.selectedPatientBirthdate}>
+                  DOB: {formatBirthdate(currentPatient.dateOfBirth)}
+                </Text>
+              )}
             </View>
           )}
         </Card.Content>
@@ -2563,6 +2649,16 @@ const styles = StyleSheet.create({
   selectedPatientText: {
     fontSize: 16,
     color: "#333",
+  },
+  selectedPatientDetails: {
+    fontSize: 14,
+    color: "#666",
+    marginTop: 4,
+  },
+  selectedPatientBirthdate: {
+    fontSize: 14,
+    color: "#666",
+    marginTop: 2,
   },
   // Inline patient search styles
   patientSearchResults: {

@@ -16,6 +16,7 @@ export interface PatientData {
   gender: string;
   serviceDate?: string;
   visitNumber?: string;
+  mrn?: string;
   attendingPhysician?: string;
   familyPhysician?: string;
 }
@@ -133,6 +134,7 @@ export class ExpoTextRecognitionService {
       let gender = "";
       let serviceDate: string | undefined;
       let visitNumber: string | undefined;
+      let mrn: string | undefined;
       let attendingPhysician: string | undefined;
       let familyPhysician: string | undefined;
 
@@ -140,8 +142,14 @@ export class ExpoTextRecognitionService {
       const extractBillingNumber = (lines: string[]): string => {
         // First pass: look for labeled formats
         for (const line of lines) {
-          // Pattern 1: SK# 790112233
-          let match = line.match(/SK#\s*(\d{9})/);
+          // Pattern 1: SK# 790112233 (with space)
+          let match = line.match(/SK#\s+(\d{9})/);
+          if (match) {
+            return match[1];
+          }
+
+          // Pattern 2: SK#790112233 (without space)
+          match = line.match(/SK#(\d{9})/);
           if (match) {
             return match[1];
           }
@@ -182,7 +190,14 @@ export class ExpoTextRecognitionService {
       const extractVisitNumber = (lines: string[]): string => {
         // First pass: look for V# format (higher priority)
         for (const line of lines) {
-          const match = line.match(/V#(\d+)/);
+          // Pattern 1: V# 4433221100 (with space)
+          let match = line.match(/V#\s+(\d+)/);
+          if (match) {
+            return match[1];
+          }
+
+          // Pattern 2: V#4433221100 (without space)
+          match = line.match(/V#(\d+)/);
           if (match) {
             return match[1];
           }
@@ -205,25 +220,42 @@ export class ExpoTextRecognitionService {
         return "";
       };
 
+      // Helper function to extract MRN (Medical Record Number)
+      const extractMRN = (lines: string[]): string => {
+        for (const line of lines) {
+          // Pattern 1: MRN: 0123456
+          let match = line.match(/MRN:\s*(\d+)/);
+          if (match) {
+            return match[1];
+          }
+
+          // Pattern 2: Medical Record Number: 0123456
+          match = line.match(/Medical Record Number:\s*(\d+)/);
+          if (match) {
+            return match[1];
+          }
+
+          // Pattern 3: Patient ID: 0123456
+          match = line.match(/Patient ID:\s*(\d+)/);
+          if (match) {
+            return match[1];
+          }
+        }
+        return "";
+      };
+
       // Helper function to extract admit date
       const extractAdmitDate = (lines: string[]): string => {
         for (const line of lines) {
-          // Pattern 1: Admit Date: Aug-09-2025
+          // Pattern 1: Admit Date: 15-FEB-2025
           let match = line.match(/Admit Date:\s*([A-Za-z0-9-]+)/);
           if (match) {
             const parsed = parseDate(match[1]);
             if (parsed) return parsed;
           }
 
-          // Pattern 2: ADM: Aug-01-2025
+          // Pattern 2: ADM: 15-FEB-2025
           match = line.match(/ADM:\s*([A-Za-z0-9-]+)/);
-          if (match) {
-            const parsed = parseDate(match[1]);
-            if (parsed) return parsed;
-          }
-
-          // Pattern 3: Admit Date: 15-FEB-2025
-          match = line.match(/Admit Date:\s*([A-Za-z0-9-]+)/);
           if (match) {
             const parsed = parseDate(match[1]);
             if (parsed) return parsed;
@@ -345,21 +377,21 @@ export class ExpoTextRecognitionService {
           // ATN: last, first
           let match = line.match(/ATN:\s*(.+)/);
           if (match) {
-            attending = cleanPhysicianName(match[1]);
+            attending = cleanPhysicianName(match[1].trim());
             continue;
           }
 
           // FAM: last, first
           match = line.match(/FAM:\s*(.+)/);
           if (match) {
-            family = cleanPhysicianName(match[1]);
+            family = cleanPhysicianName(match[1].trim());
             continue;
           }
 
           // PCP: last, first
           match = line.match(/PCP:\s*(.+)/);
           if (match) {
-            family = cleanPhysicianName(match[1]);
+            family = cleanPhysicianName(match[1].trim());
             continue;
           }
         }
@@ -494,6 +526,10 @@ export class ExpoTextRecognitionService {
 
       // Extract other fields using helpers
       visitNumber = extractVisitNumber(lines);
+      mrn = extractMRN(lines);
+
+      // Extract admit date
+      serviceDate = extractAdmitDate(lines);
 
       const physicians = extractPhysicians(lines);
       attendingPhysician = physicians.attending;
@@ -519,6 +555,7 @@ export class ExpoTextRecognitionService {
         gender,
         serviceDate,
         visitNumber,
+        mrn,
         attendingPhysician,
         familyPhysician,
       };
