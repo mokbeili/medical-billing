@@ -27,6 +27,7 @@ model Jurisdiction {
   createdAt           DateTime             @default(now()) @map("created_at")
   updatedAt           DateTime             @updatedAt @map("updated_at")
   billingClaims       BillingClaim[]
+  billingTypes        BillingType[]
   provider            Provider             @relation(fields: [providerId], references: [id])
   patients            Patient[]
   physicians          Physician[]
@@ -35,6 +36,19 @@ model Jurisdiction {
   sections            Section[]
 
   @@map("jurisdictions")
+}
+
+model BillingType {
+  id                    Int                    @id @default(autoincrement())
+  code                  String
+  title                 String
+  jurisdictionId        Int                    @map("jurisdiction_id")
+  createdAt             DateTime               @default(now()) @map("created_at")
+  updatedAt             DateTime               @updatedAt @map("updated_at")
+  jurisdiction          Jurisdiction           @relation(fields: [jurisdictionId], references: [id])
+  physicianBillingTypes PhysicianBillingType[]
+
+  @@map("billing_types")
 }
 
 model Section {
@@ -46,8 +60,8 @@ model Section {
   createdAt         DateTime           @default(now()) @map("created_at")
   updatedAt         DateTime           @updatedAt @map("updated_at")
   billingCodes      BillingCode[]
-  jurisdiction      Jurisdiction       @relation(fields: [jurisdictionId], references: [id])
   preferredSections PreferredSection[]
+  jurisdiction      Jurisdiction       @relation(fields: [jurisdictionId], references: [id])
 
   @@map("sections")
 }
@@ -74,21 +88,17 @@ model BillingCode {
   start_time_required             String?                  @db.VarChar(50)
   stop_time_required              String?                  @db.VarChar(50)
   technical_fee                   Float?
-  max_units                       Int?
-  day_range                       Int?
   embedding_vector                Unsupported("tsvector")? @map("embedding_vector")
+  day_range                       Int?
+  max_units                       Int?
   changeLogs                      BillingCodeChangeLog[]
   billing_code_embeddings         billing_code_embeddings?
+  previousCodes                   BillingCodeRelation[]    @relation("BillingCodeNext")
+  nextCodes                       BillingCodeRelation[]    @relation("BillingCodePrevious")
   section                         Section                  @relation(fields: [section_id], references: [id])
+  frequentlyUsedCodes             FrequentlyUsedCode[]
   serviceCodes                    ServiceCodes[]
-  frequentlyUsedBy                FrequentlyUsedCode[]
-
-  // Many-to-many relationship for previous/next codes
-  previousCodes BillingCodeRelation[] @relation("BillingCodeNext")
-  nextCodes     BillingCodeRelation[] @relation("BillingCodePrevious")
-
-  // Relationship to billing code chains view
-  billingCodeChains BillingCodeChain[] @relation("BillingCodeToChain")
+  billingCodeChains               BillingCodeChain[]       @relation("BillingCodeToChain")
 
   @@index([section_id])
   @@index([code])
@@ -96,15 +106,13 @@ model BillingCode {
   @@map("billing_codes")
 }
 
-// Junction table for billing code relationships
 model BillingCodeRelation {
-  id               Int      @id @default(autoincrement())
-  previous_code_id Int      @map("previous_code_id")
-  next_code_id     Int      @map("next_code_id")
-  created_at       DateTime @default(now()) @map("created_at")
-
-  previousCode BillingCode @relation("BillingCodePrevious", fields: [previous_code_id], references: [id], onDelete: Cascade)
-  nextCode     BillingCode @relation("BillingCodeNext", fields: [next_code_id], references: [id], onDelete: Cascade)
+  id               Int         @id @default(autoincrement())
+  previous_code_id Int         @map("previous_code_id")
+  next_code_id     Int         @map("next_code_id")
+  created_at       DateTime    @default(now()) @map("created_at")
+  nextCode         BillingCode @relation("BillingCodeNext", fields: [next_code_id], references: [id], onDelete: Cascade)
+  previousCode     BillingCode @relation("BillingCodePrevious", fields: [previous_code_id], references: [id], onDelete: Cascade)
 
   @@unique([previous_code_id, next_code_id])
   @@index([previous_code_id])
@@ -132,8 +140,8 @@ model BillingCodeChangeLog {
   start_time_required             String?     @db.VarChar(50)
   stop_time_required              String?     @db.VarChar(50)
   technical_fee                   Float?
-  max_units                       Int?
   day_range                       Int?
+  max_units                       Int?
   billing_code                    BillingCode @relation(fields: [billing_code_id], references: [id])
 
   @@index([billing_code_id])
@@ -149,14 +157,14 @@ model User {
   updated_at            DateTime               @updatedAt
   reset_token           String?
   reset_token_expires   DateTime?
-  encrypted_first_name  String?
-  encrypted_last_name   String?
   encrypted_city        String?
   encrypted_country     String?
   encrypted_postal_code String?
   encrypted_state       String?
   encrypted_street      String?
   encrypted_unit        String?
+  encrypted_first_name  String?
+  encrypted_last_name   String?
   physicians            Physician[]
   SearchQueryLog        SearchQueryLog[]
   serviceCodeChangeLogs ServiceCodeChangeLog[]
@@ -196,36 +204,56 @@ model Patient {
 }
 
 model Physician {
-  id                    String               @id
-  firstName             String               @map("first_name")
-  lastName              String               @map("last_name")
-  middleInitial         String?              @map("middle_initial")
-  billingNumber         String               @map("billing_number")
-  userId                Int                  @map("user_id")
-  jurisdictionId        Int                  @map("jurisdiction_id")
-  createdAt             DateTime             @default(now()) @map("created_at")
-  updatedAt             DateTime             @updatedAt @map("updated_at")
+  id                    String                 @id
+  firstName             String                 @map("first_name")
+  lastName              String                 @map("last_name")
+  middleInitial         String?                @map("middle_initial")
+  billingNumber         String                 @map("billing_number")
+  userId                Int                    @map("user_id")
+  jurisdictionId        Int                    @map("jurisdiction_id")
+  createdAt             DateTime               @default(now()) @map("created_at")
+  updatedAt             DateTime               @updatedAt @map("updated_at")
   city                  String?
-  groupNumber           String?              @map("group_number")
-  healthInstitutionId   Int?                 @map("health_institution_id")
-  postalCode            String?              @map("postal_code")
+  groupNumber           String?                @map("group_number")
+  healthInstitutionId   Int?                   @map("health_institution_id")
+  postalCode            String?                @map("postal_code")
   province              String?
-  streetAddress         String?              @map("street_address")
-  mostRecentClaimNumber Int                  @default(10000) @map("most_recent_claim_number")
+  streetAddress         String?                @map("street_address")
+  mostRecentClaimNumber Int                    @default(10000) @map("most_recent_claim_number")
   billingClaims         BillingClaim[]
+  frequentlyUsedCodes   FrequentlyUsedCode[]
   patients              Patient[]
-  healthInstitution     HealthInstitution?   @relation(fields: [healthInstitutionId], references: [id])
-  jurisdiction          Jurisdiction         @relation(fields: [jurisdictionId], references: [id])
-  user                  User                 @relation(fields: [userId], references: [id])
+  physicianBillingTypes PhysicianBillingType[]
+  healthInstitution     HealthInstitution?     @relation(fields: [healthInstitutionId], references: [id])
+  jurisdiction          Jurisdiction           @relation(fields: [jurisdictionId], references: [id])
+  user                  User                   @relation(fields: [userId], references: [id])
+  preferredSections     PreferredSection[]
   referringPhysicians   ReferringPhysician[]
   SearchQueryLog        SearchQueryLog[]
   Service               Service[]
-  preferredSections     PreferredSection[]
-  frequentlyUsedCodes   FrequentlyUsedCode[]
 
   @@map("physicians")
 }
 
+model PhysicianBillingType {
+  id            Int      @id @default(autoincrement())
+  physicianId   String   @map("physician_id")
+  billingTypeId Int      @map("billing_type_id")
+  active        Boolean  @default(true)
+  colorCode     String   @map("color_code") @db.VarChar(7) // Hex color code like #000000
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  physician   Physician   @relation(fields: [physicianId], references: [id], onDelete: Cascade)
+  billingType BillingType @relation(fields: [billingTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([physicianId, billingTypeId])
+  @@index([physicianId])
+  @@index([billingTypeId])
+  @@map("physician_billing_types")
+}
+
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
 model ICDCode {
   id          Int       @id @default(autoincrement())
   version     String
@@ -281,7 +309,6 @@ model BillingClaim {
 model Service {
   id                   Int                 @id @default(autoincrement())
   claimId              String?             @map("claim_id")
-  status               ServiceStatus       @default(OPEN)
   createdAt            DateTime            @default(now()) @map("created_at")
   updatedAt            DateTime            @updatedAt @map("updated_at")
   patientId            String?             @map("patient_id")
@@ -291,18 +318,19 @@ model Service {
   serviceDate          DateTime            @default(now()) @map("service_date")
   summary              String              @default("")
   physicianId          String              @map("physician_id")
-  visitNumber          String?             @map("visit_number")
+  status               ServiceStatus       @default(OPEN)
   attendingPhysicianId Int?                @map("attending_physician_id")
   familyPhysicianId    Int?                @map("family_physician_id")
+  visitNumber          String?             @map("visit_number")
   serviceCodes         ServiceCodes[]
-  claim                BillingClaim?       @relation(fields: [claimId], references: [id], onDelete: SetNull)
+  attendingPhysician   ReferringPhysician? @relation("AttendingPhysician", fields: [attendingPhysicianId], references: [id])
+  claim                BillingClaim?       @relation(fields: [claimId], references: [id])
+  familyPhysician      ReferringPhysician? @relation("FamilyPhysician", fields: [familyPhysicianId], references: [id])
   healthInstitution    HealthInstitution?  @relation(fields: [healthInstitutionId], references: [id])
   icdCode              ICDCode?            @relation(fields: [icdCodeId], references: [id])
   patient              Patient?            @relation(fields: [patientId], references: [id])
   physician            Physician           @relation(fields: [physicianId], references: [id])
   referringPhysician   ReferringPhysician? @relation(fields: [referringPhysicianId], references: [id])
-  attendingPhysician   ReferringPhysician? @relation("AttendingPhysician", fields: [attendingPhysicianId], references: [id])
-  familyPhysician      ReferringPhysician? @relation("FamilyPhysician", fields: [familyPhysicianId], references: [id])
 
   @@index([claimId])
   @@index([patientId])
@@ -320,19 +348,19 @@ model ServiceCodes {
   codeId               Int                    @map("code_id")
   serviceStartTime     DateTime?              @map("service_start_time")
   serviceEndTime       DateTime?              @map("service_end_time")
-  serviceDate          DateTime?              @map("service_date")
-  serviceEndDate       DateTime?              @map("service_end_date")
   bilateralIndicator   String?                @map("bilateral_indicator")
   numberOfUnits        Int                    @map("number_of_units")
   serviceId            Int                    @map("service_id")
   specialCircumstances String?                @map("special_circumstances")
+  serviceDate          DateTime?              @map("service_date")
+  serviceEndDate       DateTime?              @map("service_end_date")
   serviceLocation      String                 @map("service_location")
   locationOfService    String                 @map("location_of_service")
   claimNumber          Int?                   @map("claim_number")
   sequence             Int?                   @map("sequence")
+  changeLogs           ServiceCodeChangeLog[]
   billingCode          BillingCode            @relation(fields: [codeId], references: [id])
   service              Service                @relation(fields: [serviceId], references: [id])
-  changeLogs           ServiceCodeChangeLog[]
 
   @@index([serviceId])
   @@index([codeId])
@@ -340,6 +368,7 @@ model ServiceCodes {
   @@map("service_codes")
 }
 
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
 model ReferringPhysician {
   id                Int                      @id @default(autoincrement())
   jurisdictionId    Int                      @map("jurisdiction_id")
@@ -353,9 +382,9 @@ model ReferringPhysician {
   searchVector      Unsupported("tsvector")? @map("search_vector")
   jurisdiction      Jurisdiction             @relation(fields: [jurisdictionId], references: [id])
   physician         Physician?               @relation(fields: [physicianId], references: [id])
-  Services          Service[]
   attendingServices Service[]                @relation("AttendingPhysician")
   familyServices    Service[]                @relation("FamilyPhysician")
+  Services          Service[]
 
   @@map("referring_physicians")
 }
@@ -408,14 +437,13 @@ model search_query_embeddings {
 }
 
 model PreferredSection {
-  id          Int      @id @default(autoincrement())
-  physicianId String   @map("physician_id")
-  sectionId   Int      @map("section_id")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  physician Physician @relation(fields: [physicianId], references: [id], onDelete: Cascade)
-  section   Section   @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  id          Int       @id @default(autoincrement())
+  physicianId String    @map("physician_id")
+  sectionId   Int       @map("section_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  physician   Physician @relation(fields: [physicianId], references: [id], onDelete: Cascade)
+  section     Section   @relation(fields: [sectionId], references: [id], onDelete: Cascade)
 
   @@unique([physicianId, sectionId])
   @@index([physicianId])
@@ -424,20 +452,38 @@ model PreferredSection {
 }
 
 model FrequentlyUsedCode {
-  id            Int      @id @default(autoincrement())
-  physicianId   String   @map("physician_id")
-  billingCodeId Int      @map("billing_code_id")
-  sortMetric    Int      @default(0) @map("sort_metric")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-
-  physician   Physician   @relation(fields: [physicianId], references: [id], onDelete: Cascade)
-  billingCode BillingCode @relation(fields: [billingCodeId], references: [id], onDelete: Cascade)
+  id            Int         @id @default(autoincrement())
+  physicianId   String      @map("physician_id")
+  billingCodeId Int         @map("billing_code_id")
+  sortMetric    Int         @default(0) @map("sort_metric")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+  billingCode   BillingCode @relation(fields: [billingCodeId], references: [id], onDelete: Cascade)
+  physician     Physician   @relation(fields: [physicianId], references: [id], onDelete: Cascade)
 
   @@unique([physicianId, billingCodeId])
-  @@index([physicianId])
-  @@index([billingCodeId])
+  @@index([billingCodeId], map: "idx_frequently_used_codes_billing_code_id")
+  @@index([physicianId], map: "idx_frequently_used_codes_physician_id")
   @@map("frequently_used_codes")
+}
+
+model ServiceCodeChangeLog {
+  id            Int                   @id @default(autoincrement())
+  serviceCodeId Int                   @map("service_code_id")
+  changeType    ServiceCodeChangeType @map("change_type")
+  previousData  String?               @map("previous_data")
+  newData       String?               @map("new_data")
+  changedBy     Int?                  @map("changed_by")
+  changedAt     DateTime              @default(now()) @map("changed_at")
+  notes         String?
+  roundingDate  DateTime?             @map("rounding_date")
+  user          User?                 @relation(fields: [changedBy], references: [id])
+  serviceCode   ServiceCodes          @relation(fields: [serviceCodeId], references: [id], onDelete: Cascade)
+
+  @@index([serviceCodeId])
+  @@index([changedAt])
+  @@index([changeType])
+  @@map("service_code_change_logs")
 }
 
 enum Role {
@@ -464,26 +510,6 @@ enum ServiceCodeChangeType {
   DELETE
   UPDATE
   ROUND
-}
-
-model ServiceCodeChangeLog {
-  id            Int                   @id @default(autoincrement())
-  serviceCodeId Int                   @map("service_code_id")
-  changeType    ServiceCodeChangeType @map("change_type")
-  previousData  String?               @map("previous_data")
-  newData       String?               @map("new_data")
-  changedBy     Int?                  @map("changed_by")
-  changedAt     DateTime              @default(now()) @map("changed_at")
-  notes         String?
-  roundingDate  DateTime?             @map("rounding_date")
-
-  serviceCode ServiceCodes @relation(fields: [serviceCodeId], references: [id], onDelete: Cascade)
-  user        User?        @relation(fields: [changedBy], references: [id])
-
-  @@index([serviceCodeId])
-  @@index([changedAt])
-  @@index([changeType])
-  @@map("service_code_change_logs")
 }
 
 // View model for billing code chains
