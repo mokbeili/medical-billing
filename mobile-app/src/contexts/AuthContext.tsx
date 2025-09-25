@@ -107,13 +107,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
           // Set active billing type if available
           if (fullUserData.physicians) {
-            console.log("Full user data physicians:", fullUserData.physicians);
             const activeType = fullUserData.physicians
               ?.find((physician: any) =>
                 physician.physicianBillingTypes?.find((bt: any) => bt.active)
               )
               ?.physicianBillingTypes?.find((bt: any) => bt.active);
-            console.log("Active billing type found:", activeType);
             setActiveBillingType(activeType || null);
           }
         } catch (error) {

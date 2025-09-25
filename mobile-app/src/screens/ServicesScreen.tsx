@@ -2309,6 +2309,10 @@ const ServicesScreen = ({ navigation }: any) => {
         onSuccess={handleServiceCreationSuccess}
         scannedData={scannedPatientData}
         physicianId={physicians?.[0]?.id || ""}
+        billingTypeId={
+          physicians?.[0]?.physicianBillingTypes?.find((b) => b.active)
+            ?.billingTypeId || 0
+        }
       />
     </SafeAreaView>
   );

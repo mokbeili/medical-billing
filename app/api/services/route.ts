@@ -52,6 +52,7 @@ export async function POST(request: Request) {
       locationOfService,
       serviceStatus,
       visitNumber,
+      billingTypeId,
       attendingPhysicianId,
       familyPhysicianId,
     } = data;
@@ -115,6 +116,13 @@ export async function POST(request: Request) {
         serviceDate: new Date(serviceDate),
         summary: summary || "",
         visitNumber: visitNumber || null,
+        billingType: billingTypeId
+          ? {
+              connect: {
+                id: billingTypeId,
+              },
+            }
+          : undefined,
         healthInstitution: healthInstitutionId
           ? {
               connect: {

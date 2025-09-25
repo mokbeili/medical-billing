@@ -50,6 +50,21 @@ export async function GET(request: Request) {
         lastName: true,
         middleInitial: true,
         billingNumber: true,
+        physicianBillingTypes: {
+          select: {
+            id: true,
+            active: true,
+            colorCode: true,
+            billingType: {
+              select: {
+                id: true,
+                code: true,
+                title: true,
+              },
+            },
+            billingTypeId: true,
+          },
+        },
         frequentlyUsedCodes: {
           orderBy: {
             sortMetric: "desc",

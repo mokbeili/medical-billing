@@ -23,6 +23,7 @@ export interface ServiceData {
   visitNumber?: string;
   attendingPhysicianId?: number;
   familyPhysicianId?: number;
+  billingTypeId?: number;
 }
 
 export class PhysicianService {

@@ -65,6 +65,7 @@ interface ServiceCreationModalProps {
   onSuccess: () => void;
   scannedData: ScannedPatientData | null;
   physicianId: string;
+  billingTypeId: number | null;
 }
 
 type Step =
@@ -162,6 +163,7 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
   onSuccess,
   scannedData,
   physicianId,
+  billingTypeId,
 }) => {
   // Clear all state function
   const clearAllState = () => {
@@ -882,6 +884,7 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
 
       const serviceData = {
         physicianId,
+        billingTypeId,
         patientId:
           currentPatient?.id === "scanned"
             ? null

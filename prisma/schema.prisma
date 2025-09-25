@@ -99,6 +99,7 @@ model BillingCode {
   section                         Section                  @relation(fields: [section_id], references: [id])
   frequentlyUsedCodes             FrequentlyUsedCode[]
   serviceCodes                    ServiceCodes[]
+  billingCodeChains               BillingCodeChain[]
 
   @@index([section_id])
   @@index([code])
@@ -118,6 +119,24 @@ model BillingCodeRelation {
   @@index([previous_code_id])
   @@index([next_code_id])
   @@map("billing_code_relations")
+}
+
+model BillingCodeChain {
+  codeId             Int     @map("code_id")
+  code               String
+  title              String
+  dayRange           Int     @map("day_range")
+  rootId             Int     @map("root_id")
+  previousCodeId     Int?    @map("previous_code_id")
+  previousDayRange   Int     @map("previous_day_range")
+  cumulativeDayRange Int     @map("cumulative_day_range")
+  prevPlusSelf       Int     @map("prev_plus_self")
+  isLast             Boolean @map("is_last")
+
+  billingCode BillingCode @relation(fields: [codeId], references: [id])
+
+  @@id([codeId])
+  @@map("billing_code_chain")
 }
 
 model BillingCodeChangeLog {

@@ -48,6 +48,7 @@ export async function POST(request: Request) {
       dateOfBirth,
       gender,
       serviceDate,
+      billingTypeId,
       visitNumber,
       attendingPhysicianId,
       familyPhysicianId,
@@ -170,6 +171,13 @@ export async function POST(request: Request) {
           },
         },
         serviceDate: serviceDate ? new Date(serviceDate) : new Date(),
+        billingType: billingTypeId
+          ? {
+              connect: {
+                id: billingTypeId,
+              },
+            }
+          : undefined,
         summary: summary || "",
         visitNumber: visitNumber || null,
         healthInstitution: healthInstitutionId

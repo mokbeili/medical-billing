@@ -21,6 +21,7 @@ interface Service {
   id: string;
   serviceDate: string;
   claimId: string | null;
+  billingTypeId: number | null;
   status: ServiceStatus;
   patient: {
     firstName: string;

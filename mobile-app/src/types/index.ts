@@ -253,6 +253,7 @@ export interface Service {
   serviceDate: string;
   claimId: string | null;
   status: string;
+  billingTypeId: number | null;
   patient: {
     id: string;
     firstName: string;

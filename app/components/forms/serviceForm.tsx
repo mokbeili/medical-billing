@@ -29,6 +29,10 @@ interface Physician {
   middleInitial: string | null;
   billingNumber: string;
   jurisdictionId: number;
+  physicianBillingTypes: {
+    billingTypeId: number;
+    active: boolean;
+  }[];
   healthInstitution?: {
     city: string;
   } | null;
@@ -97,47 +101,6 @@ interface ReferringPhysician {
   specialty: string;
 }
 
-interface HealthInstitution {
-  id: number;
-  name: string;
-  street: string;
-  city: string;
-  state: string;
-  postalCode: string;
-  country: string;
-}
-
-interface Service {
-  id: string;
-  physicianId: string;
-  patientId: string;
-  referringPhysicianId: number | null;
-  icdCodeId: number | null;
-  healthInstitutionId: number | null;
-  summary: string;
-  serviceDate: string;
-  serviceStatus: string;
-  specialCircumstances: {
-    codeId: number;
-    value: string;
-  } | null;
-}
-
-interface ServiceCode {
-  serviceId: string;
-  codeId: number;
-  status: string;
-  serviceStartTime: string | null;
-  serviceEndTime: string | null;
-  numberOfUnits: number | null;
-  bilateralIndicator: string | null;
-  specialCircumstances: string | null;
-  serviceDate: string | null;
-  serviceEndDate: string | null;
-  serviceLocation: string | null;
-  locationOfService: string | null;
-}
-
 interface ServiceErrors {
   physician: boolean;
   patient: boolean;
@@ -191,6 +154,11 @@ export default function ServiceForm({
 
   const [formData, setFormData] = useState({
     physicianId: physicians.length === 1 ? physicians[0].id : "",
+    billingTypeId:
+      physicians.length === 1
+        ? physicians[0].physicianBillingTypes.find((bt) => bt.active)
+            ?.billingTypeId
+        : 0,
     patientId: "",
     referringPhysicianId: null as number | null,
     icdCodeId: null as number | null,
@@ -252,6 +220,7 @@ export default function ServiceForm({
             setFormData({
               physicianId: service.physicianId,
               patientId: service.patientId,
+              billingTypeId: service.billingTypeId,
               referringPhysicianId: service.referringPhysicianId,
               icdCodeId: service.icdCodeId,
               healthInstitutionId: service.healthInstitutionId,
@@ -1150,8 +1119,14 @@ export default function ServiceForm({
 
       if (type === "new") {
         // Create new service with billing codes in a single request
+        const billingTypeId = physicians
+          .find((p) => p.id === formData.physicianId)
+          ?.physicianBillingTypes.find((bt) => bt.active)?.billingTypeId;
         const serviceData = {
           physicianId: formData.physicianId,
+          billingTypeId: physicians[0].physicianBillingTypes.find(
+            (bt) => bt.active
+          )?.billingTypeId,
           patientId: formData.patientId,
           referringPhysicianId: formData.referringPhysicianId,
           icdCodeId: formData.icdCodeId,
@@ -1206,6 +1181,7 @@ export default function ServiceForm({
         const serviceData = {
           id: serviceId,
           physicianId: formData.physicianId,
+          billingTypeId: formData.billingTypeId,
           patientId: formData.patientId,
           referringPhysicianId: formData.referringPhysicianId,
           icdCodeId: formData.icdCodeId,
