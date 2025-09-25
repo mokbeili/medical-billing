@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import BillingTypeSelector from "../components/BillingTypeSelector";
 import Layout from "../components/layout/Layout";
 
 interface Address {
@@ -47,7 +48,21 @@ export default function ProfilePage() {
       const data = await res.json();
 
       if (!res.ok) throw new Error(data.error);
-      setProfile(data);
+
+      // Ensure address object exists with default values
+      const profileData = {
+        ...data,
+        address: data.address || {
+          street: "",
+          unit: "",
+          city: "",
+          state: "",
+          postalCode: "",
+          country: "",
+        },
+      };
+
+      setProfile(profileData);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -105,6 +120,8 @@ export default function ProfilePage() {
         <h1 className="text-3xl font-bold text-gray-900 mb-8">
           Profile Settings
         </h1>
+
+        <BillingTypeSelector />
 
         <form onSubmit={handleSubmit} className="space-y-8">
           {error && (

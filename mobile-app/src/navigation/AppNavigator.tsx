@@ -64,6 +64,8 @@ const MainTabs = () => {
         tabBarStyle: {
           backgroundColor: "#ffffff",
           borderTopColor: "#e2e8f0",
+          paddingBottom: 20,
+          height: 80,
         },
         headerShown: false,
       })}

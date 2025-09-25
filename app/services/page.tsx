@@ -15,7 +15,7 @@ import { ServiceStatus } from "@prisma/client";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 
 interface Service {
   id: string;
@@ -726,7 +726,7 @@ export default function ServiceRecordsPage() {
                   {filteredServices.map((service) => {
                     // Get the earliest service date from the service codes
                     return (
-                      <>
+                      <React.Fragment key={service.id}>
                         <tr key={service.id}>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             <input
@@ -861,7 +861,7 @@ export default function ServiceRecordsPage() {
                             </td>
                           </tr>
                         )}
-                      </>
+                      </React.Fragment>
                     );
                   })}
                 </tbody>

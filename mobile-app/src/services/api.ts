@@ -142,6 +142,22 @@ export const authAPI = {
       return null;
     }
   },
+
+  getUserWithPhysicians: async (): Promise<User> => {
+    const response = await api.get("/api/user/profile");
+    return response.data;
+  },
+};
+
+export const billingTypesAPI = {
+  updateActiveBillingType: async (
+    physicianId: string,
+    billingTypeId: number
+  ): Promise<void> => {
+    await api.put(
+      `/api/physician-billing-types/${physicianId}/${billingTypeId}/active`
+    );
+  },
 };
 
 export const billingCodesAPI = {

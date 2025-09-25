@@ -6,6 +6,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Provider as PaperProvider } from "react-native-paper";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import ActiveBillingBanner from "./src/components/ActiveBillingBanner";
 import ErrorBoundary from "./src/components/ErrorBoundary";
 import { AuthProvider } from "./src/contexts/AuthContext";
 import AppNavigator from "./src/navigation/AppNavigator";
@@ -30,6 +31,7 @@ export default function App() {
               <AuthProvider>
                 <NavigationContainer>
                   <AppNavigator />
+                  <ActiveBillingBanner />
                   <StatusBar style="auto" />
                 </NavigationContainer>
               </AuthProvider>

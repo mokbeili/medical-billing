@@ -88,12 +88,12 @@ export default function Navbar({ onMenuClick }: { onMenuClick: () => void }) {
                 <NavLink href="/search" active={pathname === "/search"}>
                   AI Code Search
                 </NavLink>
-                <NavLink
+                {/* <NavLink
                   href="/physician-search"
                   active={pathname === "/physician-search"}
                 >
                   Physician Search
-                </NavLink>
+                </NavLink> */}
                 <NavLink href="/profile" active={pathname === "/profile"}>
                   Profile
                 </NavLink>

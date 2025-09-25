@@ -63,6 +63,23 @@ export interface User {
   email: string;
   name: string;
   roles: string[];
+  physicians?: Physician[];
+}
+
+export interface BillingType {
+  id: number;
+  code: string;
+  title: string;
+  jurisdictionId: number;
+}
+
+export interface PhysicianBillingType {
+  id: number;
+  physicianId: string;
+  billingTypeId: number;
+  active: boolean;
+  colorCode: string;
+  billingType: BillingType;
 }
 
 export interface Session {
@@ -164,6 +181,7 @@ export interface Physician {
       description: string | null;
     };
   }>;
+  physicianBillingTypes?: PhysicianBillingType[];
 }
 
 export interface Patient {

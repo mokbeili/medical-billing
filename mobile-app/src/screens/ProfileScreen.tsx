@@ -1,20 +1,103 @@
 import { useNavigation } from "@react-navigation/native";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import { Avatar, Card, List, Switch } from "react-native-paper";
+import { Avatar, Card, List, RadioButton, Switch } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../contexts/AuthContext";
+import { authAPI, billingTypesAPI } from "../services/api";
+import { User } from "../types";
 
 const ProfileScreen = () => {
   const navigation = useNavigation();
-  const { user, signOut } = useAuth();
+  const { user, signOut, updateActiveBillingType } = useAuth();
+  const [userWithPhysicians, setUserWithPhysicians] = useState<User | null>(
+    null
+  );
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      fetchUserWithPhysicians();
+    }
+  }, [user]);
+
+  const fetchUserWithPhysicians = async (isRefresh = false) => {
+    try {
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+      const userData = await authAPI.getUserWithPhysicians();
+      setUserWithPhysicians(userData);
+
+      // Find the active billing type and update global state
+      const activeType = userData.physicians
+        ?.find((physician) =>
+          physician.physicianBillingTypes?.find((bt) => bt.active)
+        )
+        ?.physicianBillingTypes?.find((bt) => bt.active);
+
+      updateActiveBillingType(activeType || null);
+      return userData; // Return the data for immediate use
+    } catch (error) {
+      console.error("Error fetching user with physicians:", error);
+      return null;
+    } finally {
+      if (isRefresh) {
+        setRefreshing(false);
+      } else {
+        setLoading(false);
+      }
+    }
+  };
+
+  const handleBillingTypeChange = async (
+    physicianId: string,
+    physicianBillingTypeId: number
+  ) => {
+    try {
+      setLoading(true);
+      await billingTypesAPI.updateActiveBillingType(
+        physicianId,
+        physicianBillingTypeId
+      );
+
+      // Refresh data and get the updated user data
+      const updatedUserData = await fetchUserWithPhysicians(false);
+
+      // Find the newly active billing type from the fresh data
+      if (updatedUserData) {
+        const activeType = updatedUserData.physicians
+          ?.find((physician) => physician.id === physicianId)
+          ?.physicianBillingTypes?.find(
+            (bt) => bt.id === physicianBillingTypeId
+          );
+
+        if (activeType) {
+          updateActiveBillingType(activeType);
+        }
+      }
+    } catch (error) {
+      console.error("Error updating billing type:", error);
+      Alert.alert("Error", "Failed to update billing type. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    await fetchUserWithPhysicians(true);
+  };
 
   const handleSignOut = () => {
     Alert.alert("Sign Out", "Are you sure you want to sign out?", [
@@ -57,7 +140,17 @@ const ProfileScreen = () => {
         <Text style={styles.headerTitle}>Profile</Text>
       </View>
 
-      <ScrollView style={styles.content}>
+      <ScrollView
+        style={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#2563eb"]} // Android
+            tintColor="#2563eb" // iOS
+          />
+        }
+      >
         <Card style={styles.profileCard} mode="outlined">
           <Card.Content style={styles.profileContent}>
             <Avatar.Text size={80} label={userInitials} style={styles.avatar} />
@@ -70,6 +163,59 @@ const ProfileScreen = () => {
             </View>
           </Card.Content>
         </Card>
+
+        {userWithPhysicians?.physicians &&
+          userWithPhysicians.physicians.length > 0 && (
+            <Card style={styles.settingsCard} mode="outlined">
+              <Card.Content>
+                <List.Section>
+                  <List.Subheader style={styles.sectionTitle}>
+                    Billing Types
+                  </List.Subheader>
+                  {userWithPhysicians.physicians.map((physician) => (
+                    <View key={physician.id}>
+                      <Text style={styles.physicianName}>
+                        Dr. {physician.firstName} {physician.lastName}
+                      </Text>
+                      {physician.physicianBillingTypes
+                        ?.sort((a, b) =>
+                          a.billingType.title.localeCompare(b.billingType.title)
+                        )
+                        .map((billingType) => (
+                          <List.Item
+                            key={billingType.id}
+                            title={billingType.billingType.title}
+                            left={(props) => (
+                              <View
+                                style={[
+                                  styles.colorIndicator,
+                                  { backgroundColor: billingType.colorCode },
+                                ]}
+                              />
+                            )}
+                            right={() => (
+                              <RadioButton
+                                value={billingType.id.toString()}
+                                status={
+                                  billingType.active ? "checked" : "unchecked"
+                                }
+                                onPress={() =>
+                                  handleBillingTypeChange(
+                                    physician.id,
+                                    billingType.id
+                                  )
+                                }
+                                disabled={loading}
+                              />
+                            )}
+                          />
+                        ))}
+                    </View>
+                  ))}
+                </List.Section>
+              </Card.Content>
+            </Card>
+          )}
 
         <Card style={styles.settingsCard} mode="outlined">
           <Card.Content>
@@ -262,6 +408,19 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 18,
     color: "#64748b",
+  },
+  physicianName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1e293b",
+    marginBottom: 8,
+    marginTop: 8,
+  },
+  colorIndicator: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    marginRight: 8,
   },
 });
 
