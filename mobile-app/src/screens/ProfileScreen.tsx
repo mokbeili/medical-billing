@@ -165,7 +165,10 @@ const ProfileScreen = () => {
         </Card>
 
         {userWithPhysicians?.physicians &&
-          userWithPhysicians.physicians.length > 0 && (
+          userWithPhysicians.physicians.length > 0 &&
+          userWithPhysicians.physicians.some(
+            (physician) => (physician.physicianBillingTypes?.length || 0) >= 2
+          ) && (
             <Card style={styles.settingsCard} mode="outlined">
               <Card.Content>
                 <List.Section>

@@ -88,7 +88,13 @@ const BillingTypeSelector = () => {
     }
   };
 
-  if (!user?.physicians || user.physicians.length === 0) {
+  if (
+    !user?.physicians ||
+    user.physicians.length === 0 ||
+    !user.physicians.some(
+      (physician) => (physician.physicianBillingTypes?.length || 0) >= 2
+    )
+  ) {
     return null;
   }
 
