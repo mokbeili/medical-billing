@@ -346,6 +346,75 @@ export function isValidFlexibleDate(dateInput: string): boolean {
 }
 
 /**
+ * Formats a date without timezone conversion - treats the date as a local date
+ * This is useful for dates that are stored as dates only (without time) and should
+ * not be affected by timezone conversions
+ *
+ * @param date - Date object, date string, or ISO string
+ * @returns Formatted date string in DD MMM YYYY format without timezone conversion
+ */
+export function formatDateWithoutTimezone(
+  date: Date | string | null | undefined
+): string {
+  if (!date) return "";
+
+  try {
+    let dateObj: Date;
+
+    if (typeof date === "string") {
+      // If it's a string, check if it's in YYYY-MM-DD format
+      if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        // Parse as local date without timezone conversion
+        const [year, month, day] = date.split("-").map(Number);
+        dateObj = new Date(year, month - 1, day);
+      } else if (/^\d{4}-\d{2}-\d{2}\s/.test(date)) {
+        // Handle datetime strings like "2025-09-25 00:00:00.000"
+        // Extract just the date part and parse as local date
+        const datePart = date.split(" ")[0];
+        const [year, month, day] = datePart.split("-").map(Number);
+        dateObj = new Date(year, month - 1, day);
+      } else {
+        // For other string formats, use regular Date parsing
+        dateObj = new Date(date);
+      }
+    } else {
+      dateObj = date;
+    }
+
+    // Check if date is valid
+    if (isNaN(dateObj.getTime())) {
+      console.warn(
+        `Invalid date provided to formatDateWithoutTimezone: ${date}`
+      );
+      return "";
+    }
+
+    const day = String(dateObj.getDate()).padStart(2, "0");
+    const monthNames = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
+    const month = monthNames[dateObj.getMonth()];
+    const year = dateObj.getFullYear();
+
+    return `${day} ${month} ${year}`;
+  } catch (error) {
+    console.error("Error formatting date without timezone:", error);
+    return "";
+  }
+}
+
+/**
  * Legacy function for backward compatibility
  * @deprecated Use formatFullDate instead
  */

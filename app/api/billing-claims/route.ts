@@ -376,7 +376,7 @@ export async function POST(request: Request) {
           feeCents:
             Math.round(determinePrice(service, serviceCode) * 100) *
             (serviceCode.numberOfUnits || 1),
-          mode: "1", // TODO: Add mode to service code model
+          mode: String(service.billingTypeId),
           formType: "8" as const,
           specialCircumstances: serviceCode.specialCircumstances || undefined,
           bilateral: serviceCode.bilateralIndicator as

@@ -10,7 +10,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatFullDate } from "@/lib/dateUtils";
 import { ServiceStatus } from "@prisma/client";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
@@ -82,7 +81,7 @@ export default function ServiceRecordsPage() {
   const [filters, setFilters] = useState({
     patientName: "",
     billingNumber: "",
-    status: "OPEN", // Default to open services
+    status: "PENDING", // Default to open services
     serviceDate: "",
     code: "",
     section: "",
@@ -748,14 +747,30 @@ export default function ServiceRecordsPage() {
                               service.patient.middleInitial
                                 ? ` ${service.patient.middleInitial}`
                                 : ""
-                            }`}
+                            }${service.id}`}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {formatFullDate(
-                              new Date(service.serviceDate)
-                                .toISOString()
-                                .slice(0, 10)
-                            )}
+                            {(() => {
+                              const dateStr = service.serviceDate.split("T")[0];
+                              const [year, month, day] = dateStr.split("-");
+                              const monthNames = [
+                                "Jan",
+                                "Feb",
+                                "Mar",
+                                "Apr",
+                                "May",
+                                "Jun",
+                                "Jul",
+                                "Aug",
+                                "Sep",
+                                "Oct",
+                                "Nov",
+                                "Dec",
+                              ];
+                              return `${day.padStart(2, "0")} ${
+                                monthNames[parseInt(month) - 1]
+                              } ${year}`;
+                            })()}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             <span
@@ -848,10 +863,31 @@ export default function ServiceRecordsPage() {
                                             }
                                           </td>
                                           <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                                            {formatFullDate(
-                                              serviceCode.serviceDate ||
+                                            {(() => {
+                                              const dateStr = (
+                                                serviceCode.serviceDate ||
                                                 service.serviceDate
-                                            )}
+                                              ).split("T")[0];
+                                              const [year, month, day] =
+                                                dateStr.split("-");
+                                              const monthNames = [
+                                                "Jan",
+                                                "Feb",
+                                                "Mar",
+                                                "Apr",
+                                                "May",
+                                                "Jun",
+                                                "Jul",
+                                                "Aug",
+                                                "Sep",
+                                                "Oct",
+                                                "Nov",
+                                                "Dec",
+                                              ];
+                                              return `${day.padStart(2, "0")} ${
+                                                monthNames[parseInt(month) - 1]
+                                              } ${year}`;
+                                            })()}
                                           </td>
                                         </tr>
                                       );
