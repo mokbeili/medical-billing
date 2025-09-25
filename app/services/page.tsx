@@ -747,7 +747,7 @@ export default function ServiceRecordsPage() {
                               service.patient.middleInitial
                                 ? ` ${service.patient.middleInitial}`
                                 : ""
-                            }${service.id}`}
+                            }`}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             {(() => {
