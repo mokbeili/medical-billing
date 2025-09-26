@@ -255,6 +255,7 @@ export async function GET(request: Request) {
         physician: true,
         referringPhysician: true,
         icdCode: true,
+        billingType: true,
         serviceCodes: {
           include: {
             billingCode: {

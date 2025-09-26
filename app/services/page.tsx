@@ -20,7 +20,9 @@ interface Service {
   id: string;
   serviceDate: string;
   claimId: string | null;
-  billingTypeId: number | null;
+  billingType: {
+    code: string;
+  } | null;
   status: ServiceStatus;
   patient: {
     firstName: string;

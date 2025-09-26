@@ -171,6 +171,7 @@ export async function POST(request: Request) {
         claimId: null,
       },
       include: {
+        billingType: true,
         patient: {
           include: {
             physician: {
@@ -302,21 +303,34 @@ export async function POST(request: Request) {
         : "";
 
       // Calculate century indicator based on birth year
-      const centuryIndicator = decryptedPatient.dateOfBirth
-        ? (() => {
-            const date = new Date(decryptedPatient.dateOfBirth);
-            if (isNaN(date.getTime())) return 1; // Default to 1 if invalid date
+      const getCenturyIndicator = (billingRecordType: string) => {
+        if (!decryptedPatient.dateOfBirth) {
+          return billingRecordType === "57" ? "    1" : "1"; // Default to 1 if no date of birth
+        }
 
-            const birthYear = date.getFullYear();
-            if (birthYear >= 1900 && birthYear < 2000) {
-              return "    1"; // 19xx
-            } else if (birthYear >= 2000) {
-              return "    2"; // 20xx
-            } else {
-              return "    1"; // Default to 1 for years before 1900
-            }
-          })()
-        : "00001"; // Default to 1 if no date of birth
+        const date = new Date(decryptedPatient.dateOfBirth);
+        if (isNaN(date.getTime())) {
+          return billingRecordType === "57" ? "    1" : "1"; // Default to 1 if invalid date
+        }
+
+        const birthYear = date.getFullYear();
+        let centuryValue: string;
+
+        if (birthYear >= 1900 && birthYear < 2000) {
+          centuryValue = "1"; // 19xx
+        } else if (birthYear >= 2000) {
+          centuryValue = "2"; // 20xx
+        } else {
+          centuryValue = "1"; // Default to 1 for years before 1900
+        }
+
+        // Apply spacing based on billing code type
+        if (billingRecordType === "57") {
+          return "    " + centuryValue; // 4 spaces for type 57
+        } else {
+          return centuryValue; // 1 space for type 50
+        }
+      };
       const sex = (service.patient?.sex || "M") as "M" | "F";
       const name = `${decryptedPatient.lastName || ""}, ${
         decryptedPatient.firstName || ""
@@ -376,7 +390,7 @@ export async function POST(request: Request) {
           feeCents:
             Math.round(determinePrice(service, serviceCode) * 100) *
             (serviceCode.numberOfUnits || 1),
-          mode: String(service.billingTypeId),
+          mode: String(service.billingType?.code),
           formType: "8" as const,
           specialCircumstances: serviceCode.specialCircumstances || undefined,
           bilateral: serviceCode.bilateralIndicator as
@@ -411,7 +425,9 @@ export async function POST(request: Request) {
           serviceStartTime: serviceCode.serviceStartTime
             ? new Date(serviceCode.serviceStartTime).getTime()
             : 0,
-          centuryIndicator,
+          centuryIndicator: getCenturyIndicator(
+            String(serviceCode.billingCode.billing_record_type)
+          ),
         }));
     });
 
