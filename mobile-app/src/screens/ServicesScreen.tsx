@@ -1001,11 +1001,10 @@ const ServicesScreen = ({ navigation }: any) => {
                   <TouchableOpacity
                     style={[
                       styles.actionButton,
-                      (hasPendingStatus || isRoundedToday(service)) &&
-                        styles.actionButtonDisabled,
+                      hasPendingStatus && styles.actionButtonDisabled,
                     ]}
                     onPress={() => {
-                      if (hasPendingStatus || isRoundedToday(service)) return;
+                      if (hasPendingStatus) return;
                       // Open rounding modal and default date to today
                       const today = getLocalYMD(new Date());
                       setRoundingDate(today);
@@ -1016,11 +1015,7 @@ const ServicesScreen = ({ navigation }: any) => {
                     <Ionicons
                       name="repeat"
                       size={20}
-                      color={
-                        hasPendingStatus || isRoundedToday(service)
-                          ? "#9ca3af"
-                          : "#2563eb"
-                      }
+                      color={hasPendingStatus ? "#9ca3af" : "#2563eb"}
                     />
                   </TouchableOpacity>
 
@@ -1515,11 +1510,7 @@ const ServicesScreen = ({ navigation }: any) => {
             setPendingRoundingService(null);
           }}
         >
-          <TouchableOpacity
-            style={styles.modalContent}
-            activeOpacity={1}
-            onPress={() => {}}
-          >
+          <View style={styles.modalContent} pointerEvents="box-none">
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Set Rounding Date</Text>
               <TouchableOpacity
@@ -1572,7 +1563,7 @@ const ServicesScreen = ({ navigation }: any) => {
                 Confirm
               </Button>
             </View>
-          </TouchableOpacity>
+          </View>
         </TouchableOpacity>
       </Modal>
 
