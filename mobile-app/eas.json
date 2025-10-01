@@ -9,7 +9,7 @@
       "channel": "development",
       "env": {
         "APP_ENV": "development",
-        "EXPO_PUBLIC_API_BASE_URL": "http://172.16.1.172:3000"
+        "EXPO_PUBLIC_API_BASE_URL": "https://jonas-lyocratic-cathey.ngrok-free.dev"
       },
       "ios": {
         "resourceClass": "m-medium"
@@ -23,7 +23,7 @@
       "channel": "preview",
       "env": {
         "APP_ENV": "preview",
-        "EXPO_PUBLIC_API_BASE_URL": "http://172.16.1.172:3000"
+        "EXPO_PUBLIC_API_BASE_URL": "https://jonas-lyocratic-cathey.ngrok-free.dev"
       },
       "ios": {
         "resourceClass": "m-medium",

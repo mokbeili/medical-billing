@@ -20,9 +20,10 @@ import {
   icdCodesAPI,
   patientsAPI,
   physiciansAPI,
+  referringPhysiciansAPI,
   servicesAPI,
 } from "../services/api";
-import { BillingCode } from "../types";
+import { BillingCode, ReferringPhysician } from "../types";
 import { formatFullDate } from "../utils/dateUtils";
 import BillingCodeConfigurationModal from "./BillingCodeConfigurationModal";
 
@@ -73,6 +74,7 @@ type Step =
   | "patientSearch"
   | "patientCreation"
   | "billingCodes"
+  | "referringPhysician"
   | "serviceDate"
   | "serviceLocation"
   | "locationOfService"
@@ -295,6 +297,20 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
   const [selectedYear, setSelectedYear] = useState<number>(0);
   const [selectedMonth, setSelectedMonth] = useState<number>(0);
 
+  // Referring physician state
+  const [referringPhysicianSearchQuery, setReferringPhysicianSearchQuery] =
+    useState("");
+  const [
+    debouncedReferringPhysicianQuery,
+    setDebouncedReferringPhysicianQuery,
+  ] = useState("");
+  const [referringPhysicianSearchResults, setReferringPhysicianSearchResults] =
+    useState<ReferringPhysician[]>([]);
+  const [isSearchingReferringPhysician, setIsSearchingReferringPhysician] =
+    useState(false);
+  const [selectedReferringPhysician, setSelectedReferringPhysician] =
+    useState<ReferringPhysician | null>(null);
+
   // Service location options (based on ServiceFormScreen)
   const serviceLocationOptions = [
     { value: "R", label: "Regina" },
@@ -365,6 +381,43 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
     queryFn: () => icdCodesAPI.search(icdSearchQuery),
     enabled: icdSearchQuery.length >= 2,
   });
+
+  // Debounce referring physician search query
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedReferringPhysicianQuery(referringPhysicianSearchQuery);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [referringPhysicianSearchQuery]);
+
+  // Search referring physicians effect
+  React.useEffect(() => {
+    const searchReferringPhysicians = async () => {
+      if (
+        !debouncedReferringPhysicianQuery.trim() ||
+        debouncedReferringPhysicianQuery.length < 2
+      ) {
+        setReferringPhysicianSearchResults([]);
+        return;
+      }
+
+      setIsSearchingReferringPhysician(true);
+      try {
+        const results = await referringPhysiciansAPI.search(
+          debouncedReferringPhysicianQuery
+        );
+        setReferringPhysicianSearchResults(results);
+      } catch (error) {
+        console.error("Error searching referring physicians:", error);
+        Alert.alert("Error", "Failed to search referring physicians");
+      } finally {
+        setIsSearchingReferringPhysician(false);
+      }
+    };
+
+    searchReferringPhysicians();
+  }, [debouncedReferringPhysicianQuery]);
 
   // Fetch frequently used billing codes for the physician
   const {
@@ -763,6 +816,11 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
     });
   };
 
+  // Check if any selected billing codes require a referring practitioner
+  const requiresReferringPhysician = selectedBillingCodes.some(
+    (code) => code.referring_practitioner_required === "Y"
+  );
+
   const handleNext = () => {
     switch (currentStep) {
       case "patient":
@@ -785,8 +843,17 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
         // This step is handled inline
         break;
       case "billingCodes":
-        // If billing codes are selected, go to service location steps
-        // If no billing codes selected, skip to ICD code
+        // Check if referring physician is required
+        if (requiresReferringPhysician) {
+          setCurrentStep("referringPhysician");
+        } else if (selectedBillingCodes.length > 0) {
+          setCurrentStep("serviceDate");
+        } else {
+          setCurrentStep("icdCode");
+        }
+        break;
+      case "referringPhysician":
+        // After selecting referring physician, go to service date
         if (selectedBillingCodes.length > 0) {
           setCurrentStep("serviceDate");
         } else {
@@ -817,8 +884,16 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
           setCurrentStep("patientSearch");
         }
         break;
-      case "serviceDate":
+      case "referringPhysician":
         setCurrentStep("billingCodes");
+        break;
+      case "serviceDate":
+        // If referring physician was required, go back to it
+        if (requiresReferringPhysician) {
+          setCurrentStep("referringPhysician");
+        } else {
+          setCurrentStep("billingCodes");
+        }
         break;
       case "serviceLocation":
         setCurrentStep("serviceDate");
@@ -828,9 +903,11 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
         break;
       case "icdCode":
         // If we have billing codes, go back to locationOfService
-        // If no billing codes, go back to billingCodes
+        // If no billing codes, go back to billingCodes or referring physician
         if (selectedBillingCodes.length > 0) {
           setCurrentStep("locationOfService");
+        } else if (requiresReferringPhysician) {
+          setCurrentStep("referringPhysician");
         } else {
           setCurrentStep("billingCodes");
         }
@@ -889,6 +966,7 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
           currentPatient?.id === "scanned"
             ? null
             : currentPatient?.id || createPatientMutation.data?.id,
+        referringPhysicianId: selectedReferringPhysician?.id || null,
         serviceDate,
         serviceLocation:
           selectedBillingCodes.length > 0 ? serviceLocation : null,
@@ -1056,6 +1134,8 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
         return false; // This step is handled by PatientSelector
       case "billingCodes":
         return currentPatient !== null; // Need a patient selected
+      case "referringPhysician":
+        return selectedReferringPhysician !== null; // Need a referring physician selected
       case "serviceDate":
         return serviceDate.length > 0;
       case "serviceLocation":
@@ -1668,6 +1748,91 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
     </View>
   );
 
+  const renderReferringPhysicianStep = () => (
+    <View style={styles.stepContainer}>
+      <Text style={styles.stepTitle}>Referring Physician (Required)</Text>
+      <Text style={styles.stepSubtitle}>
+        Search and select a referring physician for this service
+      </Text>
+
+      <Card style={styles.card}>
+        <Card.Content>
+          <TextInput
+            label="Search Referring Physician"
+            value={referringPhysicianSearchQuery}
+            onChangeText={setReferringPhysicianSearchQuery}
+            mode="outlined"
+            style={styles.input}
+            placeholder="Search by name, specialty, or code..."
+          />
+        </Card.Content>
+      </Card>
+
+      {selectedReferringPhysician ? (
+        <Card style={styles.card}>
+          <Card.Content>
+            <View style={styles.selectedItem}>
+              <View style={styles.selectedItemContent}>
+                <Text style={styles.selectedItemText}>
+                  {selectedReferringPhysician.name} -{" "}
+                  {selectedReferringPhysician.specialty} (
+                  {selectedReferringPhysician.code})
+                </Text>
+                <Text style={styles.selectedItemSubtext}>
+                  {selectedReferringPhysician.location}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setSelectedReferringPhysician(null)}
+              >
+                <Ionicons name="close-circle" size={20} color="#ef4444" />
+              </TouchableOpacity>
+            </View>
+          </Card.Content>
+        </Card>
+      ) : isSearchingReferringPhysician ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="small" color="#2563eb" />
+          <Text style={styles.loadingText}>Searching...</Text>
+        </View>
+      ) : referringPhysicianSearchResults.length > 0 ? (
+        <ScrollView style={styles.resultsContainer}>
+          {referringPhysicianSearchResults.map((physician) => (
+            <TouchableOpacity
+              key={physician.id}
+              style={styles.resultItem}
+              onPress={() => {
+                setSelectedReferringPhysician(physician);
+                setReferringPhysicianSearchQuery("");
+              }}
+            >
+              <Text style={styles.resultItemText}>
+                {physician.name} - {physician.specialty} ({physician.code})
+              </Text>
+              <Text style={styles.resultItemSubtext}>{physician.location}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      ) : referringPhysicianSearchQuery.trim() ? (
+        <Card style={styles.card}>
+          <Card.Content>
+            <Text style={styles.noResultsText}>
+              No referring physicians found. Try a different search term.
+            </Text>
+          </Card.Content>
+        </Card>
+      ) : (
+        <Card style={styles.card}>
+          <Card.Content>
+            <Text style={styles.infoText}>
+              Start typing to search for referring physicians
+            </Text>
+          </Card.Content>
+        </Card>
+      )}
+    </View>
+  );
+
   const renderServiceDateStep = () => (
     <View style={styles.stepContainer}>
       <Text style={styles.stepTitle}>Admission Date</Text>
@@ -1852,6 +2017,17 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
             </>
           )}
 
+          {selectedReferringPhysician && (
+            <>
+              <Text style={styles.fieldLabel}>Referring Physician:</Text>
+              <Text style={styles.fieldValue}>
+                {selectedReferringPhysician.name} -{" "}
+                {selectedReferringPhysician.specialty} (
+                {selectedReferringPhysician.code})
+              </Text>
+            </>
+          )}
+
           {selectedBillingCodes.length > 0 && (
             <>
               <Text style={styles.fieldLabel}>Service Location:</Text>
@@ -1899,6 +2075,8 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
         return null; // Handled by PatientSelector modal
       case "billingCodes":
         return renderBillingCodesStep();
+      case "referringPhysician":
+        return renderReferringPhysicianStep();
       case "serviceDate":
         return renderServiceDateStep();
       case "serviceLocation":
@@ -2951,6 +3129,51 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "600",
     color: "#374151",
+  },
+  // Referring physician step styles
+  selectedItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    backgroundColor: "#e3f2fd",
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: "#2196f3",
+  },
+  selectedItemContent: {
+    flex: 1,
+  },
+  selectedItemText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: 4,
+  },
+  selectedItemSubtext: {
+    fontSize: 14,
+    color: "#666",
+  },
+  resultsContainer: {
+    maxHeight: 400,
+  },
+  resultItem: {
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    borderRadius: 12,
+    marginBottom: 12,
+    backgroundColor: "#fff",
+  },
+  resultItemText: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#333",
+    marginBottom: 4,
+  },
+  resultItemSubtext: {
+    fontSize: 14,
+    color: "#666",
   },
 });
 
