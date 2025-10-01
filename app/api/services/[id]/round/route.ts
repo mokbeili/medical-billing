@@ -294,6 +294,8 @@ export async function POST(
       newServiceCodes.push(newServiceCode);
     } else {
       // Type 57 codes exist, check if we need to increase units or add new code
+      let foundMatchingCode = false;
+
       for (const existingCode of existingType57Codes) {
         const billingCode = existingCode.billingCode;
 
@@ -304,6 +306,7 @@ export async function POST(
 
           // Check if today is within the existing code's range
           if (today >= startDate && today <= endDate) {
+            foundMatchingCode = true;
             // Increase units if we haven't reached max_units
             if (
               billingCode.max_units &&
@@ -336,6 +339,7 @@ export async function POST(
 
               updatedServiceCodes.push(updatedCode);
             }
+            break; // Found the matching code, no need to continue
           } else if (today > endDate) {
             // Today is beyond the existing code's range, find the next appropriate code
             let nextStartDate = new Date(endDate);
@@ -360,6 +364,7 @@ export async function POST(
             }
 
             if (selectedCode) {
+              foundMatchingCode = true;
               // Calculate the appropriate start date based on existing codes
               const calculatedStartDate = calculateNextStartDate(
                 existingType57Codes,
@@ -443,7 +448,117 @@ export async function POST(
               });
 
               newServiceCodes.push(newServiceCode);
+              break; // Found and created the code, no need to continue
             }
+          }
+        }
+      }
+
+      // Handle case where rounding date is before all existing codes (past rounding)
+      if (!foundMatchingCode) {
+        // Find which code should apply for this past date
+        let currentDate = new Date(serviceDate);
+        let selectedCode = null;
+        let codeStartDate = null;
+
+        for (const code of type57Codes) {
+          if (code.day_range && code.day_range > 0) {
+            const endDate = new Date(currentDate);
+            endDate.setDate(endDate.getDate() + code.day_range - 1);
+
+            if (today >= currentDate && today <= endDate) {
+              selectedCode = code;
+              codeStartDate = new Date(currentDate);
+              break;
+            }
+
+            currentDate = new Date(endDate);
+            currentDate.setDate(currentDate.getDate() + 1);
+          }
+        }
+
+        if (selectedCode && codeStartDate) {
+          // Check if a code already exists for this date range
+          const existingCodeForRange = existingType57Codes.find((ec) => {
+            const ecStartDate = new Date(ec.serviceDate!);
+            return (
+              ecStartDate.getTime() === codeStartDate!.getTime() &&
+              ec.codeId === selectedCode.id
+            );
+          });
+
+          if (existingCodeForRange) {
+            // Code exists, increase units if possible
+            if (
+              selectedCode.max_units &&
+              existingCodeForRange.numberOfUnits < selectedCode.max_units
+            ) {
+              const previousUnits = existingCodeForRange.numberOfUnits;
+              const updatedCode = await prisma.serviceCodes.update({
+                where: { id: existingCodeForRange.id },
+                data: {
+                  numberOfUnits: existingCodeForRange.numberOfUnits + 1,
+                },
+              });
+
+              await prisma.serviceCodeChangeLog.create({
+                data: {
+                  serviceCodeId: existingCodeForRange.id,
+                  changeType: "ROUND",
+                  previousData: JSON.stringify({
+                    numberOfUnits: previousUnits,
+                  }),
+                  newData: JSON.stringify({
+                    numberOfUnits: updatedCode.numberOfUnits,
+                  }),
+                  changedBy: parseInt(user.id),
+                  notes: "Units increased during past rounding operation",
+                  roundingDate: today,
+                },
+              });
+
+              updatedServiceCodes.push(updatedCode);
+            }
+          } else {
+            // Create new code for this past date
+            const newServiceCode = await prisma.serviceCodes.create({
+              data: {
+                serviceId: service.id,
+                codeId: selectedCode.id,
+                numberOfUnits: 1,
+                serviceDate: codeStartDate,
+                serviceEndDate: null,
+                serviceLocation: serviceLocation,
+                locationOfService: locationOfService,
+              },
+              include: {
+                billingCode: {
+                  include: {
+                    section: true,
+                  },
+                },
+              },
+            });
+
+            await prisma.serviceCodeChangeLog.create({
+              data: {
+                serviceCodeId: newServiceCode.id,
+                changeType: "ROUND",
+                newData: JSON.stringify({
+                  codeId: selectedCode.id,
+                  billingCode: selectedCode.code,
+                  numberOfUnits: 1,
+                  serviceDate: codeStartDate,
+                  serviceLocation,
+                  locationOfService,
+                }),
+                changedBy: parseInt(user.id),
+                notes: "Service code created during past rounding operation",
+                roundingDate: today,
+              },
+            });
+
+            newServiceCodes.push(newServiceCode);
           }
         }
       }
