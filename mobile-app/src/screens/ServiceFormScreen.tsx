@@ -90,6 +90,9 @@ const ServiceFormScreen = ({ navigation }: any) => {
     setDebouncedReferringPhysicianQuery,
   ] = useState("");
   const [isCreatingPatient, setIsCreatingPatient] = useState(false);
+  const [billingCodeView, setBillingCodeView] = useState<
+    "services" | "rounding"
+  >("services");
   const [newPatient, setNewPatient] = useState({
     firstName: "",
     lastName: "",
@@ -2590,21 +2593,124 @@ const ServiceFormScreen = ({ navigation }: any) => {
           <Card style={styles.card}>
             <Card.Content>
               <Text style={styles.sectionTitle}>Billing Codes</Text>
-              {selectedCodes.map((code) => (
-                <View key={code.id} style={styles.selectedCode}>
-                  <View style={styles.codeInfo}>
-                    <Chip mode="flat" style={styles.codeChip}>
-                      {code.billingCode.code} -{" "}
-                      {formatFullDate(code.serviceDate || "")}
-                    </Chip>
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => handleRemoveCode(code.billingCode.id)}
+
+              {/* Toggle between Services and Rounding */}
+              <View style={styles.toggleContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.toggleButton,
+                    billingCodeView === "services" && styles.toggleButtonActive,
+                  ]}
+                  onPress={() => setBillingCodeView("services")}
+                >
+                  <Text
+                    style={[
+                      styles.toggleButtonText,
+                      billingCodeView === "services" &&
+                        styles.toggleButtonTextActive,
+                    ]}
                   >
-                    <Ionicons name="close-circle" size={20} color="#ef4444" />
-                  </TouchableOpacity>
+                    Services (
+                    {
+                      selectedCodes.filter(
+                        (code) => code.billingCode.billing_record_type === 50
+                      ).length
+                    }
+                    )
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.toggleButton,
+                    billingCodeView === "rounding" && styles.toggleButtonActive,
+                  ]}
+                  onPress={() => setBillingCodeView("rounding")}
+                >
+                  <Text
+                    style={[
+                      styles.toggleButtonText,
+                      billingCodeView === "rounding" &&
+                        styles.toggleButtonTextActive,
+                    ]}
+                  >
+                    Rounding (
+                    {
+                      selectedCodes.filter(
+                        (code) => code.billingCode.billing_record_type === 57
+                      ).length
+                    }
+                    )
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Display codes based on selected view */}
+              {billingCodeView === "services" ? (
+                <View style={{ marginTop: 16 }}>
+                  {selectedCodes
+                    .filter(
+                      (code) => code.billingCode.billing_record_type === 50
+                    )
+                    .map((code) => (
+                      <View key={code.id} style={styles.selectedCode}>
+                        <View style={styles.codeInfo}>
+                          <Chip mode="flat" style={styles.codeChip}>
+                            {code.billingCode.code} -{" "}
+                            {formatFullDate(code.serviceDate || "")}
+                          </Chip>
+                        </View>
+                        <TouchableOpacity
+                          onPress={() => handleRemoveCode(code.billingCode.id)}
+                        >
+                          <Ionicons
+                            name="close-circle"
+                            size={20}
+                            color="#ef4444"
+                          />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  {selectedCodes.filter(
+                    (code) => code.billingCode.billing_record_type === 50
+                  ).length === 0 && (
+                    <Text style={styles.emptyText}>No service codes added</Text>
+                  )}
                 </View>
-              ))}
+              ) : (
+                <View style={{ marginTop: 16 }}>
+                  {selectedCodes
+                    .filter(
+                      (code) => code.billingCode.billing_record_type === 57
+                    )
+                    .map((code) => (
+                      <View key={code.id} style={styles.selectedCode}>
+                        <View style={styles.codeInfo}>
+                          <Chip mode="flat" style={styles.codeChip}>
+                            {code.billingCode.code} -{" "}
+                            {formatFullDate(code.serviceDate || "")}
+                          </Chip>
+                        </View>
+                        <TouchableOpacity
+                          onPress={() => handleRemoveCode(code.billingCode.id)}
+                        >
+                          <Ionicons
+                            name="close-circle"
+                            size={20}
+                            color="#ef4444"
+                          />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  {selectedCodes.filter(
+                    (code) => code.billingCode.billing_record_type === 57
+                  ).length === 0 && (
+                    <Text style={styles.emptyText}>
+                      No rounding codes added
+                    </Text>
+                  )}
+                </View>
+              )}
+
               <TouchableOpacity
                 style={styles.addCodeButton}
                 onPress={() =>
@@ -3346,6 +3452,39 @@ const styles = StyleSheet.create({
     borderStyle: "dashed",
     borderRadius: 8,
     marginTop: 8,
+  },
+  toggleContainer: {
+    flexDirection: "row",
+    backgroundColor: "#f1f5f9",
+    borderRadius: 8,
+    padding: 4,
+    marginTop: 8,
+  },
+  toggleButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  toggleButtonActive: {
+    backgroundColor: "#2563eb",
+  },
+  toggleButtonText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#64748b",
+  },
+  toggleButtonTextActive: {
+    color: "#ffffff",
+  },
+  emptyText: {
+    fontSize: 14,
+    color: "#9ca3af",
+    textAlign: "center",
+    fontStyle: "italic",
+    paddingVertical: 8,
   },
   addCodeButtonText: {
     marginLeft: 8,
