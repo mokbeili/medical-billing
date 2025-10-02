@@ -1080,7 +1080,7 @@ const ServicesScreen = ({ navigation }: any) => {
                         <View style={styles.nonType57CodesList}>
                           {nonType57CodesToday.map((code, index) => (
                             <View
-                              key={code.id}
+                              key={code.id + index}
                               style={styles.nonType57CodeChip}
                             >
                               <Text style={styles.nonType57CodeText}>
@@ -1510,7 +1510,11 @@ const ServicesScreen = ({ navigation }: any) => {
             setPendingRoundingService(null);
           }}
         >
-          <View style={styles.modalContent} pointerEvents="box-none">
+          <TouchableOpacity
+            style={styles.modalContent}
+            activeOpacity={1}
+            onPress={() => {}} // Prevent closing when tapping inside modal
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Set Rounding Date</Text>
               <TouchableOpacity
@@ -1563,7 +1567,7 @@ const ServicesScreen = ({ navigation }: any) => {
                 Confirm
               </Button>
             </View>
-          </View>
+          </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
 
@@ -2085,6 +2089,7 @@ const ServicesScreen = ({ navigation }: any) => {
                     }
                   }}
                   style={styles.modalButton}
+                  contentStyle={{ paddingVertical: 8 }}
                 >
                   Done
                 </Button>
@@ -2691,6 +2696,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 8,
     minWidth: 80,
+    width: "100%",
     alignItems: "center",
   },
   cancelButton: {
@@ -2956,7 +2962,7 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   dateNavButton: {
-    padding: 8,
+    padding: 24,
     borderRadius: 6,
     backgroundColor: "#f8fafc",
     marginHorizontal: 4,

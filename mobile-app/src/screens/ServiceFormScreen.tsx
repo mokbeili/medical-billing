@@ -15,7 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { ActivityIndicator, Button, Card, Chip } from "react-native-paper";
+import { ActivityIndicator, Button, Card } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   healthInstitutionsAPI,
@@ -91,8 +91,8 @@ const ServiceFormScreen = ({ navigation }: any) => {
   ] = useState("");
   const [isCreatingPatient, setIsCreatingPatient] = useState(false);
   const [billingCodeView, setBillingCodeView] = useState<
-    "services" | "rounding"
-  >("services");
+    "procedures" | "rounding"
+  >("procedures");
   const [newPatient, setNewPatient] = useState({
     firstName: "",
     lastName: "",
@@ -2599,18 +2599,19 @@ const ServiceFormScreen = ({ navigation }: any) => {
                 <TouchableOpacity
                   style={[
                     styles.toggleButton,
-                    billingCodeView === "services" && styles.toggleButtonActive,
+                    billingCodeView === "procedures" &&
+                      styles.toggleButtonActive,
                   ]}
-                  onPress={() => setBillingCodeView("services")}
+                  onPress={() => setBillingCodeView("procedures")}
                 >
                   <Text
                     style={[
                       styles.toggleButtonText,
-                      billingCodeView === "services" &&
+                      billingCodeView === "procedures" &&
                         styles.toggleButtonTextActive,
                     ]}
                   >
-                    Services (
+                    Procedures (
                     {
                       selectedCodes.filter(
                         (code) => code.billingCode.billing_record_type === 50
@@ -2633,81 +2634,301 @@ const ServiceFormScreen = ({ navigation }: any) => {
                         styles.toggleButtonTextActive,
                     ]}
                   >
-                    Rounding (
-                    {
-                      selectedCodes.filter(
-                        (code) => code.billingCode.billing_record_type === 57
-                      ).length
-                    }
-                    )
+                    Rounding
                   </Text>
                 </TouchableOpacity>
               </View>
 
               {/* Display codes based on selected view */}
-              {billingCodeView === "services" ? (
+              {billingCodeView === "procedures" ? (
                 <View style={{ marginTop: 16 }}>
-                  {selectedCodes
-                    .filter(
+                  {(() => {
+                    // Filter procedures
+                    const procedures = selectedCodes.filter(
                       (code) => code.billingCode.billing_record_type === 50
-                    )
-                    .map((code) => (
-                      <View key={code.id} style={styles.selectedCode}>
-                        <View style={styles.codeInfo}>
-                          <Chip mode="flat" style={styles.codeChip}>
-                            {code.billingCode.code} -{" "}
-                            {formatFullDate(code.serviceDate || "")}
-                          </Chip>
-                        </View>
-                        <TouchableOpacity
-                          onPress={() => handleRemoveCode(code.billingCode.id)}
+                    );
+
+                    if (procedures.length === 0) {
+                      return (
+                        <Text style={styles.emptyText}>
+                          No service codes added
+                        </Text>
+                      );
+                    }
+
+                    // Group by billing code
+                    const groupedByCode = procedures.reduce((acc, code) => {
+                      const codeId = code.billingCode.id;
+                      if (!acc[codeId]) {
+                        acc[codeId] = {
+                          billingCode: code.billingCode,
+                          dates: [],
+                        };
+                      }
+                      if (code.serviceDate) {
+                        acc[codeId].dates.push({
+                          date: code.serviceDate,
+                          serviceCodeId: code.id,
+                        });
+                      }
+                      return acc;
+                    }, {} as Record<number, { billingCode: any; dates: Array<{ date: string; serviceCodeId: number }> }>);
+
+                    // Helper function to convert day to ordinal format
+                    const getOrdinalDay = (day: number): string => {
+                      const j = day % 10;
+                      const k = day % 100;
+                      if (j === 1 && k !== 11) {
+                        return day + "st";
+                      }
+                      if (j === 2 && k !== 12) {
+                        return day + "nd";
+                      }
+                      if (j === 3 && k !== 13) {
+                        return day + "rd";
+                      }
+                      return day + "th";
+                    };
+
+                    return Object.values(groupedByCode).map((group) => {
+                      // Group dates by year/month/day
+                      const datesByYearMonth = group.dates.reduce(
+                        (acc, item) => {
+                          // Parse date string manually to avoid timezone issues
+                          // Handle both "YYYY-MM-DD" and "YYYY-MM-DDTHH:mm:ss" formats
+                          const dateOnly = item.date.split("T")[0];
+                          const dateParts = dateOnly.split("-");
+                          const year = parseInt(dateParts[0], 10);
+                          const monthNum = parseInt(dateParts[1], 10);
+                          const day = parseInt(dateParts[2], 10);
+
+                          const monthNames = [
+                            "Jan",
+                            "Feb",
+                            "Mar",
+                            "Apr",
+                            "May",
+                            "Jun",
+                            "Jul",
+                            "Aug",
+                            "Sep",
+                            "Oct",
+                            "Nov",
+                            "Dec",
+                          ];
+                          const monthName = monthNames[monthNum - 1];
+                          const key = `${year}/${monthName}`;
+
+                          if (!acc[key]) {
+                            acc[key] = { year, month: monthName, dayCount: {} };
+                          }
+                          // Count occurrences of each day
+                          acc[key].dayCount[day] =
+                            (acc[key].dayCount[day] || 0) + 1;
+                          return acc;
+                        },
+                        {} as Record<
+                          string,
+                          {
+                            year: number;
+                            month: string;
+                            dayCount: Record<number, number>;
+                          }
                         >
-                          <Ionicons
-                            name="close-circle"
-                            size={20}
-                            color="#ef4444"
-                          />
-                        </TouchableOpacity>
-                      </View>
-                    ))}
-                  {selectedCodes.filter(
-                    (code) => code.billingCode.billing_record_type === 50
-                  ).length === 0 && (
-                    <Text style={styles.emptyText}>No service codes added</Text>
-                  )}
+                      );
+
+                      // Convert day counts to sorted array with formatted strings
+                      Object.values(datesByYearMonth).forEach((monthData) => {
+                        const sortedDays = Object.keys(monthData.dayCount)
+                          .map(Number)
+                          .sort((a, b) => a - b);
+                        (monthData as any).formattedDays = sortedDays.map(
+                          (day) => {
+                            const count = monthData.dayCount[day];
+                            const ordinalDay = getOrdinalDay(day);
+                            return count > 1
+                              ? `${count} x ${ordinalDay}`
+                              : ordinalDay;
+                          }
+                        );
+                      });
+
+                      const yearMonthEntries = Object.entries(datesByYearMonth);
+
+                      return (
+                        <View
+                          key={group.billingCode.id}
+                          style={styles.groupedCodeContainer}
+                        >
+                          <View style={styles.groupedCodeHeader}>
+                            <View style={{ flex: 1 }}>
+                              <Text
+                                style={styles.groupedCodeText}
+                                numberOfLines={1}
+                                ellipsizeMode="tail"
+                              >
+                                {group.billingCode.code}:{" "}
+                                {group.billingCode.title}
+                              </Text>
+                              {yearMonthEntries.map(([key, monthData]) => (
+                                <View key={key} style={styles.groupedDateRow}>
+                                  <Text style={styles.groupedDateText}>
+                                    {monthData.year} - {monthData.month} (
+                                    {(monthData as any).formattedDays.join(
+                                      ", "
+                                    )}
+                                    )
+                                  </Text>
+                                </View>
+                              ))}
+                            </View>
+                            <TouchableOpacity
+                              onPress={() =>
+                                handleRemoveCode(group.billingCode.id)
+                              }
+                            >
+                              <Ionicons
+                                name="close-circle"
+                                size={20}
+                                color="#ef4444"
+                              />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      );
+                    });
+                  })()}
                 </View>
               ) : (
                 <View style={{ marginTop: 16 }}>
-                  {selectedCodes
-                    .filter(
+                  {(() => {
+                    const roundingCodes = selectedCodes.filter(
                       (code) => code.billingCode.billing_record_type === 57
-                    )
-                    .map((code) => (
-                      <View key={code.id} style={styles.selectedCode}>
-                        <View style={styles.codeInfo}>
-                          <Chip mode="flat" style={styles.codeChip}>
-                            {code.billingCode.code} -{" "}
-                            {formatFullDate(code.serviceDate || "")}
-                          </Chip>
+                    );
+
+                    if (roundingCodes.length === 0) {
+                      return (
+                        <Text style={styles.emptyText}>
+                          No rounding codes added
+                        </Text>
+                      );
+                    }
+
+                    // Helper function to convert units to text
+                    const getUnitsText = (units: number): string => {
+                      const unitsMap: { [key: number]: string } = {
+                        1: "once",
+                        2: "twice",
+                        3: "three times",
+                        4: "four times",
+                        5: "five times",
+                        6: "six times",
+                        7: "seven times",
+                        8: "eight times",
+                        9: "nine times",
+                        10: "ten times",
+                      };
+                      return unitsMap[units] || `${units} times`;
+                    };
+
+                    // Helper function to format date or show "Today"
+                    const formatDateOrToday = (dateStr: string): string => {
+                      const today = new Date().toISOString().split("T")[0];
+                      return dateStr === today
+                        ? "Today"
+                        : formatFullDate(dateStr);
+                    };
+
+                    return roundingCodes.map((code) => {
+                      // Calculate the display end date
+                      let displayEndDate = code.serviceEndDate;
+
+                      if (!displayEndDate) {
+                        const today = new Date().toISOString().split("T")[0];
+
+                        // Calculate max possible end date from billing code chain
+                        let maxEndDate = null;
+                        if (
+                          code.billingCode.billingCodeChains &&
+                          code.billingCode.billingCodeChains.length > 0
+                        ) {
+                          // Find the last code in the chain (isLast = true) or use the highest cumulativeDayRange
+                          const lastChainCode =
+                            code.billingCode.billingCodeChains.find(
+                              (c) => c.isLast
+                            ) ||
+                            code.billingCode.billingCodeChains.reduce(
+                              (max, c) =>
+                                c.cumulativeDayRange > max.cumulativeDayRange
+                                  ? c
+                                  : max
+                            );
+
+                          if (lastChainCode && code.serviceDate) {
+                            const startDate = new Date(code.serviceDate);
+                            const endDate = new Date(startDate);
+                            endDate.setDate(
+                              endDate.getDate() +
+                                lastChainCode.cumulativeDayRange -
+                                1
+                            );
+                            maxEndDate = endDate.toISOString().split("T")[0];
+                          }
+                        } else if (
+                          code.billingCode.day_range &&
+                          code.serviceDate
+                        ) {
+                          // Fallback to day_range if no chain available
+                          const startDate = new Date(code.serviceDate);
+                          const endDate = new Date(startDate);
+                          endDate.setDate(
+                            endDate.getDate() + code.billingCode.day_range - 1
+                          );
+                          maxEndDate = endDate.toISOString().split("T")[0];
+                        }
+
+                        // Use the minimum of today and maxEndDate
+                        if (maxEndDate) {
+                          displayEndDate =
+                            today < maxEndDate ? today : maxEndDate;
+                        } else {
+                          displayEndDate = today;
+                        }
+                      }
+
+                      return (
+                        <View key={code.id} style={styles.groupedCodeContainer}>
+                          <View style={styles.groupedCodeHeader}>
+                            <View style={{ flex: 1 }}>
+                              <Text
+                                style={styles.groupedCodeText}
+                                numberOfLines={1}
+                                ellipsizeMode="tail"
+                              >
+                                {code.billingCode.code}{" - "}
+                                {getUnitsText(code.numberOfUnits || 1)}
+                              </Text>
+                              <Text style={styles.groupedDateText}>
+                                {formatDateOrToday(code.serviceDate || "")} ->{" "}
+                                {formatDateOrToday(displayEndDate)}
+                              </Text>
+                            </View>
+                            <TouchableOpacity
+                              onPress={() =>
+                                handleRemoveCode(code.billingCode.id)
+                              }
+                            >
+                              <Ionicons
+                                name="close-circle"
+                                size={20}
+                                color="#ef4444"
+                              />
+                            </TouchableOpacity>
+                          </View>
                         </View>
-                        <TouchableOpacity
-                          onPress={() => handleRemoveCode(code.billingCode.id)}
-                        >
-                          <Ionicons
-                            name="close-circle"
-                            size={20}
-                            color="#ef4444"
-                          />
-                        </TouchableOpacity>
-                      </View>
-                    ))}
-                  {selectedCodes.filter(
-                    (code) => code.billingCode.billing_record_type === 57
-                  ).length === 0 && (
-                    <Text style={styles.emptyText}>
-                      No rounding codes added
-                    </Text>
-                  )}
+                      );
+                    });
+                  })()}
                 </View>
               )}
 
@@ -3485,6 +3706,38 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontStyle: "italic",
     paddingVertical: 8,
+  },
+  groupedCodeContainer: {
+    marginBottom: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: "#f9fafb",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  groupedCodeHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
+  groupedCodeFirstLine: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  groupedCodeText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#1f2937",
+    marginBottom: 4,
+  },
+  groupedDateRow: {
+    marginTop: 1,
+  },
+  groupedDateText: {
+    fontSize: 14,
+    color: "#4b5563",
+    lineHeight: 20,
   },
   addCodeButtonText: {
     marginLeft: 8,
