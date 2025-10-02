@@ -22,6 +22,15 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+// Helper function to get today's date in local timezone (not UTC)
+const getTodayLocalDate = (): string => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 interface Physician {
   id: string;
   firstName: string;
@@ -200,9 +209,7 @@ export default function ServiceForm({
 
   // Add state for discharge date modal
   const [showDischargeDateModal, setShowDischargeDateModal] = useState(false);
-  const [dischargeDate, setDischargeDate] = useState(
-    new Date().toISOString().split("T")[0]
-  );
+  const [dischargeDate, setDischargeDate] = useState(getTodayLocalDate());
   const [pendingApproveAndFinish, setPendingApproveAndFinish] = useState(false);
 
   // Add state for active tab
@@ -1089,7 +1096,7 @@ export default function ServiceForm({
     }
 
     setShowDischargeDateModal(false);
-    setDischargeDate(new Date().toISOString().split("T")[0]);
+    setDischargeDate(getTodayLocalDate());
     setPendingApproveAndFinish(false);
 
     // Now proceed with approve and finish, passing the updated billing codes
@@ -3116,6 +3123,7 @@ export default function ServiceForm({
                   value={dischargeDate}
                   onChange={(e) => setDischargeDate(e.target.value)}
                   min={formData.serviceDate}
+                  max={getTodayLocalDate()}
                 />
               </div>
               <div className="flex justify-end space-x-2">
@@ -3124,7 +3132,7 @@ export default function ServiceForm({
                   variant="outline"
                   onClick={() => {
                     setShowDischargeDateModal(false);
-                    setDischargeDate(new Date().toISOString().split("T")[0]);
+                    setDischargeDate(getTodayLocalDate());
                     setPendingApproveAndFinish(false);
                   }}
                 >

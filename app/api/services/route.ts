@@ -285,7 +285,7 @@ export async function GET(request: Request) {
                 changeType: "ROUND",
               },
               orderBy: {
-                changedAt: "desc",
+                roundingDate: "desc",
               },
               take: 1,
             },
