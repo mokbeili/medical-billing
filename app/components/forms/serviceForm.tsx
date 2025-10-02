@@ -1,6 +1,7 @@
 "use client";
 
 import Layout from "@/app/components/layout/Layout";
+import { useToast } from "@/app/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -134,6 +135,7 @@ export default function ServiceForm({
 }) {
   const router = useRouter();
   const { data: session, status } = useSession();
+  const { toast } = useToast();
   const [physicians, setPhysicians] = useState<Physician[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [referringPhysicians, setReferringPhysicians] = useState<
@@ -608,65 +610,112 @@ export default function ServiceForm({
   };
 
   const handleAddCode = (code: BillingCode) => {
-    if (!selectedCodes.find((c) => c.id === code.id)) {
-      setSelectedCodes([...selectedCodes, code]);
+    // For type 57 codes, prevent duplicates by increasing units instead
+    if (
+      code.billing_record_type === 57 &&
+      selectedCodes.find((c) => c.id === code.id)
+    ) {
+      // Find the index of the existing code in billingCodes
+      const existingIndex = formData.billingCodes.findIndex(
+        (bc) => bc.codeId === code.id
+      );
 
-      // Calculate service start date for type 57 codes
-      let serviceStartDate: string;
-      let serviceEndDate = null;
-      let updatedBillingCodes = [...formData.billingCodes];
+      if (existingIndex !== -1) {
+        const updatedBillingCodes = [...formData.billingCodes];
+        const currentCode = updatedBillingCodes[existingIndex];
+        const currentUnits = currentCode.numberOfUnits || 0;
+        const maxUnits = code.max_units || Infinity;
 
-      if (code.billing_record_type === 57) {
-        // For type 57 codes, use BillingCodeChain logic to calculate dates
-        if (code.billingCodeChains && code.billingCodeChains.length > 0) {
-          const rootChain = code.billingCodeChains[0];
-          // Start Date: admission date + previous day range
-          const startDate = new Date(formData.serviceDate);
-          startDate.setDate(startDate.getDate() + rootChain.previousDayRange);
-          serviceStartDate = startDate.toISOString().split("T")[0];
+        if (currentUnits < maxUnits) {
+          // Increase units by 1
+          updatedBillingCodes[existingIndex] = {
+            ...currentCode,
+            numberOfUnits: currentUnits + 1,
+          };
 
-          // End Date: admission date + cumulative day range - 1
-          const endDate = new Date(formData.serviceDate);
-          endDate.setDate(endDate.getDate() + rootChain.cumulativeDayRange - 1);
-          serviceEndDate = endDate.toISOString().split("T")[0];
+          setFormData({
+            ...formData,
+            billingCodes: updatedBillingCodes,
+          });
+
+          toast({
+            title: "Units increased",
+            description: `Units for ${code.code} increased to ${
+              currentUnits + 1
+            }`,
+          });
         } else {
-          // Fallback to admission date if no BillingCodeChain data
-          serviceStartDate = formData.serviceDate;
-          serviceEndDate = null;
-        }
-      } else {
-        // For non-type 57 codes, use today's date as default
-        const today = new Date().toISOString().split("T")[0];
-        serviceStartDate = today;
-
-        // Calculate service end date based on day range
-        if (code.day_range && code.day_range > 0) {
-          const startDate = new Date(serviceStartDate);
-          startDate.setDate(startDate.getDate() + code.day_range - 1); // -1 because it's inclusive
-          serviceEndDate = startDate.toISOString().split("T")[0];
+          toast({
+            title: "Maximum units reached",
+            description: `${code.code} has already reached the maximum of ${maxUnits} units`,
+            variant: "destructive",
+          });
         }
       }
 
-      // Add the new code to the updated billing codes array
-      updatedBillingCodes.push({
-        codeId: code.id,
-        status: "OPEN",
-        billing_record_type: code.billing_record_type,
-        serviceStartTime: null,
-        serviceEndTime: null,
-        numberOfUnits: code.multiple_unit_indicator === "U" ? 1 : null,
-        bilateralIndicator: null,
-        specialCircumstances: null,
-        serviceDate: serviceStartDate,
-        serviceEndDate: serviceEndDate,
-      });
-
-      // Update form data with both the updated previous code and the new code
-      setFormData({
-        ...formData,
-        billingCodes: updatedBillingCodes,
-      });
+      setServiceErrors({ ...serviceErrors, billingCodes: false });
+      setSearchQuery("");
+      return;
     }
+
+    setSelectedCodes([...selectedCodes, code]);
+
+    // Calculate service start date for type 57 codes
+    let serviceStartDate: string;
+    let serviceEndDate = null;
+    let updatedBillingCodes = [...formData.billingCodes];
+
+    if (code.billing_record_type === 57) {
+      // For type 57 codes, use BillingCodeChain logic to calculate dates
+      if (code.billingCodeChains && code.billingCodeChains.length > 0) {
+        const rootChain = code.billingCodeChains[0];
+        // Start Date: admission date + previous day range
+        const startDate = new Date(formData.serviceDate);
+        startDate.setDate(startDate.getDate() + rootChain.previousDayRange);
+        serviceStartDate = startDate.toISOString().split("T")[0];
+
+        // End Date: admission date + cumulative day range - 1
+        const endDate = new Date(formData.serviceDate);
+        endDate.setDate(endDate.getDate() + rootChain.cumulativeDayRange - 1);
+        serviceEndDate = endDate.toISOString().split("T")[0];
+      } else {
+        // Fallback to admission date if no BillingCodeChain data
+        serviceStartDate = formData.serviceDate;
+        serviceEndDate = null;
+      }
+    } else {
+      // For non-type 57 codes, use today's date as default
+      const today = new Date().toISOString().split("T")[0];
+      serviceStartDate = today;
+
+      // Calculate service end date based on day range
+      if (code.day_range && code.day_range > 0) {
+        const startDate = new Date(serviceStartDate);
+        startDate.setDate(startDate.getDate() + code.day_range - 1); // -1 because it's inclusive
+        serviceEndDate = startDate.toISOString().split("T")[0];
+      }
+    }
+
+    // Add the new code to the updated billing codes array
+    updatedBillingCodes.push({
+      codeId: code.id,
+      status: "OPEN",
+      billing_record_type: code.billing_record_type,
+      serviceStartTime: null,
+      serviceEndTime: null,
+      numberOfUnits: code.multiple_unit_indicator === "U" ? 1 : null,
+      bilateralIndicator: null,
+      specialCircumstances: null,
+      serviceDate: serviceStartDate,
+      serviceEndDate: serviceEndDate,
+    });
+
+    // Update form data with both the updated previous code and the new code
+    setFormData({
+      ...formData,
+      billingCodes: updatedBillingCodes,
+    });
+
     setServiceErrors({ ...serviceErrors, billingCodes: false });
     setSearchQuery("");
   };
@@ -819,34 +868,22 @@ export default function ServiceForm({
 
   // Function to handle main service date changes and update all billing codes
   const handleMainServiceDateChange = (newServiceDate: string) => {
-    // Step 1: Find all codes that should have their start date updated
-    // For type 57 codes, we'll update them all since they use BillingCodeChain
-    // For non-type 57 codes, we'll update them all since we're not using previous codes anymore
-    const codesToUpdate = formData.billingCodes.filter((code, index) => {
-      const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
-      return selectedCode !== undefined;
-    });
-
-    // Step 2: Update the start dates of codes that should be updated
+    // Only update type 57 codes when the admission date changes
+    // Non-type 57 codes should remain unchanged
     const updatedBillingCodes = formData.billingCodes.map((code, index) => {
       const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
       if (!selectedCode) return code;
 
-      // Check if this code should be updated
-      const shouldUpdate = codesToUpdate.some((c) => c.codeId === code.codeId);
-
-      if (!shouldUpdate) {
-        // This code shouldn't be updated, keep it as is
-        return code;
+      // Only update type 57 codes
+      if (selectedCode.billing_record_type !== 57) {
+        return code; // Keep non-type 57 codes unchanged
       }
 
-      // For codes that should be updated, set the new start date
+      // For type 57 codes, use BillingCodeChain logic if available
       let newServiceStartDate = newServiceDate;
       let newServiceEndDate = null;
 
-      // For type 57 codes, use BillingCodeChain logic if available
       if (
-        selectedCode.billing_record_type === 57 &&
         selectedCode.billingCodeChains &&
         selectedCode.billingCodeChains.length > 0
       ) {
@@ -860,11 +897,6 @@ export default function ServiceForm({
         const endDate = new Date(newServiceDate);
         endDate.setDate(endDate.getDate() + rootChain.cumulativeDayRange - 1);
         newServiceEndDate = endDate.toISOString().split("T")[0];
-      } else if (selectedCode.day_range && selectedCode.day_range > 0) {
-        // Calculate end date if this code has a day range
-        const startDate = new Date(newServiceStartDate);
-        startDate.setDate(startDate.getDate() + selectedCode.day_range - 1);
-        newServiceEndDate = startDate.toISOString().split("T")[0];
       }
 
       return {
@@ -874,23 +906,33 @@ export default function ServiceForm({
       };
     });
 
-    // Step 3: No need to recalculate dependent codes since we're not using previous codes anymore
-    const finalBillingCodes = updatedBillingCodes;
-
     setFormData({
       ...formData,
       serviceDate: newServiceDate,
-      billingCodes: finalBillingCodes,
+      billingCodes: updatedBillingCodes,
     });
   };
 
-  const handleRemoveCode = (codeId: number) => {
-    setSelectedCodes(selectedCodes.filter((code) => code.id !== codeId));
+  const handleRemoveCode = (index: number) => {
+    const removedCodeId = formData.billingCodes[index]?.codeId;
+
+    // Remove from billingCodes by index
+    const updatedBillingCodes = formData.billingCodes.filter(
+      (_, i) => i !== index
+    );
+
+    // Remove from selectedCodes only if no other instances exist
+    const stillExists = updatedBillingCodes.some(
+      (bc) => bc.codeId === removedCodeId
+    );
+    const updatedSelectedCodes = stillExists
+      ? selectedCodes
+      : selectedCodes.filter((code) => code.id !== removedCodeId);
+
+    setSelectedCodes(updatedSelectedCodes);
     setFormData({
       ...formData,
-      billingCodes: formData.billingCodes.filter(
-        (code) => code.codeId !== codeId
-      ),
+      billingCodes: updatedBillingCodes,
     });
   };
 
@@ -970,7 +1012,169 @@ export default function ServiceForm({
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Implement save functionality
+
+    if (status === "loading") {
+      return;
+    }
+
+    if (status === "unauthenticated" || !session) {
+      console.error("No active session. Please log in.");
+      router.push("/auth/signin");
+      return;
+    }
+
+    try {
+      // Use the user's selected service date as the primary service date
+      const primaryServiceDate = new Date(formData.serviceDate);
+
+      // Helper function to combine date and time
+      const combineDateTime = (date: Date, timeStr: string) => {
+        if (!timeStr) return null;
+        const [hours, minutes] = timeStr.split(":").map(Number);
+        const newDate = new Date(date);
+        newDate.setHours(hours, minutes, 0, 0);
+        return newDate.toISOString();
+      };
+
+      if (type === "new") {
+        // Create new service with all billing codes set to OPEN status
+        const billingTypeId = physicians
+          .find((p) => p.id === formData.physicianId)
+          ?.physicianBillingTypes.find((bt) => bt.active)?.billingTypeId;
+
+        const serviceData = {
+          physicianId: formData.physicianId,
+          billingTypeId: physicians[0].physicianBillingTypes.find(
+            (bt) => bt.active
+          )?.billingTypeId,
+          patientId: formData.patientId,
+          referringPhysicianId: formData.referringPhysicianId,
+          icdCodeId: formData.icdCodeId,
+          healthInstitutionId: formData.healthInstitutionId,
+          summary: formData.summary,
+          serviceDate: primaryServiceDate.toISOString(),
+          serviceLocation: formData.serviceLocation,
+          locationOfService: formData.locationOfService,
+          serviceStatus: "OPEN",
+          billingCodes: formData.billingCodes.map((code) => ({
+            codeId: code.codeId,
+            status: "OPEN", // Set all codes to OPEN
+            serviceStartTime: code.serviceStartTime
+              ? combineDateTime(
+                  new Date(code.serviceDate || formData.serviceDate),
+                  code.serviceStartTime
+                )
+              : null,
+            serviceEndTime: code.serviceEndTime
+              ? combineDateTime(
+                  new Date(code.serviceDate || formData.serviceDate),
+                  code.serviceEndTime
+                )
+              : null,
+            numberOfUnits: code.numberOfUnits || null,
+            bilateralIndicator: code.bilateralIndicator,
+            specialCircumstances: code.specialCircumstances,
+            serviceDate: code.serviceDate
+              ? new Date(code.serviceDate).toISOString()
+              : primaryServiceDate.toISOString(),
+            serviceEndDate: code.serviceEndDate
+              ? new Date(code.serviceEndDate).toISOString()
+              : null,
+          })),
+        };
+
+        const serviceResponse = await fetch("/api/services", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.user?.id}`,
+          },
+          body: JSON.stringify(serviceData),
+        });
+
+        if (!serviceResponse.ok) {
+          console.error(serviceResponse);
+          throw new Error("Failed to create service");
+        }
+
+        const result = await serviceResponse.json();
+
+        toast({
+          title: "Service saved",
+          description: "Service has been saved with OPEN status",
+        });
+
+        // Redirect to edit mode for the newly created service
+        router.push(`/services/edit/${result.id}`);
+      } else if (type === "edit" && serviceId) {
+        // Update existing service with all billing codes set to OPEN status
+        const serviceData = {
+          id: serviceId,
+          physicianId: formData.physicianId,
+          billingTypeId: formData.billingTypeId,
+          patientId: formData.patientId,
+          referringPhysicianId: formData.referringPhysicianId,
+          icdCodeId: formData.icdCodeId,
+          healthInstitutionId: formData.healthInstitutionId,
+          summary: formData.summary,
+          serviceDate: primaryServiceDate.toISOString(),
+          serviceLocation: formData.serviceLocation,
+          locationOfService: formData.locationOfService,
+          serviceStatus: "OPEN",
+          billingCodes: formData.billingCodes.map((code) => ({
+            codeId: code.codeId,
+            status: "OPEN", // Set all codes to OPEN
+            serviceStartTime: code.serviceStartTime
+              ? combineDateTime(
+                  new Date(code.serviceDate || formData.serviceDate),
+                  code.serviceStartTime
+                )
+              : null,
+            serviceEndTime: code.serviceEndTime
+              ? combineDateTime(
+                  new Date(code.serviceDate || formData.serviceDate),
+                  code.serviceEndTime
+                )
+              : null,
+            numberOfUnits: code.numberOfUnits || null,
+            bilateralIndicator: code.bilateralIndicator,
+            specialCircumstances: code.specialCircumstances,
+            serviceDate: code.serviceDate
+              ? new Date(code.serviceDate).toISOString()
+              : primaryServiceDate.toISOString(),
+            serviceEndDate: code.serviceEndDate
+              ? new Date(code.serviceEndDate).toISOString()
+              : null,
+          })),
+        };
+
+        const serviceResponse = await fetch("/api/services", {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.user?.id}`,
+          },
+          body: JSON.stringify(serviceData),
+        });
+
+        if (!serviceResponse.ok) {
+          console.error(serviceResponse);
+          throw new Error("Failed to update service");
+        }
+
+        toast({
+          title: "Service saved",
+          description: "Service has been saved with OPEN status",
+        });
+      }
+    } catch (error) {
+      console.error("Error saving service:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save service. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleApproveAndFinish = async (e: React.FormEvent) => {
@@ -1639,16 +1843,17 @@ export default function ServiceForm({
                         <h4 className="text-sm font-medium text-gray-700 mt-2 mb-1">
                           Claims, Consultation, etc.
                         </h4>
-                        {selectedCodes
-                          .filter((code) => code.billing_record_type === 50)
-                          .map((code, index) => {
-                            const billingCodeIndex =
-                              formData.billingCodes.findIndex(
-                                (bc) => bc.codeId === code.id
-                              );
+                        {formData.billingCodes.map(
+                          (billingCode, billingCodeIndex) => {
+                            const code = selectedCodes.find(
+                              (c) => c.id === billingCode.codeId
+                            );
+                            if (!code || code.billing_record_type !== 50)
+                              return null;
+
                             return (
                               <div
-                                key={code.id}
+                                key={billingCodeIndex}
                                 className="p-3 bg-gray-50 rounded-md space-y-3"
                               >
                                 <div className="flex items-center justify-between">
@@ -1667,7 +1872,9 @@ export default function ServiceForm({
                                     type="button"
                                     variant="ghost"
                                     size="sm"
-                                    onClick={() => handleRemoveCode(code.id)}
+                                    onClick={() =>
+                                      handleRemoveCode(billingCodeIndex)
+                                    }
                                     className="text-red-500 hover:text-red-700"
                                   >
                                     <span className="sm:hidden">✕</span>
@@ -2128,7 +2335,8 @@ export default function ServiceForm({
                                 </div>
                               </div>
                             );
-                          })}
+                          }
+                        )}
                       </>
                     ) : (
                       <p className="text-sm text-gray-500">
@@ -2148,16 +2356,17 @@ export default function ServiceForm({
                         <h4 className="text-sm font-medium text-gray-700 mt-2 mb-1">
                           Rounding
                         </h4>
-                        {selectedCodes
-                          .filter((code) => code.billing_record_type === 57)
-                          .map((code, index) => {
-                            const billingCodeIndex =
-                              formData.billingCodes.findIndex(
-                                (bc) => bc.codeId === code.id
-                              );
+                        {formData.billingCodes.map(
+                          (billingCode, billingCodeIndex) => {
+                            const code = selectedCodes.find(
+                              (c) => c.id === billingCode.codeId
+                            );
+                            if (!code || code.billing_record_type !== 57)
+                              return null;
+
                             return (
                               <div
-                                key={code.id}
+                                key={billingCodeIndex}
                                 className="p-3 bg-gray-50 rounded-md space-y-3"
                               >
                                 <div className="flex items-center justify-between">
@@ -2176,7 +2385,9 @@ export default function ServiceForm({
                                     type="button"
                                     variant="ghost"
                                     size="sm"
-                                    onClick={() => handleRemoveCode(code.id)}
+                                    onClick={() =>
+                                      handleRemoveCode(billingCodeIndex)
+                                    }
                                     className="text-red-500 hover:text-red-700"
                                   >
                                     <span className="sm:hidden">✕</span>
@@ -2634,7 +2845,8 @@ export default function ServiceForm({
                                 </div>
                               </div>
                             );
-                          })}
+                          }
+                        )}
                       </>
                     ) : (
                       <p className="text-sm text-gray-500">
