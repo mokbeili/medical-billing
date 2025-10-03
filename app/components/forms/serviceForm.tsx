@@ -1206,6 +1206,9 @@ export default function ServiceForm({
           title: "Service saved",
           description: "Service has been saved with OPEN status",
         });
+
+        // Redirect to services page
+        router.push("/services");
       }
     } catch (error) {
       console.error("Error saving service:", error);
