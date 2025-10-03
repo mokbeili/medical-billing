@@ -1,5 +1,6 @@
 "use client";
 
+import { HybridDateInput } from "@/app/components/forms/HybridDateInput";
 import Layout from "@/app/components/layout/Layout";
 import { useToast } from "@/app/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,45 @@ const getTodayLocalDate = (): string => {
   const month = String(today.getMonth() + 1).padStart(2, "0");
   const day = String(today.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+};
+
+// Helper function to group billing codes by code
+const groupBillingCodesByCode = (
+  billingCodes: any[],
+  selectedCodes: BillingCode[],
+  formData?: { serviceDate: string }
+) => {
+  const grouped: {
+    [key: string]: {
+      code: BillingCode;
+      instances: Array<{ billingCode: any; index: number }>;
+    };
+  } = {};
+
+  billingCodes.forEach((billingCode, index) => {
+    const code = selectedCodes.find((c) => c.id === billingCode.codeId);
+    if (code) {
+      if (!grouped[code.code]) {
+        grouped[code.code] = {
+          code,
+          instances: [],
+        };
+      }
+      grouped[code.code].instances.push({ billingCode, index });
+    }
+  });
+
+  // Sort instances by service date descending (most recent first)
+  Object.values(grouped).forEach((group) => {
+    group.instances.sort((a, b) => {
+      const dateA = a.billingCode.serviceDate || formData?.serviceDate || "";
+      const dateB = b.billingCode.serviceDate || formData?.serviceDate || "";
+      // Descending order: most recent first
+      return dateB.localeCompare(dateA);
+    });
+  });
+
+  return grouped;
 };
 
 interface Physician {
@@ -1564,12 +1604,12 @@ export default function ServiceForm({
           <div className="space-y-2">
             <label className="block text-sm font-medium">Admission Date</label>
             <div className="flex gap-2 items-center">
-              <Input
-                type="date"
+              <HybridDateInput
                 value={formData.serviceDate}
-                onChange={(e) => {
-                  handleMainServiceDateChange(e.target.value);
+                onChange={(value) => {
+                  handleMainServiceDateChange(value);
                 }}
+                placeholder="e.g., 22 Feb 2024, 22/02/2024, or use calendar"
                 className={serviceErrors.serviceDate ? "border-red-500" : ""}
               />
               <Button
@@ -1843,22 +1883,33 @@ export default function ServiceForm({
                         <h4 className="text-sm font-medium text-gray-700 mt-2 mb-1">
                           Claims, Consultation, etc.
                         </h4>
-                        {formData.billingCodes.map(
-                          (billingCode, billingCodeIndex) => {
-                            const code = selectedCodes.find(
-                              (c) => c.id === billingCode.codeId
-                            );
-                            if (!code || code.billing_record_type !== 50)
-                              return null;
+                        {(() => {
+                          const type50Codes = formData.billingCodes.filter(
+                            (_, idx) => {
+                              const code = selectedCodes.find(
+                                (c) =>
+                                  c.id === formData.billingCodes[idx].codeId
+                              );
+                              return code && code.billing_record_type === 50;
+                            }
+                          );
+                          const grouped = groupBillingCodesByCode(
+                            type50Codes,
+                            selectedCodes.filter(
+                              (c) => c.billing_record_type === 50
+                            ),
+                            formData
+                          );
 
-                            return (
+                          return Object.values(grouped).map(
+                            ({ code, instances }) => (
                               <div
-                                key={billingCodeIndex}
-                                className="p-3 bg-gray-50 rounded-md space-y-3"
+                                key={code.code}
+                                className="p-2 bg-gray-50 rounded-md space-y-1.5 mb-3"
                               >
-                                <div className="flex items-center justify-between">
+                                <div className="flex items-center justify-between border-b border-gray-300 pb-1">
                                   <div>
-                                    <span className="font-medium">
+                                    <span className="font-bold text-base">
                                       <span className="sm:hidden">
                                         {code.code.replace(/^0+/, "")}
                                       </span>
@@ -1866,477 +1917,390 @@ export default function ServiceForm({
                                         {code.code}
                                       </span>
                                     </span>{" "}
-                                    - {code.title}
-                                  </div>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                      handleRemoveCode(billingCodeIndex)
-                                    }
-                                    className="text-red-500 hover:text-red-700"
-                                  >
-                                    <span className="sm:hidden">✕</span>
-                                    <span className="hidden sm:inline">
-                                      Remove
+                                    <span className="text-gray-600 text-sm">
+                                      - {code.title}
                                     </span>
-                                  </Button>
+                                  </div>
+                                  <div className="text-xs text-gray-500">
+                                    {instances.length} instance
+                                    {instances.length > 1 ? "s" : ""}
+                                  </div>
                                 </div>
 
-                                <div className="flex flex-col sm:flex-row gap-3 items-center sm:items-start justify-center sm:justify-around">
-                                  {/* Service Date for all codes */}
-                                  <div className="space-y-1 w-full sm:w-auto flex flex-col items-center sm:items-start">
-                                    <label className="block text-sm font-medium">
-                                      Service Date
-                                    </label>
-                                    <Input
-                                      type="date"
-                                      value={
-                                        formData.billingCodes[billingCodeIndex]
-                                          ?.serviceDate || formData.serviceDate
-                                      }
-                                      onChange={(e) =>
-                                        handleUpdateBillingCode(
-                                          billingCodeIndex,
-                                          {
-                                            serviceDate: e.target.value,
-                                          }
-                                        )
-                                      }
-                                      className="w-auto min-w-[140px]"
-                                    />
-                                  </div>
+                                {instances.map(
+                                  (
+                                    { billingCode, index: billingCodeIndex },
+                                    instanceIdx
+                                  ) => (
+                                    <div
+                                      key={billingCodeIndex}
+                                      className="pl-2 py-1 bg-white rounded border border-gray-200 flex flex-wrap items-center gap-2 text-xs"
+                                    >
+                                      <div className="font-medium text-gray-700 min-w-[50px]">
+                                        #{instanceIdx + 1}
+                                      </div>
 
-                                  {/* Service End Date for codes with day range */}
-                                  {code.day_range && code.day_range > 0 ? (
-                                    <div className="space-y-1 w-full sm:w-auto flex flex-col items-center sm:items-start">
-                                      <label className="block text-sm font-medium">
-                                        Service End Date
-                                      </label>
-                                      <Input
-                                        type="date"
-                                        value={
-                                          formData.billingCodes[
-                                            billingCodeIndex
-                                          ]?.serviceEndDate || ""
-                                        }
-                                        onChange={(e) =>
-                                          handleUpdateBillingCode(
-                                            billingCodeIndex,
-                                            {
-                                              serviceEndDate:
-                                                e.target.value || null,
-                                            }
-                                          )
-                                        }
-                                        className="w-auto min-w-[140px]"
-                                      />
-                                    </div>
-                                  ) : null}
-
-                                  {code.multiple_unit_indicator === "U" && (
-                                    <div className="space-y-1 w-full sm:w-auto flex flex-col items-center sm:items-start">
-                                      <label className="block text-sm font-medium">
-                                        # Units
-                                        {code.max_units && (
-                                          <span className="text-xs text-gray-500 ml-2">
-                                            (Max: {code.max_units})
-                                          </span>
-                                        )}
-                                      </label>
-                                      <div className="flex items-center gap-2">
-                                        <Button
-                                          type="button"
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() => {
-                                            const currentValue =
-                                              formData.billingCodes[
-                                                billingCodeIndex
-                                              ]?.numberOfUnits || 0;
-                                            if (currentValue > 1) {
-                                              handleUpdateBillingCode(
-                                                billingCodeIndex,
-                                                {
-                                                  numberOfUnits:
-                                                    currentValue - 1,
-                                                }
-                                              );
-                                            }
-                                          }}
-                                          disabled={
-                                            (formData.billingCodes[
-                                              billingCodeIndex
-                                            ]?.numberOfUnits || 0) <= 1
-                                          }
-                                        >
-                                          -
-                                        </Button>
-                                        <Input
-                                          type="number"
-                                          min="1"
-                                          max={code.max_units || undefined}
+                                      {/* Service Date */}
+                                      <div className="flex items-center gap-1">
+                                        <label className="text-gray-600">
+                                          Date:
+                                        </label>
+                                        <HybridDateInput
                                           value={
                                             formData.billingCodes[
                                               billingCodeIndex
-                                            ]?.numberOfUnits || ""
+                                            ]?.serviceDate ||
+                                            formData.serviceDate
                                           }
-                                          onChange={(e) => {
-                                            const value = e.target.value
-                                              ? parseInt(e.target.value)
-                                              : 1;
-                                            const maxUnits =
-                                              code.max_units || value;
+                                          onChange={(value) =>
                                             handleUpdateBillingCode(
                                               billingCodeIndex,
                                               {
-                                                numberOfUnits: Math.min(
-                                                  value,
-                                                  maxUnits
-                                                ),
+                                                serviceDate: value,
                                               }
-                                            );
-                                          }}
-                                          className="w-16 text-center text-lg font-semibold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                            )
+                                          }
+                                          placeholder="e.g., 22 Feb 2024"
+                                          className="w-40 h-7 text-xs"
                                         />
-                                        <Button
-                                          type="button"
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() => {
-                                            const currentValue =
+                                      </div>
+
+                                      {/* End Date */}
+                                      {code.day_range && code.day_range > 0 && (
+                                        <div className="flex items-center gap-1">
+                                          <label className="text-gray-600">
+                                            End:
+                                          </label>
+                                          <HybridDateInput
+                                            value={
                                               formData.billingCodes[
                                                 billingCodeIndex
-                                              ]?.numberOfUnits || 0;
-                                            const maxUnits =
-                                              code.max_units ||
-                                              currentValue + 1;
-                                            handleUpdateBillingCode(
-                                              billingCodeIndex,
-                                              {
-                                                numberOfUnits: Math.min(
-                                                  currentValue + 1,
-                                                  maxUnits
-                                                ),
-                                              }
-                                            );
-                                          }}
-                                          disabled={
-                                            !!(
-                                              code.max_units &&
-                                              (formData.billingCodes[
+                                              ]?.serviceEndDate || ""
+                                            }
+                                            onChange={(value) =>
+                                              handleUpdateBillingCode(
+                                                billingCodeIndex,
+                                                {
+                                                  serviceEndDate: value || null,
+                                                }
+                                              )
+                                            }
+                                            placeholder="e.g., 22 Feb 2024"
+                                            className="w-40 h-7 text-xs"
+                                          />
+                                        </div>
+                                      )}
+
+                                      {/* Units */}
+                                      {code.multiple_unit_indicator === "U" && (
+                                        <div className="flex items-center gap-1">
+                                          <label className="text-gray-600">
+                                            Units:
+                                          </label>
+                                          <Input
+                                            type="number"
+                                            min="1"
+                                            max={code.max_units || undefined}
+                                            value={
+                                              formData.billingCodes[
                                                 billingCodeIndex
-                                              ]?.numberOfUnits || 0) >=
-                                                code.max_units
-                                            )
-                                          }
-                                        >
-                                          +
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {code.day_range && code.day_range > 0 && (
-                                    <div className="hidden sm:block space-y-2 w-full sm:w-auto">
-                                      <label className="block text-sm font-medium">
-                                        Day Range: {code.day_range} days
-                                        <span className="text-xs text-blue-600 ml-2">
-                                          (Auto-calculated)
-                                        </span>
-                                      </label>
-                                      <div className="text-xs text-gray-500">
-                                        Service period:{" "}
-                                        {formData.billingCodes[billingCodeIndex]
-                                          ?.serviceDate || "Not set"}{" "}
-                                        to{" "}
-                                        {formData.billingCodes[billingCodeIndex]
-                                          ?.serviceEndDate || "Not set"}
-                                        {formData.billingCodes[billingCodeIndex]
-                                          ?.serviceDate &&
-                                          formData.billingCodes[
-                                            billingCodeIndex
-                                          ]?.serviceEndDate && (
-                                            <span className="text-green-600 ml-2">
-                                              ✓ {code.day_range} days inclusive
-                                            </span>
-                                          )}
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                  {code.start_time_required === "Y" && (
-                                    <div className="space-y-1">
-                                      <label className="block text-sm font-medium">
-                                        Service Start Time
-                                      </label>
-                                      <Input
-                                        type="time"
-                                        value={
-                                          formData.billingCodes[
-                                            billingCodeIndex
-                                          ]?.serviceStartTime || ""
-                                        }
-                                        onChange={(e) =>
-                                          handleUpdateBillingCode(
-                                            billingCodeIndex,
-                                            {
-                                              serviceStartTime:
-                                                e.target.value || null,
+                                              ]?.numberOfUnits || ""
                                             }
-                                          )
-                                        }
-                                      />
-                                    </div>
-                                  )}
+                                            onChange={(e) => {
+                                              const value = e.target.value
+                                                ? parseInt(e.target.value)
+                                                : 1;
+                                              const maxUnits =
+                                                code.max_units || value;
+                                              handleUpdateBillingCode(
+                                                billingCodeIndex,
+                                                {
+                                                  numberOfUnits: Math.min(
+                                                    value,
+                                                    maxUnits
+                                                  ),
+                                                }
+                                              );
+                                            }}
+                                            className="w-16 h-7 text-xs text-center"
+                                          />
+                                        </div>
+                                      )}
 
-                                  {code.stop_time_required === "Y" && (
-                                    <div className="space-y-1">
-                                      <label className="block text-sm font-medium">
-                                        Service End Time
-                                      </label>
-                                      <Input
-                                        type="time"
-                                        value={
-                                          formData.billingCodes[
-                                            billingCodeIndex
-                                          ]?.serviceEndTime || ""
-                                        }
-                                        onChange={(e) =>
-                                          handleUpdateBillingCode(
-                                            billingCodeIndex,
-                                            {
-                                              serviceEndTime:
-                                                e.target.value || null,
+                                      {/* Start Time */}
+                                      {code.start_time_required === "Y" && (
+                                        <div className="flex items-center gap-1">
+                                          <label className="text-gray-600">
+                                            Start:
+                                          </label>
+                                          <Input
+                                            type="time"
+                                            value={
+                                              formData.billingCodes[
+                                                billingCodeIndex
+                                              ]?.serviceStartTime || ""
                                             }
-                                          )
-                                        }
-                                      />
-                                    </div>
-                                  )}
+                                            onChange={(e) =>
+                                              handleUpdateBillingCode(
+                                                billingCodeIndex,
+                                                {
+                                                  serviceStartTime:
+                                                    e.target.value || null,
+                                                }
+                                              )
+                                            }
+                                            className="w-28 h-7 text-xs"
+                                          />
+                                        </div>
+                                      )}
 
-                                  {code.title.includes("Bilateral") && (
-                                    <div className="space-y-1">
-                                      <label className="block text-sm font-medium text-center sm:text-left">
-                                        Bilateral Indicator
-                                      </label>
-                                      <div className="flex gap-2 justify-center sm:justify-start">
+                                      {/* End Time */}
+                                      {code.stop_time_required === "Y" && (
+                                        <div className="flex items-center gap-1">
+                                          <label className="text-gray-600">
+                                            Stop:
+                                          </label>
+                                          <Input
+                                            type="time"
+                                            value={
+                                              formData.billingCodes[
+                                                billingCodeIndex
+                                              ]?.serviceEndTime || ""
+                                            }
+                                            onChange={(e) =>
+                                              handleUpdateBillingCode(
+                                                billingCodeIndex,
+                                                {
+                                                  serviceEndTime:
+                                                    e.target.value || null,
+                                                }
+                                              )
+                                            }
+                                            className="w-28 h-7 text-xs"
+                                          />
+                                        </div>
+                                      )}
+
+                                      {/* Bilateral */}
+                                      {code.title.includes("Bilateral") && (
+                                        <div className="flex items-center gap-1">
+                                          <label className="text-gray-600">
+                                            Side:
+                                          </label>
+                                          <div className="flex gap-1">
+                                            <Button
+                                              type="button"
+                                              variant={
+                                                formData.billingCodes[
+                                                  billingCodeIndex
+                                                ]?.bilateralIndicator === "L"
+                                                  ? "default"
+                                                  : "outline"
+                                              }
+                                              onClick={() =>
+                                                handleUpdateBillingCode(
+                                                  billingCodeIndex,
+                                                  {
+                                                    bilateralIndicator:
+                                                      formData.billingCodes[
+                                                        billingCodeIndex
+                                                      ]?.bilateralIndicator ===
+                                                      "L"
+                                                        ? null
+                                                        : "L",
+                                                  }
+                                                )
+                                              }
+                                              className="h-6 px-2 text-xs"
+                                            >
+                                              L
+                                            </Button>
+                                            <Button
+                                              type="button"
+                                              variant={
+                                                formData.billingCodes[
+                                                  billingCodeIndex
+                                                ]?.bilateralIndicator === "R"
+                                                  ? "default"
+                                                  : "outline"
+                                              }
+                                              onClick={() =>
+                                                handleUpdateBillingCode(
+                                                  billingCodeIndex,
+                                                  {
+                                                    bilateralIndicator:
+                                                      formData.billingCodes[
+                                                        billingCodeIndex
+                                                      ]?.bilateralIndicator ===
+                                                      "R"
+                                                        ? null
+                                                        : "R",
+                                                  }
+                                                )
+                                              }
+                                              className="h-6 px-2 text-xs"
+                                            >
+                                              R
+                                            </Button>
+                                            <Button
+                                              type="button"
+                                              variant={
+                                                formData.billingCodes[
+                                                  billingCodeIndex
+                                                ]?.bilateralIndicator === "B"
+                                                  ? "default"
+                                                  : "outline"
+                                              }
+                                              onClick={() =>
+                                                handleUpdateBillingCode(
+                                                  billingCodeIndex,
+                                                  {
+                                                    bilateralIndicator:
+                                                      formData.billingCodes[
+                                                        billingCodeIndex
+                                                      ]?.bilateralIndicator ===
+                                                      "B"
+                                                        ? null
+                                                        : "B",
+                                                  }
+                                                )
+                                              }
+                                              className="h-6 px-2 text-xs"
+                                            >
+                                              B
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* Tech/Interp */}
+                                      {isWorXSection(code) && (
+                                        <div className="flex items-center gap-1">
+                                          <label className="text-gray-600">
+                                            Type:
+                                          </label>
+                                          <div className="flex gap-1">
+                                            <Button
+                                              type="button"
+                                              variant={
+                                                formData.billingCodes[
+                                                  billingCodeIndex
+                                                ]?.specialCircumstances === "TF"
+                                                  ? "default"
+                                                  : "outline"
+                                              }
+                                              onClick={() =>
+                                                handleUpdateBillingCode(
+                                                  billingCodeIndex,
+                                                  {
+                                                    specialCircumstances: "TF",
+                                                  }
+                                                )
+                                              }
+                                              className="h-6 px-2 text-xs"
+                                            >
+                                              T
+                                            </Button>
+                                            <Button
+                                              type="button"
+                                              variant={
+                                                formData.billingCodes[
+                                                  billingCodeIndex
+                                                ]?.specialCircumstances === "PF"
+                                                  ? "default"
+                                                  : "outline"
+                                              }
+                                              onClick={() =>
+                                                handleUpdateBillingCode(
+                                                  billingCodeIndex,
+                                                  {
+                                                    specialCircumstances: "PF",
+                                                  }
+                                                )
+                                              }
+                                              className="h-6 px-2 text-xs"
+                                            >
+                                              I
+                                            </Button>
+                                            <Button
+                                              type="button"
+                                              variant={
+                                                formData.billingCodes[
+                                                  billingCodeIndex
+                                                ]?.specialCircumstances === "CF"
+                                                  ? "default"
+                                                  : "outline"
+                                              }
+                                              onClick={() =>
+                                                handleUpdateBillingCode(
+                                                  billingCodeIndex,
+                                                  {
+                                                    specialCircumstances: "CF",
+                                                  }
+                                                )
+                                              }
+                                              className="h-6 px-2 text-xs"
+                                            >
+                                              T&I
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* Takeover */}
+                                      {isHSection(code) && (
+                                        <div className="flex items-center gap-1">
+                                          <Button
+                                            type="button"
+                                            variant={
+                                              formData.billingCodes[
+                                                billingCodeIndex
+                                              ]?.specialCircumstances === "TA"
+                                                ? "default"
+                                                : "outline"
+                                            }
+                                            onClick={() =>
+                                              handleUpdateBillingCode(
+                                                billingCodeIndex,
+                                                {
+                                                  specialCircumstances:
+                                                    formData.billingCodes[
+                                                      billingCodeIndex
+                                                    ]?.specialCircumstances ===
+                                                    "TA"
+                                                      ? null
+                                                      : "TA",
+                                                }
+                                              )
+                                            }
+                                            className="h-6 px-2 text-xs"
+                                          >
+                                            Takeover
+                                          </Button>
+                                        </div>
+                                      )}
+
+                                      {/* Remove button */}
+                                      <div className="ml-auto">
                                         <Button
                                           type="button"
-                                          variant={
-                                            formData.billingCodes[
-                                              billingCodeIndex
-                                            ]?.bilateralIndicator === "L"
-                                              ? "default"
-                                              : "outline"
-                                          }
+                                          variant="ghost"
+                                          size="sm"
                                           onClick={() =>
-                                            handleUpdateBillingCode(
-                                              billingCodeIndex,
-                                              {
-                                                bilateralIndicator:
-                                                  formData.billingCodes[
-                                                    billingCodeIndex
-                                                  ]?.bilateralIndicator === "L"
-                                                    ? null
-                                                    : "L",
-                                              }
-                                            )
+                                            handleRemoveCode(billingCodeIndex)
                                           }
-                                          className="flex-1"
+                                          className="text-red-500 hover:text-red-700 h-6 px-2 text-xs"
                                         >
-                                          Left
-                                        </Button>
-                                        <Button
-                                          type="button"
-                                          variant={
-                                            formData.billingCodes[
-                                              billingCodeIndex
-                                            ]?.bilateralIndicator === "R"
-                                              ? "default"
-                                              : "outline"
-                                          }
-                                          onClick={() =>
-                                            handleUpdateBillingCode(
-                                              billingCodeIndex,
-                                              {
-                                                bilateralIndicator:
-                                                  formData.billingCodes[
-                                                    billingCodeIndex
-                                                  ]?.bilateralIndicator === "R"
-                                                    ? null
-                                                    : "R",
-                                              }
-                                            )
-                                          }
-                                          className="flex-1"
-                                        >
-                                          Right
-                                        </Button>
-                                        <Button
-                                          type="button"
-                                          variant={
-                                            formData.billingCodes[
-                                              billingCodeIndex
-                                            ]?.bilateralIndicator === "B"
-                                              ? "default"
-                                              : "outline"
-                                          }
-                                          onClick={() =>
-                                            handleUpdateBillingCode(
-                                              billingCodeIndex,
-                                              {
-                                                bilateralIndicator:
-                                                  formData.billingCodes[
-                                                    billingCodeIndex
-                                                  ]?.bilateralIndicator === "B"
-                                                    ? null
-                                                    : "B",
-                                              }
-                                            )
-                                          }
-                                          className="flex-1"
-                                        >
-                                          Both
+                                          ✕
                                         </Button>
                                       </div>
                                     </div>
-                                  )}
-
-                                  {isWorXSection(code) && (
-                                    <div className="col-span-2 space-y-2 justify-center sm:justify-start">
-                                      <label className="block text-sm font-medium text-center sm:text-left">
-                                        Special Circumstances{" "}
-                                        <span className="text-red-500">*</span>
-                                      </label>
-                                      <div className="flex gap-2">
-                                        <Button
-                                          type="button"
-                                          variant={
-                                            formData.billingCodes[
-                                              billingCodeIndex
-                                            ]?.specialCircumstances === "TF"
-                                              ? "default"
-                                              : "outline"
-                                          }
-                                          onClick={() =>
-                                            handleUpdateBillingCode(
-                                              billingCodeIndex,
-                                              {
-                                                specialCircumstances: "TF",
-                                              }
-                                            )
-                                          }
-                                          className="flex-1"
-                                        >
-                                          <span className="sm:hidden">T</span>
-                                          <span className="hidden sm:inline">
-                                            Technical
-                                          </span>
-                                        </Button>
-                                        <Button
-                                          type="button"
-                                          variant={
-                                            formData.billingCodes[
-                                              billingCodeIndex
-                                            ]?.specialCircumstances === "PF"
-                                              ? "default"
-                                              : "outline"
-                                          }
-                                          onClick={() =>
-                                            handleUpdateBillingCode(
-                                              billingCodeIndex,
-                                              {
-                                                specialCircumstances: "PF",
-                                              }
-                                            )
-                                          }
-                                          className="flex-1"
-                                        >
-                                          <span className="sm:hidden">I</span>
-                                          <span className="hidden sm:inline">
-                                            Interpretation
-                                          </span>
-                                        </Button>
-                                        <Button
-                                          type="button"
-                                          variant={
-                                            formData.billingCodes[
-                                              billingCodeIndex
-                                            ]?.specialCircumstances === "CF"
-                                              ? "default"
-                                              : "outline"
-                                          }
-                                          onClick={() =>
-                                            handleUpdateBillingCode(
-                                              billingCodeIndex,
-                                              {
-                                                specialCircumstances: "CF",
-                                              }
-                                            )
-                                          }
-                                          className="flex-1"
-                                        >
-                                          <span className="sm:hidden">T&I</span>
-                                          <span className="hidden sm:inline">
-                                            Both
-                                          </span>
-                                        </Button>
-                                      </div>
-                                      {serviceErrors.billingCodes &&
-                                        !formData.billingCodes[billingCodeIndex]
-                                          ?.specialCircumstances && (
-                                          <p className="text-sm text-red-500">
-                                            Please select a special circumstance
-                                          </p>
-                                        )}
-                                    </div>
-                                  )}
-
-                                  {isHSection(code) && (
-                                    <div className="col-span-2 space-y-2">
-                                      <label className="block text-sm font-medium text-center sm:text-left">
-                                        Special Circumstances
-                                      </label>
-                                      <div className="flex gap-2 justify-center sm:justify-start">
-                                        <Button
-                                          type="button"
-                                          variant={
-                                            formData.billingCodes[
-                                              billingCodeIndex
-                                            ]?.specialCircumstances === "TA"
-                                              ? "default"
-                                              : "outline"
-                                          }
-                                          onClick={() =>
-                                            handleUpdateBillingCode(
-                                              billingCodeIndex,
-                                              {
-                                                specialCircumstances:
-                                                  formData.billingCodes[
-                                                    billingCodeIndex
-                                                  ]?.specialCircumstances ===
-                                                  "TA"
-                                                    ? null
-                                                    : "TA",
-                                              }
-                                            )
-                                          }
-                                          className="flex-1"
-                                        >
-                                          Takeover
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
+                                  )
+                                )}
                               </div>
-                            );
-                          }
-                        )}
+                            )
+                          );
+                        })()}
                       </>
                     ) : (
                       <p className="text-sm text-gray-500">
@@ -2356,497 +2320,532 @@ export default function ServiceForm({
                         <h4 className="text-sm font-medium text-gray-700 mt-2 mb-1">
                           Rounding
                         </h4>
-                        {formData.billingCodes.map(
-                          (billingCode, billingCodeIndex) => {
-                            const code = selectedCodes.find(
-                              (c) => c.id === billingCode.codeId
-                            );
-                            if (!code || code.billing_record_type !== 57)
-                              return null;
+                        {(() => {
+                          // Filter and prepare type 57 codes with their indices
+                          const type57CodesWithIndices = formData.billingCodes
+                            .map((billingCode, billingCodeIndex) => {
+                              const code = selectedCodes.find(
+                                (c) => c.id === billingCode.codeId
+                              );
+                              if (!code || code.billing_record_type !== 57)
+                                return null;
+                              return { billingCode, billingCodeIndex, code };
+                            })
+                            .filter((item) => item !== null);
 
-                            return (
-                              <div
-                                key={billingCodeIndex}
-                                className="p-3 bg-gray-50 rounded-md space-y-3"
-                              >
-                                <div className="flex items-center justify-between">
-                                  <div>
-                                    <span className="font-medium">
-                                      <span className="sm:hidden">
-                                        {code.code.replace(/^0+/, "")}
-                                      </span>
+                          // Sort by service date descending (most recent first)
+                          type57CodesWithIndices.sort((a, b) => {
+                            const dateA =
+                              a!.billingCode.serviceDate ||
+                              formData.serviceDate;
+                            const dateB =
+                              b!.billingCode.serviceDate ||
+                              formData.serviceDate;
+                            return dateB.localeCompare(dateA);
+                          });
+
+                          return type57CodesWithIndices.map(
+                            ({ billingCode, billingCodeIndex, code }) => {
+                              if (!code) return null;
+
+                              return (
+                                <div
+                                  key={billingCodeIndex}
+                                  className="p-3 bg-gray-50 rounded-md space-y-3"
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <span className="font-medium">
+                                        <span className="sm:hidden">
+                                          {code.code.replace(/^0+/, "")}
+                                        </span>
+                                        <span className="hidden sm:inline">
+                                          {code.code}
+                                        </span>
+                                      </span>{" "}
+                                      - {code.title}
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() =>
+                                        handleRemoveCode(billingCodeIndex)
+                                      }
+                                      className="text-red-500 hover:text-red-700"
+                                    >
+                                      <span className="sm:hidden">✕</span>
                                       <span className="hidden sm:inline">
-                                        {code.code}
+                                        Remove
                                       </span>
-                                    </span>{" "}
-                                    - {code.title}
-                                  </div>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                      handleRemoveCode(billingCodeIndex)
-                                    }
-                                    className="text-red-500 hover:text-red-700"
-                                  >
-                                    <span className="sm:hidden">✕</span>
-                                    <span className="hidden sm:inline">
-                                      Remove
-                                    </span>
-                                  </Button>
-                                </div>
-
-                                <div className="flex flex-col sm:flex-row gap-3 items-center sm:items-start justify-center sm:justify-around">
-                                  {/* Service Date for all codes */}
-                                  <div className="space-y-1 w-full sm:w-auto flex flex-col items-center sm:items-start">
-                                    <label className="block text-sm font-medium">
-                                      Service Date
-                                    </label>
-                                    <Input
-                                      type="date"
-                                      value={
-                                        formData.billingCodes[billingCodeIndex]
-                                          ?.serviceDate || formData.serviceDate
-                                      }
-                                      onChange={(e) =>
-                                        handleUpdateBillingCode(
-                                          billingCodeIndex,
-                                          {
-                                            serviceDate: e.target.value,
-                                          }
-                                        )
-                                      }
-                                      className="w-auto min-w-[140px]"
-                                    />
+                                    </Button>
                                   </div>
 
-                                  {/* Service End Date for type 57 codes */}
-                                  <div className="space-y-1 w-full sm:w-auto flex flex-col items-center sm:items-start">
-                                    <label className="block text-sm font-medium">
-                                      Service End Date
-                                    </label>
-                                    <Input
-                                      type="date"
-                                      value={
-                                        formData.billingCodes[billingCodeIndex]
-                                          ?.serviceEndDate || ""
-                                      }
-                                      onChange={(e) =>
-                                        handleUpdateBillingCode(
-                                          billingCodeIndex,
-                                          {
-                                            serviceEndDate:
-                                              e.target.value || null,
-                                          }
-                                        )
-                                      }
-                                      className="w-auto min-w-[140px]"
-                                    />
-                                  </div>
-
-                                  {code.multiple_unit_indicator === "U" && (
-                                    <div className="space-y-2 w-full sm:w-auto flex flex-col items-center sm:items-start">
+                                  <div className="flex flex-col sm:flex-row gap-3 items-center sm:items-start justify-center sm:justify-around">
+                                    {/* Service Date for all codes */}
+                                    <div className="space-y-1 w-full sm:w-auto flex flex-col items-center sm:items-start">
                                       <label className="block text-sm font-medium">
-                                        # Units
-                                        {code.max_units && (
-                                          <span className="text-xs text-gray-500 ml-2">
-                                            (Max: {code.max_units})
-                                          </span>
-                                        )}
+                                        Service Date
                                       </label>
-                                      <div className="flex items-center gap-2">
-                                        <Button
-                                          type="button"
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() => {
-                                            const currentValue =
+                                      <HybridDateInput
+                                        value={
+                                          formData.billingCodes[
+                                            billingCodeIndex
+                                          ]?.serviceDate || formData.serviceDate
+                                        }
+                                        onChange={(value) =>
+                                          handleUpdateBillingCode(
+                                            billingCodeIndex,
+                                            {
+                                              serviceDate: value,
+                                            }
+                                          )
+                                        }
+                                        placeholder="e.g., 22 Feb 2024"
+                                        className="w-auto min-w-[180px]"
+                                      />
+                                    </div>
+
+                                    {/* Service End Date for type 57 codes */}
+                                    <div className="space-y-1 w-full sm:w-auto flex flex-col items-center sm:items-start">
+                                      <label className="block text-sm font-medium">
+                                        Service End Date
+                                      </label>
+                                      <HybridDateInput
+                                        value={
+                                          formData.billingCodes[
+                                            billingCodeIndex
+                                          ]?.serviceEndDate || ""
+                                        }
+                                        onChange={(value) =>
+                                          handleUpdateBillingCode(
+                                            billingCodeIndex,
+                                            {
+                                              serviceEndDate: value || null,
+                                            }
+                                          )
+                                        }
+                                        placeholder="e.g., 22 Feb 2024"
+                                        className="w-auto min-w-[180px]"
+                                      />
+                                    </div>
+
+                                    {code.multiple_unit_indicator === "U" && (
+                                      <div className="space-y-2 w-full sm:w-auto flex flex-col items-center sm:items-start">
+                                        <label className="block text-sm font-medium">
+                                          # Units
+                                          {code.max_units && (
+                                            <span className="text-xs text-gray-500 ml-2">
+                                              (Max: {code.max_units})
+                                            </span>
+                                          )}
+                                        </label>
+                                        <div className="flex items-center gap-2">
+                                          <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => {
+                                              const currentValue =
+                                                formData.billingCodes[
+                                                  billingCodeIndex
+                                                ]?.numberOfUnits || 0;
+                                              if (currentValue > 1) {
+                                                handleUpdateBillingCode(
+                                                  billingCodeIndex,
+                                                  {
+                                                    numberOfUnits:
+                                                      currentValue - 1,
+                                                  }
+                                                );
+                                              }
+                                            }}
+                                            disabled={
+                                              (formData.billingCodes[
+                                                billingCodeIndex
+                                              ]?.numberOfUnits || 0) <= 1
+                                            }
+                                          >
+                                            -
+                                          </Button>
+                                          <Input
+                                            type="number"
+                                            min="1"
+                                            max={code.max_units || undefined}
+                                            value={
                                               formData.billingCodes[
                                                 billingCodeIndex
-                                              ]?.numberOfUnits || 0;
-                                            if (currentValue > 1) {
+                                              ]?.numberOfUnits || ""
+                                            }
+                                            onChange={(e) => {
+                                              const value = e.target.value
+                                                ? parseInt(e.target.value)
+                                                : 1;
+                                              const maxUnits =
+                                                code.max_units || value;
                                               handleUpdateBillingCode(
                                                 billingCodeIndex,
                                                 {
-                                                  numberOfUnits:
-                                                    currentValue - 1,
+                                                  numberOfUnits: Math.min(
+                                                    value,
+                                                    maxUnits
+                                                  ),
                                                 }
                                               );
+                                            }}
+                                            className="w-16 text-center text-lg font-semibold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                          />
+                                          <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => {
+                                              const currentValue =
+                                                formData.billingCodes[
+                                                  billingCodeIndex
+                                                ]?.numberOfUnits || 0;
+                                              const maxUnits =
+                                                code.max_units ||
+                                                currentValue + 1;
+                                              handleUpdateBillingCode(
+                                                billingCodeIndex,
+                                                {
+                                                  numberOfUnits: Math.min(
+                                                    currentValue + 1,
+                                                    maxUnits
+                                                  ),
+                                                }
+                                              );
+                                            }}
+                                            disabled={
+                                              !!(
+                                                code.max_units &&
+                                                (formData.billingCodes[
+                                                  billingCodeIndex
+                                                ]?.numberOfUnits || 0) >=
+                                                  code.max_units
+                                              )
                                             }
-                                          }}
-                                          disabled={
-                                            (formData.billingCodes[
+                                          >
+                                            +
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {code.day_range && code.day_range > 0 && (
+                                      <div className="hidden sm:block space-y-2 w-full sm:w-auto">
+                                        <label className="block text-sm font-medium">
+                                          Day Range: {code.day_range} days
+                                          <span className="text-xs text-blue-600 ml-2">
+                                            (Auto-calculated)
+                                          </span>
+                                        </label>
+                                        <div className="text-xs text-gray-500">
+                                          Service period:{" "}
+                                          {formData.billingCodes[
+                                            billingCodeIndex
+                                          ]?.serviceDate || "Not set"}{" "}
+                                          to{" "}
+                                          {formData.billingCodes[
+                                            billingCodeIndex
+                                          ]?.serviceEndDate || "Not set"}
+                                          {formData.billingCodes[
+                                            billingCodeIndex
+                                          ]?.serviceDate &&
+                                            formData.billingCodes[
                                               billingCodeIndex
-                                            ]?.numberOfUnits || 0) <= 1
-                                          }
-                                        >
-                                          -
-                                        </Button>
+                                            ]?.serviceEndDate && (
+                                              <span className="text-green-600 ml-2">
+                                                ✓ {code.day_range} days
+                                                inclusive
+                                              </span>
+                                            )}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    {code.start_time_required === "Y" && (
+                                      <div className="space-y-2">
+                                        <label className="block text-sm font-medium">
+                                          Service Start Time
+                                        </label>
                                         <Input
-                                          type="number"
-                                          min="1"
-                                          max={code.max_units || undefined}
+                                          type="time"
                                           value={
                                             formData.billingCodes[
                                               billingCodeIndex
-                                            ]?.numberOfUnits || ""
+                                            ]?.serviceStartTime || ""
                                           }
-                                          onChange={(e) => {
-                                            const value = e.target.value
-                                              ? parseInt(e.target.value)
-                                              : 1;
-                                            const maxUnits =
-                                              code.max_units || value;
+                                          onChange={(e) =>
                                             handleUpdateBillingCode(
                                               billingCodeIndex,
                                               {
-                                                numberOfUnits: Math.min(
-                                                  value,
-                                                  maxUnits
-                                                ),
+                                                serviceStartTime:
+                                                  e.target.value || null,
                                               }
-                                            );
-                                          }}
-                                          className="w-16 text-center text-lg font-semibold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                            )
+                                          }
                                         />
-                                        <Button
-                                          type="button"
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() => {
-                                            const currentValue =
+                                      </div>
+                                    )}
+
+                                    {code.stop_time_required === "Y" && (
+                                      <div className="space-y-2">
+                                        <label className="block text-sm font-medium">
+                                          Service End Time
+                                        </label>
+                                        <Input
+                                          type="time"
+                                          value={
+                                            formData.billingCodes[
+                                              billingCodeIndex
+                                            ]?.serviceEndTime || ""
+                                          }
+                                          onChange={(e) =>
+                                            handleUpdateBillingCode(
+                                              billingCodeIndex,
+                                              {
+                                                serviceEndTime:
+                                                  e.target.value || null,
+                                              }
+                                            )
+                                          }
+                                        />
+                                      </div>
+                                    )}
+
+                                    {code.title.includes("Bilateral") && (
+                                      <div className="space-y-2">
+                                        <label className="block text-sm font-medium text-center sm:text-left">
+                                          Bilateral Indicator
+                                        </label>
+                                        <div className="flex gap-2 justify-center sm:justify-start">
+                                          <Button
+                                            type="button"
+                                            variant={
                                               formData.billingCodes[
                                                 billingCodeIndex
-                                              ]?.numberOfUnits || 0;
-                                            const maxUnits =
-                                              code.max_units ||
-                                              currentValue + 1;
-                                            handleUpdateBillingCode(
-                                              billingCodeIndex,
-                                              {
-                                                numberOfUnits: Math.min(
-                                                  currentValue + 1,
-                                                  maxUnits
-                                                ),
-                                              }
-                                            );
-                                          }}
-                                          disabled={
-                                            !!(
-                                              code.max_units &&
-                                              (formData.billingCodes[
+                                              ]?.bilateralIndicator === "L"
+                                                ? "default"
+                                                : "outline"
+                                            }
+                                            onClick={() =>
+                                              handleUpdateBillingCode(
+                                                billingCodeIndex,
+                                                {
+                                                  bilateralIndicator:
+                                                    formData.billingCodes[
+                                                      billingCodeIndex
+                                                    ]?.bilateralIndicator ===
+                                                    "L"
+                                                      ? null
+                                                      : "L",
+                                                }
+                                              )
+                                            }
+                                            className="flex-1"
+                                          >
+                                            Left
+                                          </Button>
+                                          <Button
+                                            type="button"
+                                            variant={
+                                              formData.billingCodes[
                                                 billingCodeIndex
-                                              ]?.numberOfUnits || 0) >=
-                                                code.max_units
-                                            )
-                                          }
-                                        >
-                                          +
-                                        </Button>
+                                              ]?.bilateralIndicator === "R"
+                                                ? "default"
+                                                : "outline"
+                                            }
+                                            onClick={() =>
+                                              handleUpdateBillingCode(
+                                                billingCodeIndex,
+                                                {
+                                                  bilateralIndicator:
+                                                    formData.billingCodes[
+                                                      billingCodeIndex
+                                                    ]?.bilateralIndicator ===
+                                                    "R"
+                                                      ? null
+                                                      : "R",
+                                                }
+                                              )
+                                            }
+                                            className="flex-1"
+                                          >
+                                            Right
+                                          </Button>
+                                          <Button
+                                            type="button"
+                                            variant={
+                                              formData.billingCodes[
+                                                billingCodeIndex
+                                              ]?.bilateralIndicator === "B"
+                                                ? "default"
+                                                : "outline"
+                                            }
+                                            onClick={() =>
+                                              handleUpdateBillingCode(
+                                                billingCodeIndex,
+                                                {
+                                                  bilateralIndicator:
+                                                    formData.billingCodes[
+                                                      billingCodeIndex
+                                                    ]?.bilateralIndicator ===
+                                                    "B"
+                                                      ? null
+                                                      : "B",
+                                                }
+                                              )
+                                            }
+                                            className="flex-1"
+                                          >
+                                            Both
+                                          </Button>
+                                        </div>
                                       </div>
-                                    </div>
-                                  )}
+                                    )}
 
-                                  {code.day_range && code.day_range > 0 && (
-                                    <div className="hidden sm:block space-y-2 w-full sm:w-auto">
-                                      <label className="block text-sm font-medium">
-                                        Day Range: {code.day_range} days
-                                        <span className="text-xs text-blue-600 ml-2">
-                                          (Auto-calculated)
-                                        </span>
-                                      </label>
-                                      <div className="text-xs text-gray-500">
-                                        Service period:{" "}
-                                        {formData.billingCodes[billingCodeIndex]
-                                          ?.serviceDate || "Not set"}{" "}
-                                        to{" "}
-                                        {formData.billingCodes[billingCodeIndex]
-                                          ?.serviceEndDate || "Not set"}
-                                        {formData.billingCodes[billingCodeIndex]
-                                          ?.serviceDate &&
-                                          formData.billingCodes[
-                                            billingCodeIndex
-                                          ]?.serviceEndDate && (
-                                            <span className="text-green-600 ml-2">
-                                              ✓ {code.day_range} days inclusive
+                                    {isWorXSection(code) && (
+                                      <div className="col-span-2 space-y-2 justify-center sm:justify-start">
+                                        <label className="block text-sm font-medium text-center sm:text-left">
+                                          Special Circumstances{" "}
+                                          <span className="text-red-500">
+                                            *
+                                          </span>
+                                        </label>
+                                        <div className="flex gap-2">
+                                          <Button
+                                            type="button"
+                                            variant={
+                                              formData.billingCodes[
+                                                billingCodeIndex
+                                              ]?.specialCircumstances === "TF"
+                                                ? "default"
+                                                : "outline"
+                                            }
+                                            onClick={() =>
+                                              handleUpdateBillingCode(
+                                                billingCodeIndex,
+                                                {
+                                                  specialCircumstances: "TF",
+                                                }
+                                              )
+                                            }
+                                            className="flex-1"
+                                          >
+                                            <span className="sm:hidden">T</span>
+                                            <span className="hidden sm:inline">
+                                              Technical
                                             </span>
+                                          </Button>
+                                          <Button
+                                            type="button"
+                                            variant={
+                                              formData.billingCodes[
+                                                billingCodeIndex
+                                              ]?.specialCircumstances === "PF"
+                                                ? "default"
+                                                : "outline"
+                                            }
+                                            onClick={() =>
+                                              handleUpdateBillingCode(
+                                                billingCodeIndex,
+                                                {
+                                                  specialCircumstances: "PF",
+                                                }
+                                              )
+                                            }
+                                            className="flex-1"
+                                          >
+                                            <span className="sm:hidden">I</span>
+                                            <span className="hidden sm:inline">
+                                              Interpretation
+                                            </span>
+                                          </Button>
+                                          <Button
+                                            type="button"
+                                            variant={
+                                              formData.billingCodes[
+                                                billingCodeIndex
+                                              ]?.specialCircumstances === "CF"
+                                                ? "default"
+                                                : "outline"
+                                            }
+                                            onClick={() =>
+                                              handleUpdateBillingCode(
+                                                billingCodeIndex,
+                                                {
+                                                  specialCircumstances: "CF",
+                                                }
+                                              )
+                                            }
+                                            className="flex-1"
+                                          >
+                                            <span className="sm:hidden">
+                                              T&I
+                                            </span>
+                                            <span className="hidden sm:inline">
+                                              Both
+                                            </span>
+                                          </Button>
+                                        </div>
+                                        {serviceErrors.billingCodes &&
+                                          !formData.billingCodes[
+                                            billingCodeIndex
+                                          ]?.specialCircumstances && (
+                                            <p className="text-sm text-red-500">
+                                              Please select a special
+                                              circumstance
+                                            </p>
                                           )}
                                       </div>
-                                    </div>
-                                  )}
-                                </div>
+                                    )}
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                  {code.start_time_required === "Y" && (
-                                    <div className="space-y-2">
-                                      <label className="block text-sm font-medium">
-                                        Service Start Time
-                                      </label>
-                                      <Input
-                                        type="time"
-                                        value={
-                                          formData.billingCodes[
-                                            billingCodeIndex
-                                          ]?.serviceStartTime || ""
-                                        }
-                                        onChange={(e) =>
-                                          handleUpdateBillingCode(
-                                            billingCodeIndex,
-                                            {
-                                              serviceStartTime:
-                                                e.target.value || null,
+                                    {isHSection(code) && (
+                                      <div className="col-span-2 space-y-2">
+                                        <label className="block text-sm font-medium text-center sm:text-left">
+                                          Special Circumstances
+                                        </label>
+                                        <div className="flex gap-2 justify-center sm:justify-start">
+                                          <Button
+                                            type="button"
+                                            variant={
+                                              formData.billingCodes[
+                                                billingCodeIndex
+                                              ]?.specialCircumstances === "TA"
+                                                ? "default"
+                                                : "outline"
                                             }
-                                          )
-                                        }
-                                      />
-                                    </div>
-                                  )}
-
-                                  {code.stop_time_required === "Y" && (
-                                    <div className="space-y-2">
-                                      <label className="block text-sm font-medium">
-                                        Service End Time
-                                      </label>
-                                      <Input
-                                        type="time"
-                                        value={
-                                          formData.billingCodes[
-                                            billingCodeIndex
-                                          ]?.serviceEndTime || ""
-                                        }
-                                        onChange={(e) =>
-                                          handleUpdateBillingCode(
-                                            billingCodeIndex,
-                                            {
-                                              serviceEndTime:
-                                                e.target.value || null,
+                                            onClick={() =>
+                                              handleUpdateBillingCode(
+                                                billingCodeIndex,
+                                                {
+                                                  specialCircumstances:
+                                                    formData.billingCodes[
+                                                      billingCodeIndex
+                                                    ]?.specialCircumstances ===
+                                                    "TA"
+                                                      ? null
+                                                      : "TA",
+                                                }
+                                              )
                                             }
-                                          )
-                                        }
-                                      />
-                                    </div>
-                                  )}
-
-                                  {code.title.includes("Bilateral") && (
-                                    <div className="space-y-2">
-                                      <label className="block text-sm font-medium text-center sm:text-left">
-                                        Bilateral Indicator
-                                      </label>
-                                      <div className="flex gap-2 justify-center sm:justify-start">
-                                        <Button
-                                          type="button"
-                                          variant={
-                                            formData.billingCodes[
-                                              billingCodeIndex
-                                            ]?.bilateralIndicator === "L"
-                                              ? "default"
-                                              : "outline"
-                                          }
-                                          onClick={() =>
-                                            handleUpdateBillingCode(
-                                              billingCodeIndex,
-                                              {
-                                                bilateralIndicator:
-                                                  formData.billingCodes[
-                                                    billingCodeIndex
-                                                  ]?.bilateralIndicator === "L"
-                                                    ? null
-                                                    : "L",
-                                              }
-                                            )
-                                          }
-                                          className="flex-1"
-                                        >
-                                          Left
-                                        </Button>
-                                        <Button
-                                          type="button"
-                                          variant={
-                                            formData.billingCodes[
-                                              billingCodeIndex
-                                            ]?.bilateralIndicator === "R"
-                                              ? "default"
-                                              : "outline"
-                                          }
-                                          onClick={() =>
-                                            handleUpdateBillingCode(
-                                              billingCodeIndex,
-                                              {
-                                                bilateralIndicator:
-                                                  formData.billingCodes[
-                                                    billingCodeIndex
-                                                  ]?.bilateralIndicator === "R"
-                                                    ? null
-                                                    : "R",
-                                              }
-                                            )
-                                          }
-                                          className="flex-1"
-                                        >
-                                          Right
-                                        </Button>
-                                        <Button
-                                          type="button"
-                                          variant={
-                                            formData.billingCodes[
-                                              billingCodeIndex
-                                            ]?.bilateralIndicator === "B"
-                                              ? "default"
-                                              : "outline"
-                                          }
-                                          onClick={() =>
-                                            handleUpdateBillingCode(
-                                              billingCodeIndex,
-                                              {
-                                                bilateralIndicator:
-                                                  formData.billingCodes[
-                                                    billingCodeIndex
-                                                  ]?.bilateralIndicator === "B"
-                                                    ? null
-                                                    : "B",
-                                              }
-                                            )
-                                          }
-                                          className="flex-1"
-                                        >
-                                          Both
-                                        </Button>
+                                            className="flex-1"
+                                          >
+                                            Takeover
+                                          </Button>
+                                        </div>
                                       </div>
-                                    </div>
-                                  )}
-
-                                  {isWorXSection(code) && (
-                                    <div className="col-span-2 space-y-2 justify-center sm:justify-start">
-                                      <label className="block text-sm font-medium text-center sm:text-left">
-                                        Special Circumstances{" "}
-                                        <span className="text-red-500">*</span>
-                                      </label>
-                                      <div className="flex gap-2">
-                                        <Button
-                                          type="button"
-                                          variant={
-                                            formData.billingCodes[
-                                              billingCodeIndex
-                                            ]?.specialCircumstances === "TF"
-                                              ? "default"
-                                              : "outline"
-                                          }
-                                          onClick={() =>
-                                            handleUpdateBillingCode(
-                                              billingCodeIndex,
-                                              {
-                                                specialCircumstances: "TF",
-                                              }
-                                            )
-                                          }
-                                          className="flex-1"
-                                        >
-                                          <span className="sm:hidden">T</span>
-                                          <span className="hidden sm:inline">
-                                            Technical
-                                          </span>
-                                        </Button>
-                                        <Button
-                                          type="button"
-                                          variant={
-                                            formData.billingCodes[
-                                              billingCodeIndex
-                                            ]?.specialCircumstances === "PF"
-                                              ? "default"
-                                              : "outline"
-                                          }
-                                          onClick={() =>
-                                            handleUpdateBillingCode(
-                                              billingCodeIndex,
-                                              {
-                                                specialCircumstances: "PF",
-                                              }
-                                            )
-                                          }
-                                          className="flex-1"
-                                        >
-                                          <span className="sm:hidden">I</span>
-                                          <span className="hidden sm:inline">
-                                            Interpretation
-                                          </span>
-                                        </Button>
-                                        <Button
-                                          type="button"
-                                          variant={
-                                            formData.billingCodes[
-                                              billingCodeIndex
-                                            ]?.specialCircumstances === "CF"
-                                              ? "default"
-                                              : "outline"
-                                          }
-                                          onClick={() =>
-                                            handleUpdateBillingCode(
-                                              billingCodeIndex,
-                                              {
-                                                specialCircumstances: "CF",
-                                              }
-                                            )
-                                          }
-                                          className="flex-1"
-                                        >
-                                          <span className="sm:hidden">T&I</span>
-                                          <span className="hidden sm:inline">
-                                            Both
-                                          </span>
-                                        </Button>
-                                      </div>
-                                      {serviceErrors.billingCodes &&
-                                        !formData.billingCodes[billingCodeIndex]
-                                          ?.specialCircumstances && (
-                                          <p className="text-sm text-red-500">
-                                            Please select a special circumstance
-                                          </p>
-                                        )}
-                                    </div>
-                                  )}
-
-                                  {isHSection(code) && (
-                                    <div className="col-span-2 space-y-2">
-                                      <label className="block text-sm font-medium text-center sm:text-left">
-                                        Special Circumstances
-                                      </label>
-                                      <div className="flex gap-2 justify-center sm:justify-start">
-                                        <Button
-                                          type="button"
-                                          variant={
-                                            formData.billingCodes[
-                                              billingCodeIndex
-                                            ]?.specialCircumstances === "TA"
-                                              ? "default"
-                                              : "outline"
-                                          }
-                                          onClick={() =>
-                                            handleUpdateBillingCode(
-                                              billingCodeIndex,
-                                              {
-                                                specialCircumstances:
-                                                  formData.billingCodes[
-                                                    billingCodeIndex
-                                                  ]?.specialCircumstances ===
-                                                  "TA"
-                                                    ? null
-                                                    : "TA",
-                                              }
-                                            )
-                                          }
-                                          className="flex-1"
-                                        >
-                                          Takeover
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  )}
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                            );
-                          }
-                        )}
+                              );
+                            }
+                          );
+                        })()}
                       </>
                     ) : (
                       <p className="text-sm text-gray-500">
