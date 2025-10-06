@@ -37,7 +37,8 @@ const getTodayLocalDate = (): string => {
 const groupBillingCodesByCode = (
   billingCodes: any[],
   selectedCodes: BillingCode[],
-  formData?: { serviceDate: string }
+  formData?: { serviceDate: string },
+  originalIndices?: number[]
 ) => {
   const grouped: {
     [key: string]: {
@@ -55,7 +56,9 @@ const groupBillingCodesByCode = (
           instances: [],
         };
       }
-      grouped[code.code].instances.push({ billingCode, index });
+      // Use originalIndices if provided, otherwise fall back to the current index
+      const actualIndex = originalIndices ? originalIndices[index] : index;
+      grouped[code.code].instances.push({ billingCode, index: actualIndex });
     }
   });
 
@@ -1887,21 +1890,25 @@ export default function ServiceForm({
                           Claims, Consultation, etc.
                         </h4>
                         {(() => {
-                          const type50Codes = formData.billingCodes.filter(
-                            (_, idx) => {
+                          const type50Codes = formData.billingCodes
+                            .map((billingCode, idx) => ({
+                              billingCode,
+                              originalIndex: idx,
+                            }))
+                            .filter(({ originalIndex: idx }) => {
                               const code = selectedCodes.find(
                                 (c) =>
                                   c.id === formData.billingCodes[idx].codeId
                               );
                               return code && code.billing_record_type === 50;
-                            }
-                          );
+                            });
                           const grouped = groupBillingCodesByCode(
-                            type50Codes,
+                            type50Codes.map((item) => item.billingCode),
                             selectedCodes.filter(
                               (c) => c.billing_record_type === 50
                             ),
-                            formData
+                            formData,
+                            type50Codes.map((item) => item.originalIndex)
                           );
 
                           return Object.values(grouped).map(
