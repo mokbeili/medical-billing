@@ -17,9 +17,12 @@ export function formatFullDate(date: Date | string | null | undefined): string {
     let dateObj: Date;
 
     if (typeof date === "string") {
+      // Extract date part if ISO timestamp (e.g., "2025-09-19T00:00:00.000Z" -> "2025-09-19")
+      const dateOnly = date.split("T")[0];
+
       // Handle YYYY-MM-DD format as local date to avoid timezone issues
-      if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-        const [year, month, day] = date.split("-").map(Number);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
+        const [year, month, day] = dateOnly.split("-").map(Number);
         dateObj = new Date(year, month - 1, day); // month is 0-indexed
       } else {
         dateObj = new Date(date);

@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import { ActivityIndicator, Button, Card } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
+import BillingCodeConfigurationModal from "../components/BillingCodeConfigurationModal";
 import {
   healthInstitutionsAPI,
   icdCodesAPI,
@@ -93,6 +94,11 @@ const ServiceFormScreen = ({ navigation }: any) => {
   const [billingCodeView, setBillingCodeView] = useState<
     "procedures" | "rounding"
   >("procedures");
+  const [expandedProcedureGroups, setExpandedProcedureGroups] = useState<
+    Record<number, boolean>
+  >({});
+  const [editingCode, setEditingCode] = useState<ServiceCode | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [newPatient, setNewPatient] = useState({
     firstName: "",
     lastName: "",
@@ -888,6 +894,29 @@ const ServiceFormScreen = ({ navigation }: any) => {
     });
   };
 
+  // Helper function to sync selectedCodes to formData.billingCodes
+  const syncCodesToFormData = (codes: ServiceCode[]) => {
+    const billingCodes = codes.map((code) => ({
+      codeId: code.billingCode.id,
+      status: code.status,
+      billing_record_type: code.billingCode.billing_record_type,
+      serviceStartTime: code.serviceStartTime,
+      serviceEndTime: code.serviceEndTime,
+      numberOfUnits: code.numberOfUnits,
+      bilateralIndicator: code.bilateralIndicator,
+      specialCircumstances: code.specialCircumstances,
+      serviceDate: code.serviceDate,
+      serviceEndDate: code.serviceEndDate,
+      fee_determinant: code.billingCode.fee_determinant,
+      multiple_unit_indicator: code.billingCode.multiple_unit_indicator,
+    }));
+
+    setFormData((prev) => ({
+      ...prev,
+      billingCodes: billingCodes,
+    }));
+  };
+
   const handleRemoveCode = (codeId: number) => {
     setSelectedCodes(selectedCodes.filter((c) => c.billingCode.id !== codeId));
     setFormData((prev) => ({
@@ -907,6 +936,123 @@ const ServiceFormScreen = ({ navigation }: any) => {
     if (!stillRequiresReferringPhysician && selectedReferringPhysician) {
       handleRemoveReferringPhysician();
     }
+  };
+
+  const handleRemoveIndividualCode = (serviceCodeId: number) => {
+    setSelectedCodes((prev) => {
+      const updated = prev.filter((c) => c.id !== serviceCodeId);
+
+      // Sync to formData.billingCodes
+      syncCodesToFormData(updated);
+
+      // Check if we still need a referring physician after removing this code
+      const stillRequiresReferringPhysician = updated.some(
+        (code) => code.billingCode.referring_practitioner_required === "Y"
+      );
+
+      // If no longer required, clear the referring physician
+      if (!stillRequiresReferringPhysician && selectedReferringPhysician) {
+        handleRemoveReferringPhysician();
+      }
+
+      return updated;
+    });
+  };
+
+  const handleEditCode = (code: ServiceCode) => {
+    setEditingCode(code);
+    setShowEditModal(true);
+  };
+
+  const handleSaveEditedCode = (subSelection: any) => {
+    if (!editingCode) return;
+
+    // Update the selected code with the new configuration
+    setSelectedCodes((prev) => {
+      const updated = prev.map((c) =>
+        c.id === editingCode.id
+          ? {
+              ...c,
+              serviceDate: subSelection.serviceDate,
+              serviceEndDate: subSelection.serviceEndDate,
+              bilateralIndicator: subSelection.bilateralIndicator,
+              serviceStartTime: subSelection.serviceStartTime,
+              serviceEndTime: subSelection.serviceEndTime,
+              numberOfUnits: subSelection.numberOfUnits,
+              specialCircumstances: subSelection.specialCircumstances,
+            }
+          : c
+      );
+
+      // Sync to formData.billingCodes
+      syncCodesToFormData(updated);
+      return updated;
+    });
+
+    setShowEditModal(false);
+    setEditingCode(null);
+  };
+
+  const handleAddNewInstanceOfCode = (billingCode: BillingCode) => {
+    // Create a new code instance with a temporary negative ID
+    const newId = -Math.floor(Math.random() * 1000000);
+    const newCode: ServiceCode = {
+      id: newId,
+      billingCode: billingCode,
+      status: "ACTIVE",
+      serviceDate: new Date().toISOString().split("T")[0],
+      serviceEndDate: null,
+      bilateralIndicator: null,
+      serviceStartTime: null,
+      serviceEndTime: null,
+      serviceLocation: null,
+      locationOfService: null,
+      numberOfUnits: 1,
+      specialCircumstances: null,
+      summary: "",
+      createdAt: new Date().toISOString(),
+      changeLogs: [],
+    };
+
+    setEditingCode(newCode);
+    setShowEditModal(true);
+  };
+
+  const handleSaveNewCodeInstance = (subSelection: any) => {
+    if (!editingCode || editingCode.id >= 0) {
+      // This is an edit, not a new instance
+      handleSaveEditedCode(subSelection);
+      return;
+    }
+
+    // This is a new instance, add it to selectedCodes
+    const newCode: ServiceCode = {
+      id: editingCode.id, // Keep the temporary negative ID
+      billingCode: editingCode.billingCode,
+      status: "ACTIVE",
+      serviceDate: subSelection.serviceDate,
+      serviceEndDate: subSelection.serviceEndDate,
+      bilateralIndicator: subSelection.bilateralIndicator,
+      serviceStartTime: subSelection.serviceStartTime,
+      serviceEndTime: subSelection.serviceEndTime,
+      serviceLocation: null,
+      locationOfService: null,
+      numberOfUnits: subSelection.numberOfUnits,
+      specialCircumstances: subSelection.specialCircumstances,
+      summary: "",
+      createdAt: new Date().toISOString(),
+      changeLogs: [],
+    };
+
+    setSelectedCodes((prev) => {
+      const updated = [...prev, newCode];
+      // Sync to formData.billingCodes
+      syncCodesToFormData(updated);
+      return updated;
+    });
+
+    setShowEditModal(false);
+    setEditingCode(null);
   };
 
   const handleSelectIcdCode = (icdCode: ICDCode) => {
@@ -2691,7 +2837,10 @@ const ServiceFormScreen = ({ navigation }: any) => {
                     };
 
                     return Object.values(groupedByCode).map((group) => {
-                      // Group dates by year/month/day
+                      const isExpanded =
+                        expandedProcedureGroups[group.billingCode.id];
+
+                      // Group dates by year/month/day for summary view
                       const datesByYearMonth = group.dates.reduce(
                         (acc, item) => {
                           // Parse date string manually to avoid timezone issues
@@ -2755,12 +2904,26 @@ const ServiceFormScreen = ({ navigation }: any) => {
 
                       const yearMonthEntries = Object.entries(datesByYearMonth);
 
+                      // Get all individual codes for this group
+                      const individualCodes = selectedCodes.filter(
+                        (code) => code.billingCode.id === group.billingCode.id
+                      );
+
                       return (
                         <View
                           key={group.billingCode.id}
                           style={styles.groupedCodeContainer}
                         >
-                          <View style={styles.groupedCodeHeader}>
+                          <TouchableOpacity
+                            style={styles.groupedCodeHeader}
+                            onPress={() => {
+                              setExpandedProcedureGroups((prev) => ({
+                                ...prev,
+                                [group.billingCode.id]:
+                                  !prev[group.billingCode.id],
+                              }));
+                            }}
+                          >
                             <View style={{ flex: 1 }}>
                               <Text
                                 style={styles.groupedCodeText}
@@ -2770,30 +2933,126 @@ const ServiceFormScreen = ({ navigation }: any) => {
                                 {group.billingCode.code}:{" "}
                                 {group.billingCode.title}
                               </Text>
-                              {yearMonthEntries.map(([key, monthData]) => (
-                                <View key={key} style={styles.groupedDateRow}>
-                                  <Text style={styles.groupedDateText}>
-                                    {monthData.year} - {monthData.month} (
-                                    {(monthData as any).formattedDays.join(
-                                      ", "
-                                    )}
-                                    )
-                                  </Text>
-                                </View>
-                              ))}
+                              {!isExpanded &&
+                                yearMonthEntries.map(([key, monthData]) => (
+                                  <View key={key} style={styles.groupedDateRow}>
+                                    <Text style={styles.groupedDateText}>
+                                      {monthData.year} - {monthData.month} (
+                                      {(monthData as any).formattedDays.join(
+                                        ", "
+                                      )}
+                                      )
+                                    </Text>
+                                  </View>
+                                ))}
                             </View>
-                            <TouchableOpacity
-                              onPress={() =>
-                                handleRemoveCode(group.billingCode.id)
-                              }
-                            >
-                              <Ionicons
-                                name="close-circle"
-                                size={20}
-                                color="#ef4444"
-                              />
-                            </TouchableOpacity>
-                          </View>
+                            <Ionicons
+                              name={isExpanded ? "chevron-up" : "chevron-down"}
+                              size={20}
+                              color="#6b7280"
+                            />
+                          </TouchableOpacity>
+
+                          {isExpanded && (
+                            <View style={styles.expandedCodesContainer}>
+                              {individualCodes.map((code) => {
+                                // Format date without timezone conversion
+                                const formatDateNoTimezone = (
+                                  dateStr: string
+                                ) => {
+                                  if (!dateStr) return "";
+                                  // Extract just the date part (YYYY-MM-DD)
+                                  const dateOnly = dateStr.split("T")[0];
+                                  const [year, month, day] = dateOnly
+                                    .split("-")
+                                    .map(Number);
+
+                                  const monthNames = [
+                                    "Jan",
+                                    "Feb",
+                                    "Mar",
+                                    "Apr",
+                                    "May",
+                                    "Jun",
+                                    "Jul",
+                                    "Aug",
+                                    "Sep",
+                                    "Oct",
+                                    "Nov",
+                                    "Dec",
+                                  ];
+
+                                  return `${String(day).padStart(2, "0")} ${
+                                    monthNames[month - 1]
+                                  } ${year}`;
+                                };
+
+                                return (
+                                  <View
+                                    key={code.id}
+                                    style={styles.individualCodeItem}
+                                  >
+                                    <View style={{ flex: 1 }}>
+                                      <Text style={styles.individualCodeDate}>
+                                        {formatDateNoTimezone(
+                                          code.serviceDate || ""
+                                        )}
+                                      </Text>
+                                      {code.numberOfUnits &&
+                                        code.numberOfUnits > 1 && (
+                                          <Text
+                                            style={styles.individualCodeUnits}
+                                          >
+                                            Units: {code.numberOfUnits}
+                                          </Text>
+                                        )}
+                                    </View>
+                                    <View style={styles.individualCodeActions}>
+                                      <TouchableOpacity
+                                        onPress={() => handleEditCode(code)}
+                                        style={styles.iconButton}
+                                      >
+                                        <Ionicons
+                                          name="create-outline"
+                                          size={20}
+                                          color="#3b82f6"
+                                        />
+                                      </TouchableOpacity>
+                                      <TouchableOpacity
+                                        onPress={() =>
+                                          handleRemoveIndividualCode(code.id)
+                                        }
+                                        style={styles.iconButton}
+                                      >
+                                        <Ionicons
+                                          name="trash-outline"
+                                          size={20}
+                                          color="#ef4444"
+                                        />
+                                      </TouchableOpacity>
+                                    </View>
+                                  </View>
+                                );
+                              })}
+
+                              {/* Add New Instance Button */}
+                              <TouchableOpacity
+                                style={styles.addInstanceButton}
+                                onPress={() =>
+                                  handleAddNewInstanceOfCode(group.billingCode)
+                                }
+                              >
+                                <Ionicons
+                                  name="add-circle-outline"
+                                  size={20}
+                                  color="#3b82f6"
+                                />
+                                <Text style={styles.addInstanceButtonText}>
+                                  Add Another Instance
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          )}
                         </View>
                       );
                     });
@@ -2831,12 +3090,40 @@ const ServiceFormScreen = ({ navigation }: any) => {
                       return unitsMap[units] || `${units} times`;
                     };
 
-                    // Helper function to format date or show "Today"
+                    // Helper function to format date or show "Today" without timezone conversion
                     const formatDateOrToday = (dateStr: string): string => {
+                      if (!dateStr) return "";
+
+                      // Extract just the date part (YYYY-MM-DD)
+                      const dateOnly = dateStr.split("T")[0];
                       const today = new Date().toISOString().split("T")[0];
-                      return dateStr === today
-                        ? "Today"
-                        : formatFullDate(dateStr);
+
+                      if (dateOnly === today) {
+                        return "Today";
+                      }
+
+                      // Format date without timezone conversion
+                      const [year, month, day] = dateOnly
+                        .split("-")
+                        .map(Number);
+                      const monthNames = [
+                        "Jan",
+                        "Feb",
+                        "Mar",
+                        "Apr",
+                        "May",
+                        "Jun",
+                        "Jul",
+                        "Aug",
+                        "Sep",
+                        "Oct",
+                        "Nov",
+                        "Dec",
+                      ];
+
+                      return `${String(day).padStart(2, "0")} ${
+                        monthNames[month - 1]
+                      } ${year}`;
                     };
 
                     return roundingCodes.map((code) => {
@@ -2905,12 +3192,13 @@ const ServiceFormScreen = ({ navigation }: any) => {
                                 numberOfLines={1}
                                 ellipsizeMode="tail"
                               >
-                                {code.billingCode.code}{" - "}
+                                {code.billingCode.code}
+                                {" - "}
                                 {getUnitsText(code.numberOfUnits || 1)}
                               </Text>
                               <Text style={styles.groupedDateText}>
-                                {formatDateOrToday(code.serviceDate || "")} ->{" "}
-                                {formatDateOrToday(displayEndDate)}
+                                {formatDateOrToday(code.serviceDate || "")}{" "}
+                                {"->"} {formatDateOrToday(displayEndDate)}
                               </Text>
                             </View>
                             <TouchableOpacity
@@ -3454,6 +3742,36 @@ const ServiceFormScreen = ({ navigation }: any) => {
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+
+      {/* Billing Code Configuration Modal for Editing */}
+      <BillingCodeConfigurationModal
+        visible={showEditModal}
+        billingCode={editingCode?.billingCode || null}
+        subSelection={
+          editingCode
+            ? {
+                codeId: editingCode.billingCode.id,
+                serviceDate: editingCode.serviceDate
+                  ? editingCode.serviceDate.split("T")[0]
+                  : null,
+                serviceEndDate: editingCode.serviceEndDate
+                  ? editingCode.serviceEndDate.split("T")[0]
+                  : null,
+                bilateralIndicator: editingCode.bilateralIndicator,
+                serviceStartTime: editingCode.serviceStartTime,
+                serviceEndTime: editingCode.serviceEndTime,
+                numberOfUnits: editingCode.numberOfUnits,
+                specialCircumstances: editingCode.specialCircumstances,
+              }
+            : null
+        }
+        onClose={() => {
+          setShowEditModal(false);
+          setEditingCode(null);
+        }}
+        onSave={handleSaveNewCodeInstance}
+        serviceDate={formData.serviceDate}
+      />
     </SafeAreaView>
   );
 };
@@ -4151,6 +4469,58 @@ const styles = StyleSheet.create({
     color: "#374151",
     marginBottom: 16,
     textAlign: "center",
+  },
+  expandedCodesContainer: {
+    marginTop: 8,
+    paddingLeft: 12,
+    borderLeftWidth: 2,
+    borderLeftColor: "#e5e7eb",
+  },
+  individualCodeItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 12,
+    backgroundColor: "#f9fafb",
+    borderRadius: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  individualCodeDate: {
+    fontSize: 14,
+    color: "#374151",
+    fontWeight: "500",
+  },
+  individualCodeUnits: {
+    fontSize: 12,
+    color: "#6b7280",
+    marginTop: 2,
+  },
+  individualCodeActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  iconButton: {
+    padding: 4,
+  },
+  addInstanceButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: 12,
+    marginTop: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#3b82f6",
+    borderStyle: "dashed",
+    backgroundColor: "#f0f9ff",
+  },
+  addInstanceButtonText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#3b82f6",
   },
 });
 

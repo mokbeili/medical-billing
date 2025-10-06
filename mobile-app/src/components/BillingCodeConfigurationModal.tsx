@@ -71,37 +71,58 @@ const BillingCodeConfigurationModal: React.FC<
     onClose();
   };
 
-  // Date navigation helpers
+  // Date navigation helpers - timezone safe
   const canDecrementDate = () => {
     if (!localSubSelection?.serviceDate) return false;
-    const currentDate = new Date(localSubSelection.serviceDate + "T00:00:00");
-    const minDate = new Date("2020-01-01T00:00:00");
-    return currentDate > minDate; // Reasonable minimum date
+    // Parse date without timezone conversion
+    const dateOnly = localSubSelection.serviceDate.split("T")[0];
+    return dateOnly > "2020-01-01"; // Simple string comparison for YYYY-MM-DD
   };
 
   const canIncrementDate = () => {
     if (!localSubSelection?.serviceDate) return false;
-    const currentDate = new Date(localSubSelection.serviceDate + "T00:00:00");
-    const today = new Date();
-    const todayString = today.toISOString().split("T")[0];
-    const todayDate = new Date(todayString + "T00:00:00");
+    // Parse date without timezone conversion
+    const dateOnly = localSubSelection.serviceDate.split("T")[0];
+    const today = new Date().toISOString().split("T")[0];
     // Disable if current date is today or in the future
-    return currentDate < todayDate;
+    return dateOnly < today;
   };
 
   const decrementDate = () => {
     if (!localSubSelection?.serviceDate || !canDecrementDate()) return;
-    const currentDate = new Date(localSubSelection.serviceDate);
-    currentDate.setDate(currentDate.getDate() - 1);
-    const newDate = currentDate.toISOString().split("T")[0];
+    // Parse date manually to avoid timezone issues
+    const dateOnly = localSubSelection.serviceDate.split("T")[0];
+    const [year, month, day] = dateOnly.split("-").map(Number);
+
+    // Create a local date and decrement
+    const localDate = new Date(year, month - 1, day);
+    localDate.setDate(localDate.getDate() - 1);
+
+    // Format back to YYYY-MM-DD
+    const newYear = localDate.getFullYear();
+    const newMonth = String(localDate.getMonth() + 1).padStart(2, "0");
+    const newDay = String(localDate.getDate()).padStart(2, "0");
+    const newDate = `${newYear}-${newMonth}-${newDay}`;
+
     handleUpdateSubSelection({ serviceDate: newDate });
   };
 
   const incrementDate = () => {
     if (!localSubSelection?.serviceDate || !canIncrementDate()) return;
-    const currentDate = new Date(localSubSelection.serviceDate);
-    currentDate.setDate(currentDate.getDate() + 1);
-    const newDate = currentDate.toISOString().split("T")[0];
+    // Parse date manually to avoid timezone issues
+    const dateOnly = localSubSelection.serviceDate.split("T")[0];
+    const [year, month, day] = dateOnly.split("-").map(Number);
+
+    // Create a local date and increment
+    const localDate = new Date(year, month - 1, day);
+    localDate.setDate(localDate.getDate() + 1);
+
+    // Format back to YYYY-MM-DD
+    const newYear = localDate.getFullYear();
+    const newMonth = String(localDate.getMonth() + 1).padStart(2, "0");
+    const newDay = String(localDate.getDate()).padStart(2, "0");
+    const newDate = `${newYear}-${newMonth}-${newDay}`;
+
     handleUpdateSubSelection({ serviceDate: newDate });
   };
 
@@ -157,12 +178,10 @@ const BillingCodeConfigurationModal: React.FC<
                     />
                   </TouchableOpacity>
                   <TextInput
-                    style={styles.dateInput}
+                    style={[styles.dateInput, styles.readOnlyInput]}
                     placeholder="YYYY-MM-DD"
                     value={formatFullDate(localSubSelection.serviceDate || "")}
-                    onChangeText={(text) =>
-                      handleUpdateSubSelection({ serviceDate: text })
-                    }
+                    editable={false}
                   />
                   <TouchableOpacity
                     style={[
