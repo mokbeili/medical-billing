@@ -20,7 +20,8 @@ DerivedData
 *.hmap
 *.ipa
 *.xcuserstate
-project.xcworkspace
+*.xcworkspace/xcshareddata/
+*.xcworkspace/xcuserdata/
 .xcode.env.local
 
 # Bundle artifacts

@@ -1,6 +1,7 @@
 import { useNavigation } from "@react-navigation/native";
 import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   RefreshControl,
   ScrollView,
@@ -23,6 +24,9 @@ const ProfileScreen = () => {
   );
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingBillingTypeId, setLoadingBillingTypeId] = useState<
+    number | null
+  >(null);
 
   useEffect(() => {
     if (user) {
@@ -66,7 +70,7 @@ const ProfileScreen = () => {
     physicianBillingTypeId: number
   ) => {
     try {
-      setLoading(true);
+      setLoadingBillingTypeId(physicianBillingTypeId);
       await billingTypesAPI.updateActiveBillingType(
         physicianId,
         physicianBillingTypeId
@@ -91,7 +95,7 @@ const ProfileScreen = () => {
       console.error("Error updating billing type:", error);
       Alert.alert("Error", "Failed to update billing type. Please try again.");
     } finally {
-      setLoading(false);
+      setLoadingBillingTypeId(null);
     }
   };
 
@@ -184,35 +188,63 @@ const ProfileScreen = () => {
                         ?.sort((a, b) =>
                           a.billingType.title.localeCompare(b.billingType.title)
                         )
-                        .map((billingType) => (
-                          <List.Item
-                            key={billingType.id}
-                            title={billingType.billingType.title}
-                            left={(props) => (
+                        .map((billingType) => {
+                          const isLoading =
+                            loadingBillingTypeId === billingType.id;
+                          const isDisabled = loadingBillingTypeId !== null;
+
+                          return (
+                            <TouchableOpacity
+                              key={billingType.id}
+                              style={[
+                                styles.billingTypeRow,
+                                billingType.active &&
+                                  styles.billingTypeRowActive,
+                                isDisabled && styles.billingTypeRowDisabled,
+                              ]}
+                              onPress={() => {
+                                if (!isDisabled) {
+                                  handleBillingTypeChange(
+                                    physician.id,
+                                    billingType.id
+                                  );
+                                }
+                              }}
+                              disabled={isDisabled}
+                              activeOpacity={0.7}
+                            >
                               <View
                                 style={[
                                   styles.colorIndicator,
                                   { backgroundColor: billingType.colorCode },
                                 ]}
                               />
-                            )}
-                            right={() => (
-                              <RadioButton
-                                value={billingType.id.toString()}
-                                status={
-                                  billingType.active ? "checked" : "unchecked"
-                                }
-                                onPress={() =>
-                                  handleBillingTypeChange(
-                                    physician.id,
-                                    billingType.id
-                                  )
-                                }
-                                disabled={loading}
-                              />
-                            )}
-                          />
-                        ))}
+                              <View style={styles.billingTypeContent}>
+                                <Text style={styles.billingTypeTitle}>
+                                  {billingType.billingType.title}
+                                </Text>
+                                <Text style={styles.billingTypeCode}>
+                                  Code: {billingType.billingType.code}
+                                </Text>
+                              </View>
+                              {isLoading ? (
+                                <ActivityIndicator
+                                  size="small"
+                                  color="#2563eb"
+                                />
+                              ) : (
+                                <RadioButton
+                                  value={billingType.id.toString()}
+                                  status={
+                                    billingType.active ? "checked" : "unchecked"
+                                  }
+                                  onPress={() => {}}
+                                  disabled={true}
+                                />
+                              )}
+                            </TouchableOpacity>
+                          );
+                        })}
                     </View>
                   ))}
                 </List.Section>
@@ -423,7 +455,39 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    marginRight: 8,
+    marginRight: 12,
+  },
+  billingTypeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginVertical: 4,
+    backgroundColor: "#ffffff",
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
+  billingTypeRowActive: {
+    backgroundColor: "#eff6ff",
+    borderColor: "#bfdbfe",
+  },
+  billingTypeRowDisabled: {
+    opacity: 0.6,
+  },
+  billingTypeContent: {
+    flex: 1,
+    marginLeft: 8,
+  },
+  billingTypeTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1e293b",
+    marginBottom: 2,
+  },
+  billingTypeCode: {
+    fontSize: 12,
+    color: "#64748b",
   },
 });
 

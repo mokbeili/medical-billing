@@ -36,6 +36,9 @@ const BillingTypeSelector = () => {
   const { activeBillingType, setActiveBillingType } = useBillingType();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingBillingTypeId, setLoadingBillingTypeId] = useState<
+    number | null
+  >(null);
 
   useEffect(() => {
     fetchUserWithPhysicians();
@@ -70,7 +73,7 @@ const BillingTypeSelector = () => {
     physicianBillingTypeId: number
   ) => {
     try {
-      setLoading(true);
+      setLoadingBillingTypeId(physicianBillingTypeId);
       await fetch(
         `/api/physician-billing-types/${physicianId}/${physicianBillingTypeId}/active`,
         {
@@ -84,7 +87,7 @@ const BillingTypeSelector = () => {
       console.error("Error updating billing type:", error);
       alert("Failed to update billing type. Please try again.");
     } finally {
-      setLoading(false);
+      setLoadingBillingTypeId(null);
     }
   };
 
@@ -117,35 +120,75 @@ const BillingTypeSelector = () => {
                 .sort((a, b) =>
                   a.billingType.title.localeCompare(b.billingType.title)
                 )
-                .map((billingType) => (
-                  <label
-                    key={billingType.id}
-                    className="flex items-center space-x-3 cursor-pointer hover:bg-gray-50 p-2 rounded"
-                  >
-                    <input
-                      type="radio"
-                      name={`billing-type-${physician.id}`}
-                      checked={billingType.active}
-                      onChange={() =>
-                        handleBillingTypeChange(physician.id, billingType.id)
-                      }
-                      disabled={loading}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-                    />
+                .map((billingType) => {
+                  const isLoading = loadingBillingTypeId === billingType.id;
+                  const isDisabled = loadingBillingTypeId !== null;
+
+                  return (
                     <div
-                      className="w-4 h-4 rounded-full border-2 border-gray-300"
-                      style={{ backgroundColor: billingType.colorCode }}
-                    />
-                    <div className="flex-1">
-                      <div className="text-sm font-medium text-gray-900">
-                        {billingType.billingType.title}
+                      key={billingType.id}
+                      onClick={() => {
+                        if (!isDisabled) {
+                          handleBillingTypeChange(physician.id, billingType.id);
+                        }
+                      }}
+                      className={`flex items-center space-x-3 p-3 rounded transition-colors ${
+                        isDisabled
+                          ? "cursor-not-allowed opacity-60"
+                          : "cursor-pointer hover:bg-gray-50 active:bg-gray-100"
+                      } ${
+                        billingType.active
+                          ? "bg-blue-50 border-2 border-blue-200"
+                          : "border-2 border-transparent"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name={`billing-type-${physician.id}`}
+                        checked={billingType.active}
+                        onChange={() => {}}
+                        disabled={isDisabled}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 pointer-events-none"
+                      />
+                      <div
+                        className="w-4 h-4 rounded-full border-2 border-gray-300"
+                        style={{ backgroundColor: billingType.colorCode }}
+                      />
+                      <div className="flex-1">
+                        <div className="text-sm font-medium text-gray-900">
+                          {billingType.billingType.title}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          Code: {billingType.billingType.code}
+                        </div>
                       </div>
-                      <div className="text-xs text-gray-500">
-                        Code: {billingType.billingType.code}
-                      </div>
+                      {isLoading && (
+                        <div className="flex items-center">
+                          <svg
+                            className="animate-spin h-5 w-5 text-blue-600"
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            />
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                            />
+                          </svg>
+                        </div>
+                      )}
                     </div>
-                  </label>
-                ))}
+                  );
+                })}
             </div>
           </div>
         ))}
