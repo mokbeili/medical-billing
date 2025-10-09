@@ -159,6 +159,11 @@ const ServiceFormScreen = ({ navigation }: any) => {
   const [selectedServiceMonth, setSelectedServiceMonth] = useState<number>(0);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
+  const [hasChanges, setHasChanges] = useState(false);
+  const initialFormData = useRef<ServiceFormData | null>(null);
+  const initialSelectedCodes = useRef<ServiceCode[]>([]);
+  const initialIcdCode = useRef<ICDCode | null>(null);
+  const initialReferringPhysician = useRef<ReferringPhysician | null>(null);
 
   // Billing number validation function (from web form)
   const checkDigit = (value: string): boolean => {
@@ -309,6 +314,14 @@ const ServiceFormScreen = ({ navigation }: any) => {
         serviceLocation: newServiceLocation,
       }));
     }
+
+    // Store initial state for new services
+    if (!isEditing && physicians && !initialFormData.current) {
+      initialFormData.current = formData;
+      initialSelectedCodes.current = [];
+      initialIcdCode.current = null;
+      initialReferringPhysician.current = null;
+    }
   }, [physicians, isEditing]);
 
   // Set service location based on selected physician's city (for new services)
@@ -449,8 +462,97 @@ const ServiceFormScreen = ({ navigation }: any) => {
           `${service.patient.firstName} ${service.patient.lastName} (#${service.patient.billingNumber})`
         );
       }
+
+      // Store initial state for editing
+      setTimeout(() => {
+        initialFormData.current = {
+          physicianId: service.physician.id,
+          patientId: service.patient.id || "",
+          referringPhysicianId: service.referringPhysician?.id || null,
+          icdCodeId: service.icdCode?.id || null,
+          healthInstitutionId: service.healthInstitution?.id || null,
+          summary: service.serviceCodes[0]?.summary || "",
+          serviceDate: new Date(service.serviceDate)
+            .toISOString()
+            .split("T")[0],
+          serviceLocation: service.serviceCodes[0]?.serviceLocation || null,
+          locationOfService: service.serviceCodes[0]?.locationOfService || null,
+          serviceStatus: service.status,
+          billingCodes: service.serviceCodes.map((code) => ({
+            codeId: code.billingCode.id,
+            status: code.status,
+            billing_record_type: code.billingCode.billing_record_type || 1,
+            serviceStartTime: code.serviceStartTime,
+            serviceEndTime: code.serviceEndTime,
+            numberOfUnits: code.numberOfUnits,
+            bilateralIndicator: code.bilateralIndicator,
+            specialCircumstances: code.specialCircumstances,
+            serviceDate: code.serviceDate,
+            serviceEndDate: code.serviceEndDate,
+            fee_determinant: code.billingCode.fee_determinant,
+            multiple_unit_indicator: code.billingCode.multiple_unit_indicator,
+          })),
+        };
+        initialSelectedCodes.current = service.serviceCodes.map((code) => code);
+        initialIcdCode.current = service.icdCode
+          ? {
+              id: parseInt(service.icdCode.code),
+              version: "10",
+              code: service.icdCode.code,
+              description: service.icdCode.description,
+            }
+          : null;
+        initialReferringPhysician.current = service.referringPhysician
+          ? {
+              id: parseInt(service.referringPhysician.code),
+              code: service.referringPhysician.code,
+              name: service.referringPhysician.name,
+              location: "",
+              specialty: "",
+            }
+          : null;
+      }, 100);
+
+      // Reset hasChanges after loading initial data
+      setHasChanges(false);
     }
   }, [service, isEditing]);
+
+  // Track changes to form data
+  useEffect(() => {
+    // Wait for initial data to be stored
+    if (!initialFormData.current) {
+      return;
+    }
+
+    // Check if form data has changed
+    const formDataChanged =
+      JSON.stringify(formData) !== JSON.stringify(initialFormData.current);
+
+    // Check if selected codes have changed
+    const codesChanged =
+      selectedCodes.length !== initialSelectedCodes.current.length ||
+      JSON.stringify(selectedCodes) !==
+        JSON.stringify(initialSelectedCodes.current);
+
+    // Check if ICD code has changed
+    const icdCodeChanged =
+      JSON.stringify(selectedIcdCode) !==
+      JSON.stringify(initialIcdCode.current);
+
+    // Check if referring physician has changed
+    const referringPhysicianChanged =
+      JSON.stringify(selectedReferringPhysician) !==
+      JSON.stringify(initialReferringPhysician.current);
+
+    // Set hasChanges if any field has changed
+    setHasChanges(
+      formDataChanged ||
+        codesChanged ||
+        icdCodeChanged ||
+        referringPhysicianChanged
+    );
+  }, [formData, selectedCodes, selectedIcdCode, selectedReferringPhysician]);
 
   // Handle scanned patient data from camera
   useEffect(() => {
@@ -3628,7 +3730,9 @@ const ServiceFormScreen = ({ navigation }: any) => {
             }
             style={[styles.submitButton, styles.saveButton]}
             disabled={
-              createServiceMutation.isPending || updateServiceMutation.isPending
+              !hasChanges ||
+              createServiceMutation.isPending ||
+              updateServiceMutation.isPending
             }
           >
             Save
@@ -3641,7 +3745,9 @@ const ServiceFormScreen = ({ navigation }: any) => {
             }
             style={[styles.submitButton, styles.approveButton]}
             disabled={
-              createServiceMutation.isPending || updateServiceMutation.isPending
+              formData.serviceStatus !== "OPEN" ||
+              createServiceMutation.isPending ||
+              updateServiceMutation.isPending
             }
           >
             Approve & Finish

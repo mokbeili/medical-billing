@@ -131,6 +131,7 @@ export async function PUT(
       serviceLocation,
       locationOfService,
       billingCodes,
+      serviceStatus,
     } = data;
 
     // Check if service exists and belongs to the user's patients
@@ -155,6 +156,7 @@ export async function PUT(
         id: parseInt(id),
       },
       data: {
+        status: serviceStatus,
         physician: physicianId ? { connect: { id: physicianId } } : undefined,
         patient: patientId ? { connect: { id: patientId } } : undefined,
         serviceDate: serviceDate ? new Date(serviceDate) : undefined,
