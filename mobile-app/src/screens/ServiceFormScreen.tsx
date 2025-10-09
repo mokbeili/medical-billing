@@ -1797,7 +1797,11 @@ const ServiceFormScreen = ({ navigation }: any) => {
           <Ionicons name="arrow-back" size={24} color="#1e293b" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
-          {isEditing ? "Edit Service" : "New Service"}
+          {service?.patient
+            ? `${service.patient.firstName} ${service.patient.lastName}`
+            : isEditing
+            ? "Edit Service"
+            : "New Service"}
         </Text>
         <View style={{ width: 24 }} />
       </View>
@@ -1861,6 +1865,534 @@ const ServiceFormScreen = ({ navigation }: any) => {
             </Card>
           )}
 
+          {/* Summary - Removed */}
+
+          {/* Billing Codes */}
+          <Card style={styles.card}>
+            <Card.Content>
+              <Text style={styles.sectionTitle}>Billing Codes</Text>
+
+              {/* Toggle between Services and Rounding */}
+              <View style={styles.toggleContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.toggleButton,
+                    billingCodeView === "procedures" &&
+                      styles.toggleButtonActive,
+                  ]}
+                  onPress={() => setBillingCodeView("procedures")}
+                >
+                  <Text
+                    style={[
+                      styles.toggleButtonText,
+                      billingCodeView === "procedures" &&
+                        styles.toggleButtonTextActive,
+                    ]}
+                  >
+                    Procedures (
+                    {
+                      selectedCodes.filter(
+                        (code) => code.billingCode.billing_record_type === 50
+                      ).length
+                    }
+                    )
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.toggleButton,
+                    billingCodeView === "rounding" && styles.toggleButtonActive,
+                  ]}
+                  onPress={() => setBillingCodeView("rounding")}
+                >
+                  <Text
+                    style={[
+                      styles.toggleButtonText,
+                      billingCodeView === "rounding" &&
+                        styles.toggleButtonTextActive,
+                    ]}
+                  >
+                    Rounding
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Display codes based on selected view */}
+              {billingCodeView === "procedures" ? (
+                <View style={{ marginTop: 16 }}>
+                  {(() => {
+                    // Filter procedures
+                    const procedures = selectedCodes.filter(
+                      (code) => code.billingCode.billing_record_type === 50
+                    );
+
+                    if (procedures.length === 0) {
+                      return (
+                        <Text style={styles.emptyText}>
+                          No service codes added
+                        </Text>
+                      );
+                    }
+
+                    // Group by billing code
+                    const groupedByCode = procedures.reduce((acc, code) => {
+                      const codeId = code.billingCode.id;
+                      if (!acc[codeId]) {
+                        acc[codeId] = {
+                          billingCode: code.billingCode,
+                          dates: [],
+                        };
+                      }
+                      if (code.serviceDate) {
+                        acc[codeId].dates.push({
+                          date: code.serviceDate,
+                          serviceCodeId: code.id,
+                        });
+                      }
+                      return acc;
+                    }, {} as Record<number, { billingCode: any; dates: Array<{ date: string; serviceCodeId: number }> }>);
+
+                    // Helper function to convert day to ordinal format
+                    const getOrdinalDay = (day: number): string => {
+                      const j = day % 10;
+                      const k = day % 100;
+                      if (j === 1 && k !== 11) {
+                        return day + "st";
+                      }
+                      if (j === 2 && k !== 12) {
+                        return day + "nd";
+                      }
+                      if (j === 3 && k !== 13) {
+                        return day + "rd";
+                      }
+                      return day + "th";
+                    };
+
+                    return Object.values(groupedByCode).map((group) => {
+                      const isExpanded =
+                        expandedProcedureGroups[group.billingCode.id];
+
+                      // Group dates by year/month/day for summary view
+                      const datesByYearMonth = group.dates.reduce(
+                        (acc, item) => {
+                          // Parse date string manually to avoid timezone issues
+                          // Handle both "YYYY-MM-DD" and "YYYY-MM-DDTHH:mm:ss" formats
+                          const dateOnly = item.date.split("T")[0];
+                          const dateParts = dateOnly.split("-");
+                          const year = parseInt(dateParts[0], 10);
+                          const monthNum = parseInt(dateParts[1], 10);
+                          const day = parseInt(dateParts[2], 10);
+
+                          const monthNames = [
+                            "Jan",
+                            "Feb",
+                            "Mar",
+                            "Apr",
+                            "May",
+                            "Jun",
+                            "Jul",
+                            "Aug",
+                            "Sep",
+                            "Oct",
+                            "Nov",
+                            "Dec",
+                          ];
+                          const monthName = monthNames[monthNum - 1];
+                          const key = `${year}/${monthName}`;
+
+                          if (!acc[key]) {
+                            acc[key] = { year, month: monthName, dayCount: {} };
+                          }
+                          // Count occurrences of each day
+                          acc[key].dayCount[day] =
+                            (acc[key].dayCount[day] || 0) + 1;
+                          return acc;
+                        },
+                        {} as Record<
+                          string,
+                          {
+                            year: number;
+                            month: string;
+                            dayCount: Record<number, number>;
+                          }
+                        >
+                      );
+
+                      // Convert day counts to sorted array with formatted strings
+                      Object.values(datesByYearMonth).forEach((monthData) => {
+                        const sortedDays = Object.keys(monthData.dayCount)
+                          .map(Number)
+                          .sort((a, b) => a - b);
+                        (monthData as any).formattedDays = sortedDays.map(
+                          (day) => {
+                            const count = monthData.dayCount[day];
+                            const ordinalDay = getOrdinalDay(day);
+                            return count > 1
+                              ? `${count} x ${ordinalDay}`
+                              : ordinalDay;
+                          }
+                        );
+                      });
+
+                      const yearMonthEntries = Object.entries(datesByYearMonth);
+
+                      // Get all individual codes for this group
+                      const individualCodes = selectedCodes.filter(
+                        (code) => code.billingCode.id === group.billingCode.id
+                      );
+
+                      return (
+                        <View
+                          key={group.billingCode.id}
+                          style={styles.groupedCodeContainer}
+                        >
+                          <TouchableOpacity
+                            style={styles.groupedCodeHeader}
+                            onPress={() => {
+                              setExpandedProcedureGroups((prev) => ({
+                                ...prev,
+                                [group.billingCode.id]:
+                                  !prev[group.billingCode.id],
+                              }));
+                            }}
+                          >
+                            <View style={{ flex: 1 }}>
+                              <Text
+                                style={styles.groupedCodeText}
+                                numberOfLines={1}
+                                ellipsizeMode="tail"
+                              >
+                                {group.billingCode.code}:{" "}
+                                {group.billingCode.title}
+                              </Text>
+                              {!isExpanded &&
+                                yearMonthEntries.map(([key, monthData]) => (
+                                  <View key={key} style={styles.groupedDateRow}>
+                                    <Text style={styles.groupedDateText}>
+                                      {monthData.year} - {monthData.month} (
+                                      {(monthData as any).formattedDays.join(
+                                        ", "
+                                      )}
+                                      )
+                                    </Text>
+                                  </View>
+                                ))}
+                            </View>
+                            <Ionicons
+                              name={isExpanded ? "chevron-up" : "chevron-down"}
+                              size={20}
+                              color="#6b7280"
+                            />
+                          </TouchableOpacity>
+
+                          {isExpanded && (
+                            <View style={styles.expandedCodesContainer}>
+                              {individualCodes.map((code) => {
+                                // Format date without timezone conversion
+                                const formatDateNoTimezone = (
+                                  dateStr: string
+                                ) => {
+                                  if (!dateStr) return "";
+                                  // Extract just the date part (YYYY-MM-DD)
+                                  const dateOnly = dateStr.split("T")[0];
+                                  const [year, month, day] = dateOnly
+                                    .split("-")
+                                    .map(Number);
+
+                                  const monthNames = [
+                                    "Jan",
+                                    "Feb",
+                                    "Mar",
+                                    "Apr",
+                                    "May",
+                                    "Jun",
+                                    "Jul",
+                                    "Aug",
+                                    "Sep",
+                                    "Oct",
+                                    "Nov",
+                                    "Dec",
+                                  ];
+
+                                  return `${String(day).padStart(2, "0")} ${
+                                    monthNames[month - 1]
+                                  } ${year}`;
+                                };
+
+                                return (
+                                  <View
+                                    key={code.id}
+                                    style={styles.individualCodeItem}
+                                  >
+                                    <View style={{ flex: 1 }}>
+                                      <Text style={styles.individualCodeDate}>
+                                        {formatDateNoTimezone(
+                                          code.serviceDate || ""
+                                        )}
+                                      </Text>
+                                      {code.numberOfUnits &&
+                                        code.numberOfUnits > 1 && (
+                                          <Text
+                                            style={styles.individualCodeUnits}
+                                          >
+                                            Units: {code.numberOfUnits}
+                                          </Text>
+                                        )}
+                                    </View>
+                                    <View style={styles.individualCodeActions}>
+                                      <TouchableOpacity
+                                        onPress={() => handleEditCode(code)}
+                                        style={styles.iconButton}
+                                      >
+                                        <Ionicons
+                                          name="create-outline"
+                                          size={20}
+                                          color="#3b82f6"
+                                        />
+                                      </TouchableOpacity>
+                                      <TouchableOpacity
+                                        onPress={() =>
+                                          handleRemoveIndividualCode(code.id)
+                                        }
+                                        style={styles.iconButton}
+                                      >
+                                        <Ionicons
+                                          name="trash-outline"
+                                          size={20}
+                                          color="#ef4444"
+                                        />
+                                      </TouchableOpacity>
+                                    </View>
+                                  </View>
+                                );
+                              })}
+
+                              {/* Add New Instance Button */}
+                              <TouchableOpacity
+                                style={styles.addInstanceButton}
+                                onPress={() =>
+                                  handleAddNewInstanceOfCode(group.billingCode)
+                                }
+                              >
+                                <Ionicons
+                                  name="add-circle-outline"
+                                  size={20}
+                                  color="#3b82f6"
+                                />
+                                <Text style={styles.addInstanceButtonText}>
+                                  Add Another Instance
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          )}
+                        </View>
+                      );
+                    });
+                  })()}
+                </View>
+              ) : (
+                <View style={{ marginTop: 16 }}>
+                  {(() => {
+                    const roundingCodes = selectedCodes.filter(
+                      (code) => code.billingCode.billing_record_type === 57
+                    );
+
+                    if (roundingCodes.length === 0) {
+                      return (
+                        <Text style={styles.emptyText}>
+                          No rounding codes added
+                        </Text>
+                      );
+                    }
+
+                    // Helper function to convert units to text
+                    const getUnitsText = (units: number): string => {
+                      const unitsMap: { [key: number]: string } = {
+                        1: "once",
+                        2: "twice",
+                        3: "three times",
+                        4: "four times",
+                        5: "five times",
+                        6: "six times",
+                        7: "seven times",
+                        8: "eight times",
+                        9: "nine times",
+                        10: "ten times",
+                      };
+                      return unitsMap[units] || `${units} times`;
+                    };
+
+                    // Helper function to format date or show "Today" without timezone conversion
+                    const formatDateOrToday = (dateStr: string): string => {
+                      if (!dateStr) return "";
+
+                      // Extract just the date part (YYYY-MM-DD)
+                      const dateOnly = dateStr.split("T")[0];
+                      const today = new Date().toISOString().split("T")[0];
+
+                      if (dateOnly === today) {
+                        return "Today";
+                      }
+
+                      // Format date without timezone conversion
+                      const [year, month, day] = dateOnly
+                        .split("-")
+                        .map(Number);
+                      const monthNames = [
+                        "Jan",
+                        "Feb",
+                        "Mar",
+                        "Apr",
+                        "May",
+                        "Jun",
+                        "Jul",
+                        "Aug",
+                        "Sep",
+                        "Oct",
+                        "Nov",
+                        "Dec",
+                      ];
+
+                      return `${String(day).padStart(2, "0")} ${
+                        monthNames[month - 1]
+                      } ${year}`;
+                    };
+
+                    return roundingCodes.map((code) => {
+                      // Calculate the display end date
+                      let displayEndDate = code.serviceEndDate;
+
+                      if (!displayEndDate) {
+                        const today = new Date().toISOString().split("T")[0];
+
+                        // Calculate max possible end date from billing code chain
+                        let maxEndDate = null;
+                        if (
+                          code.billingCode.billingCodeChains &&
+                          code.billingCode.billingCodeChains.length > 0
+                        ) {
+                          // Find the last code in the chain (isLast = true) or use the highest cumulativeDayRange
+                          const lastChainCode =
+                            code.billingCode.billingCodeChains.find(
+                              (c) => c.isLast
+                            ) ||
+                            code.billingCode.billingCodeChains.reduce(
+                              (max, c) =>
+                                c.cumulativeDayRange > max.cumulativeDayRange
+                                  ? c
+                                  : max
+                            );
+
+                          if (lastChainCode && code.serviceDate) {
+                            const startDate = new Date(code.serviceDate);
+                            const endDate = new Date(startDate);
+                            endDate.setDate(
+                              endDate.getDate() +
+                                lastChainCode.cumulativeDayRange -
+                                1
+                            );
+                            maxEndDate = endDate.toISOString().split("T")[0];
+                          }
+                        } else if (
+                          code.billingCode.day_range &&
+                          code.serviceDate
+                        ) {
+                          // Fallback to day_range if no chain available
+                          const startDate = new Date(code.serviceDate);
+                          const endDate = new Date(startDate);
+                          endDate.setDate(
+                            endDate.getDate() + code.billingCode.day_range - 1
+                          );
+                          maxEndDate = endDate.toISOString().split("T")[0];
+                        }
+
+                        // Use the minimum of today and maxEndDate
+                        if (maxEndDate) {
+                          displayEndDate =
+                            today < maxEndDate ? today : maxEndDate;
+                        } else {
+                          displayEndDate = today;
+                        }
+                      }
+
+                      return (
+                        <View key={code.id} style={styles.groupedCodeContainer}>
+                          <View style={styles.groupedCodeHeader}>
+                            <View style={{ flex: 1 }}>
+                              <Text
+                                style={styles.groupedCodeText}
+                                numberOfLines={1}
+                                ellipsizeMode="tail"
+                              >
+                                {code.billingCode.code}
+                                {" - "}
+                                {getUnitsText(code.numberOfUnits || 1)}
+                              </Text>
+                              <Text style={styles.groupedDateText}>
+                                {formatDateOrToday(code.serviceDate || "")}{" "}
+                                {"->"} {formatDateOrToday(displayEndDate)}
+                              </Text>
+                            </View>
+                            <TouchableOpacity
+                              onPress={() =>
+                                handleRemoveCode(code.billingCode.id)
+                              }
+                            >
+                              <Ionicons
+                                name="close-circle"
+                                size={20}
+                                color="#ef4444"
+                              />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      );
+                    });
+                  })()}
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={styles.addCodeButton}
+                onPress={() =>
+                  navigation.navigate("BillingCodeSearch", {
+                    onSelect: handleAddCodes,
+                    existingCodes: selectedCodes.map((c) => c.billingCode),
+                    serviceDate: formData.serviceDate,
+                  })
+                }
+              >
+                <Ionicons name="add" size={20} color="#2563eb" />
+                <Text style={styles.addCodeButtonText}>Add Billing Code</Text>
+              </TouchableOpacity>
+            </Card.Content>
+          </Card>
+
+          {/* ICD Code */}
+          <Card style={styles.card}>
+            <Card.Content>
+              <Text style={styles.sectionTitle}>ICD Code</Text>
+              {selectedIcdCode ? (
+                <View style={styles.selectedItem}>
+                  <Text style={styles.selectedItemText}>
+                    {selectedIcdCode.code} - {selectedIcdCode.description}
+                  </Text>
+                  <TouchableOpacity onPress={handleRemoveIcdCode}>
+                    <Ionicons name="close-circle" size={20} color="#ef4444" />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.addCodeButton}
+                  onPress={() => setShowIcdCodeModal(true)}
+                >
+                  <Ionicons name="add" size={20} color="#2563eb" />
+                  <Text style={styles.addCodeButtonText}>Add ICD Code</Text>
+                </TouchableOpacity>
+              )}
+            </Card.Content>
+          </Card>
+
           {/* Service Date */}
           <Card style={styles.card}>
             <Card.Content>
@@ -1893,91 +2425,42 @@ const ServiceFormScreen = ({ navigation }: any) => {
             </Card.Content>
           </Card>
 
-          {/* Service Location */}
-          <Card style={styles.card}>
-            <Card.Content>
-              <Text style={styles.sectionTitle}>Service Location *</Text>
-              <View style={styles.buttonGroup}>
-                <TouchableOpacity
-                  style={[
-                    styles.locationButton,
-                    formData.serviceLocation === "R" &&
-                      styles.selectedLocationButton,
-                  ]}
-                  onPress={() =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      serviceLocation:
-                        formData.serviceLocation === "R" ? null : "R",
-                    }))
-                  }
-                >
-                  <Text
-                    style={[
-                      styles.locationButtonText,
-                      formData.serviceLocation === "R" &&
-                        styles.selectedLocationButtonText,
-                    ]}
-                  >
-                    Regina
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.locationButton,
-                    formData.serviceLocation === "S" &&
-                      styles.selectedLocationButton,
-                  ]}
-                  onPress={() =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      serviceLocation:
-                        formData.serviceLocation === "S" ? null : "S",
-                    }))
-                  }
-                >
-                  <Text
-                    style={[
-                      styles.locationButtonText,
-                      formData.serviceLocation === "S" &&
-                        styles.selectedLocationButtonText,
-                    ]}
-                  >
-                    Saskatoon
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.locationButton,
-                    formData.serviceLocation === "X" &&
-                      styles.selectedLocationButton,
-                  ]}
-                  onPress={() =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      serviceLocation:
-                        formData.serviceLocation === "X" ? null : "X",
-                    }))
-                  }
-                >
-                  <Text
-                    style={[
-                      styles.locationButtonText,
-                      formData.serviceLocation === "X" &&
-                        styles.selectedLocationButtonText,
-                    ]}
-                  >
-                    Rural/Northern
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              {!formData.serviceLocation && (
-                <Text style={styles.errorText}>
-                  Please select a service location
+          {requiresReferringPhysician && (
+            <Card style={styles.card}>
+              <Card.Content>
+                <Text style={styles.sectionTitle}>
+                  Referring Physician (Required)
                 </Text>
-              )}
-            </Card.Content>
-          </Card>
+                {selectedReferringPhysician ? (
+                  <View style={styles.selectedItem}>
+                    <View style={styles.selectedItemContent}>
+                      <Text style={styles.selectedItemText}>
+                        {selectedReferringPhysician.name} -{" "}
+                        {selectedReferringPhysician.specialty} (
+                        {selectedReferringPhysician.code})
+                      </Text>
+                      <Text style={styles.selectedItemSubtext}>
+                        {selectedReferringPhysician.location}
+                      </Text>
+                    </View>
+                    <TouchableOpacity onPress={handleRemoveReferringPhysician}>
+                      <Ionicons name="close-circle" size={20} color="#ef4444" />
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.addCodeButton}
+                    onPress={() => setShowReferringPhysicianModal(true)}
+                  >
+                    <Ionicons name="add" size={20} color="#2563eb" />
+                    <Text style={styles.addCodeButtonText}>
+                      Add Referring Physician
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </Card.Content>
+            </Card>
+          )}
 
           {/* Location of Service */}
           <Card style={styles.card}>
@@ -2073,27 +2556,88 @@ const ServiceFormScreen = ({ navigation }: any) => {
             </Card.Content>
           </Card>
 
-          {/* ICD Code */}
+          {/* Service Location */}
           <Card style={styles.card}>
             <Card.Content>
-              <Text style={styles.sectionTitle}>ICD Code</Text>
-              {selectedIcdCode ? (
-                <View style={styles.selectedItem}>
-                  <Text style={styles.selectedItemText}>
-                    {selectedIcdCode.code} - {selectedIcdCode.description}
-                  </Text>
-                  <TouchableOpacity onPress={handleRemoveIcdCode}>
-                    <Ionicons name="close-circle" size={20} color="#ef4444" />
-                  </TouchableOpacity>
-                </View>
-              ) : (
+              <Text style={styles.sectionTitle}>Service Location *</Text>
+              <View style={styles.buttonGroup}>
                 <TouchableOpacity
-                  style={styles.addCodeButton}
-                  onPress={() => setShowIcdCodeModal(true)}
+                  style={[
+                    styles.locationButton,
+                    formData.serviceLocation === "R" &&
+                      styles.selectedLocationButton,
+                  ]}
+                  onPress={() =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      serviceLocation:
+                        formData.serviceLocation === "R" ? null : "R",
+                    }))
+                  }
                 >
-                  <Ionicons name="add" size={20} color="#2563eb" />
-                  <Text style={styles.addCodeButtonText}>Add ICD Code</Text>
+                  <Text
+                    style={[
+                      styles.locationButtonText,
+                      formData.serviceLocation === "R" &&
+                        styles.selectedLocationButtonText,
+                    ]}
+                  >
+                    Regina
+                  </Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.locationButton,
+                    formData.serviceLocation === "S" &&
+                      styles.selectedLocationButton,
+                  ]}
+                  onPress={() =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      serviceLocation:
+                        formData.serviceLocation === "S" ? null : "S",
+                    }))
+                  }
+                >
+                  <Text
+                    style={[
+                      styles.locationButtonText,
+                      formData.serviceLocation === "S" &&
+                        styles.selectedLocationButtonText,
+                    ]}
+                  >
+                    Saskatoon
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.locationButton,
+                    formData.serviceLocation === "X" &&
+                      styles.selectedLocationButton,
+                  ]}
+                  onPress={() =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      serviceLocation:
+                        formData.serviceLocation === "X" ? null : "X",
+                    }))
+                  }
+                >
+                  <Text
+                    style={[
+                      styles.locationButtonText,
+                      formData.serviceLocation === "X" &&
+                        styles.selectedLocationButtonText,
+                    ]}
+                  >
+                    Rural/Northern
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              {!formData.serviceLocation && (
+                <Text style={styles.errorText}>
+                  Please select a service location
+                </Text>
               )}
             </Card.Content>
           </Card>
@@ -2733,546 +3277,6 @@ const ServiceFormScreen = ({ navigation }: any) => {
           </Card.Content>
         </Card> */}
 
-          {/* Summary - Removed */}
-
-          {/* Billing Codes */}
-          <Card style={styles.card}>
-            <Card.Content>
-              <Text style={styles.sectionTitle}>Billing Codes</Text>
-
-              {/* Toggle between Services and Rounding */}
-              <View style={styles.toggleContainer}>
-                <TouchableOpacity
-                  style={[
-                    styles.toggleButton,
-                    billingCodeView === "procedures" &&
-                      styles.toggleButtonActive,
-                  ]}
-                  onPress={() => setBillingCodeView("procedures")}
-                >
-                  <Text
-                    style={[
-                      styles.toggleButtonText,
-                      billingCodeView === "procedures" &&
-                        styles.toggleButtonTextActive,
-                    ]}
-                  >
-                    Procedures (
-                    {
-                      selectedCodes.filter(
-                        (code) => code.billingCode.billing_record_type === 50
-                      ).length
-                    }
-                    )
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.toggleButton,
-                    billingCodeView === "rounding" && styles.toggleButtonActive,
-                  ]}
-                  onPress={() => setBillingCodeView("rounding")}
-                >
-                  <Text
-                    style={[
-                      styles.toggleButtonText,
-                      billingCodeView === "rounding" &&
-                        styles.toggleButtonTextActive,
-                    ]}
-                  >
-                    Rounding
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Display codes based on selected view */}
-              {billingCodeView === "procedures" ? (
-                <View style={{ marginTop: 16 }}>
-                  {(() => {
-                    // Filter procedures
-                    const procedures = selectedCodes.filter(
-                      (code) => code.billingCode.billing_record_type === 50
-                    );
-
-                    if (procedures.length === 0) {
-                      return (
-                        <Text style={styles.emptyText}>
-                          No service codes added
-                        </Text>
-                      );
-                    }
-
-                    // Group by billing code
-                    const groupedByCode = procedures.reduce((acc, code) => {
-                      const codeId = code.billingCode.id;
-                      if (!acc[codeId]) {
-                        acc[codeId] = {
-                          billingCode: code.billingCode,
-                          dates: [],
-                        };
-                      }
-                      if (code.serviceDate) {
-                        acc[codeId].dates.push({
-                          date: code.serviceDate,
-                          serviceCodeId: code.id,
-                        });
-                      }
-                      return acc;
-                    }, {} as Record<number, { billingCode: any; dates: Array<{ date: string; serviceCodeId: number }> }>);
-
-                    // Helper function to convert day to ordinal format
-                    const getOrdinalDay = (day: number): string => {
-                      const j = day % 10;
-                      const k = day % 100;
-                      if (j === 1 && k !== 11) {
-                        return day + "st";
-                      }
-                      if (j === 2 && k !== 12) {
-                        return day + "nd";
-                      }
-                      if (j === 3 && k !== 13) {
-                        return day + "rd";
-                      }
-                      return day + "th";
-                    };
-
-                    return Object.values(groupedByCode).map((group) => {
-                      const isExpanded =
-                        expandedProcedureGroups[group.billingCode.id];
-
-                      // Group dates by year/month/day for summary view
-                      const datesByYearMonth = group.dates.reduce(
-                        (acc, item) => {
-                          // Parse date string manually to avoid timezone issues
-                          // Handle both "YYYY-MM-DD" and "YYYY-MM-DDTHH:mm:ss" formats
-                          const dateOnly = item.date.split("T")[0];
-                          const dateParts = dateOnly.split("-");
-                          const year = parseInt(dateParts[0], 10);
-                          const monthNum = parseInt(dateParts[1], 10);
-                          const day = parseInt(dateParts[2], 10);
-
-                          const monthNames = [
-                            "Jan",
-                            "Feb",
-                            "Mar",
-                            "Apr",
-                            "May",
-                            "Jun",
-                            "Jul",
-                            "Aug",
-                            "Sep",
-                            "Oct",
-                            "Nov",
-                            "Dec",
-                          ];
-                          const monthName = monthNames[monthNum - 1];
-                          const key = `${year}/${monthName}`;
-
-                          if (!acc[key]) {
-                            acc[key] = { year, month: monthName, dayCount: {} };
-                          }
-                          // Count occurrences of each day
-                          acc[key].dayCount[day] =
-                            (acc[key].dayCount[day] || 0) + 1;
-                          return acc;
-                        },
-                        {} as Record<
-                          string,
-                          {
-                            year: number;
-                            month: string;
-                            dayCount: Record<number, number>;
-                          }
-                        >
-                      );
-
-                      // Convert day counts to sorted array with formatted strings
-                      Object.values(datesByYearMonth).forEach((monthData) => {
-                        const sortedDays = Object.keys(monthData.dayCount)
-                          .map(Number)
-                          .sort((a, b) => a - b);
-                        (monthData as any).formattedDays = sortedDays.map(
-                          (day) => {
-                            const count = monthData.dayCount[day];
-                            const ordinalDay = getOrdinalDay(day);
-                            return count > 1
-                              ? `${count} x ${ordinalDay}`
-                              : ordinalDay;
-                          }
-                        );
-                      });
-
-                      const yearMonthEntries = Object.entries(datesByYearMonth);
-
-                      // Get all individual codes for this group
-                      const individualCodes = selectedCodes.filter(
-                        (code) => code.billingCode.id === group.billingCode.id
-                      );
-
-                      return (
-                        <View
-                          key={group.billingCode.id}
-                          style={styles.groupedCodeContainer}
-                        >
-                          <TouchableOpacity
-                            style={styles.groupedCodeHeader}
-                            onPress={() => {
-                              setExpandedProcedureGroups((prev) => ({
-                                ...prev,
-                                [group.billingCode.id]:
-                                  !prev[group.billingCode.id],
-                              }));
-                            }}
-                          >
-                            <View style={{ flex: 1 }}>
-                              <Text
-                                style={styles.groupedCodeText}
-                                numberOfLines={1}
-                                ellipsizeMode="tail"
-                              >
-                                {group.billingCode.code}:{" "}
-                                {group.billingCode.title}
-                              </Text>
-                              {!isExpanded &&
-                                yearMonthEntries.map(([key, monthData]) => (
-                                  <View key={key} style={styles.groupedDateRow}>
-                                    <Text style={styles.groupedDateText}>
-                                      {monthData.year} - {monthData.month} (
-                                      {(monthData as any).formattedDays.join(
-                                        ", "
-                                      )}
-                                      )
-                                    </Text>
-                                  </View>
-                                ))}
-                            </View>
-                            <Ionicons
-                              name={isExpanded ? "chevron-up" : "chevron-down"}
-                              size={20}
-                              color="#6b7280"
-                            />
-                          </TouchableOpacity>
-
-                          {isExpanded && (
-                            <View style={styles.expandedCodesContainer}>
-                              {individualCodes.map((code) => {
-                                // Format date without timezone conversion
-                                const formatDateNoTimezone = (
-                                  dateStr: string
-                                ) => {
-                                  if (!dateStr) return "";
-                                  // Extract just the date part (YYYY-MM-DD)
-                                  const dateOnly = dateStr.split("T")[0];
-                                  const [year, month, day] = dateOnly
-                                    .split("-")
-                                    .map(Number);
-
-                                  const monthNames = [
-                                    "Jan",
-                                    "Feb",
-                                    "Mar",
-                                    "Apr",
-                                    "May",
-                                    "Jun",
-                                    "Jul",
-                                    "Aug",
-                                    "Sep",
-                                    "Oct",
-                                    "Nov",
-                                    "Dec",
-                                  ];
-
-                                  return `${String(day).padStart(2, "0")} ${
-                                    monthNames[month - 1]
-                                  } ${year}`;
-                                };
-
-                                return (
-                                  <View
-                                    key={code.id}
-                                    style={styles.individualCodeItem}
-                                  >
-                                    <View style={{ flex: 1 }}>
-                                      <Text style={styles.individualCodeDate}>
-                                        {formatDateNoTimezone(
-                                          code.serviceDate || ""
-                                        )}
-                                      </Text>
-                                      {code.numberOfUnits &&
-                                        code.numberOfUnits > 1 && (
-                                          <Text
-                                            style={styles.individualCodeUnits}
-                                          >
-                                            Units: {code.numberOfUnits}
-                                          </Text>
-                                        )}
-                                    </View>
-                                    <View style={styles.individualCodeActions}>
-                                      <TouchableOpacity
-                                        onPress={() => handleEditCode(code)}
-                                        style={styles.iconButton}
-                                      >
-                                        <Ionicons
-                                          name="create-outline"
-                                          size={20}
-                                          color="#3b82f6"
-                                        />
-                                      </TouchableOpacity>
-                                      <TouchableOpacity
-                                        onPress={() =>
-                                          handleRemoveIndividualCode(code.id)
-                                        }
-                                        style={styles.iconButton}
-                                      >
-                                        <Ionicons
-                                          name="trash-outline"
-                                          size={20}
-                                          color="#ef4444"
-                                        />
-                                      </TouchableOpacity>
-                                    </View>
-                                  </View>
-                                );
-                              })}
-
-                              {/* Add New Instance Button */}
-                              <TouchableOpacity
-                                style={styles.addInstanceButton}
-                                onPress={() =>
-                                  handleAddNewInstanceOfCode(group.billingCode)
-                                }
-                              >
-                                <Ionicons
-                                  name="add-circle-outline"
-                                  size={20}
-                                  color="#3b82f6"
-                                />
-                                <Text style={styles.addInstanceButtonText}>
-                                  Add Another Instance
-                                </Text>
-                              </TouchableOpacity>
-                            </View>
-                          )}
-                        </View>
-                      );
-                    });
-                  })()}
-                </View>
-              ) : (
-                <View style={{ marginTop: 16 }}>
-                  {(() => {
-                    const roundingCodes = selectedCodes.filter(
-                      (code) => code.billingCode.billing_record_type === 57
-                    );
-
-                    if (roundingCodes.length === 0) {
-                      return (
-                        <Text style={styles.emptyText}>
-                          No rounding codes added
-                        </Text>
-                      );
-                    }
-
-                    // Helper function to convert units to text
-                    const getUnitsText = (units: number): string => {
-                      const unitsMap: { [key: number]: string } = {
-                        1: "once",
-                        2: "twice",
-                        3: "three times",
-                        4: "four times",
-                        5: "five times",
-                        6: "six times",
-                        7: "seven times",
-                        8: "eight times",
-                        9: "nine times",
-                        10: "ten times",
-                      };
-                      return unitsMap[units] || `${units} times`;
-                    };
-
-                    // Helper function to format date or show "Today" without timezone conversion
-                    const formatDateOrToday = (dateStr: string): string => {
-                      if (!dateStr) return "";
-
-                      // Extract just the date part (YYYY-MM-DD)
-                      const dateOnly = dateStr.split("T")[0];
-                      const today = new Date().toISOString().split("T")[0];
-
-                      if (dateOnly === today) {
-                        return "Today";
-                      }
-
-                      // Format date without timezone conversion
-                      const [year, month, day] = dateOnly
-                        .split("-")
-                        .map(Number);
-                      const monthNames = [
-                        "Jan",
-                        "Feb",
-                        "Mar",
-                        "Apr",
-                        "May",
-                        "Jun",
-                        "Jul",
-                        "Aug",
-                        "Sep",
-                        "Oct",
-                        "Nov",
-                        "Dec",
-                      ];
-
-                      return `${String(day).padStart(2, "0")} ${
-                        monthNames[month - 1]
-                      } ${year}`;
-                    };
-
-                    return roundingCodes.map((code) => {
-                      // Calculate the display end date
-                      let displayEndDate = code.serviceEndDate;
-
-                      if (!displayEndDate) {
-                        const today = new Date().toISOString().split("T")[0];
-
-                        // Calculate max possible end date from billing code chain
-                        let maxEndDate = null;
-                        if (
-                          code.billingCode.billingCodeChains &&
-                          code.billingCode.billingCodeChains.length > 0
-                        ) {
-                          // Find the last code in the chain (isLast = true) or use the highest cumulativeDayRange
-                          const lastChainCode =
-                            code.billingCode.billingCodeChains.find(
-                              (c) => c.isLast
-                            ) ||
-                            code.billingCode.billingCodeChains.reduce(
-                              (max, c) =>
-                                c.cumulativeDayRange > max.cumulativeDayRange
-                                  ? c
-                                  : max
-                            );
-
-                          if (lastChainCode && code.serviceDate) {
-                            const startDate = new Date(code.serviceDate);
-                            const endDate = new Date(startDate);
-                            endDate.setDate(
-                              endDate.getDate() +
-                                lastChainCode.cumulativeDayRange -
-                                1
-                            );
-                            maxEndDate = endDate.toISOString().split("T")[0];
-                          }
-                        } else if (
-                          code.billingCode.day_range &&
-                          code.serviceDate
-                        ) {
-                          // Fallback to day_range if no chain available
-                          const startDate = new Date(code.serviceDate);
-                          const endDate = new Date(startDate);
-                          endDate.setDate(
-                            endDate.getDate() + code.billingCode.day_range - 1
-                          );
-                          maxEndDate = endDate.toISOString().split("T")[0];
-                        }
-
-                        // Use the minimum of today and maxEndDate
-                        if (maxEndDate) {
-                          displayEndDate =
-                            today < maxEndDate ? today : maxEndDate;
-                        } else {
-                          displayEndDate = today;
-                        }
-                      }
-
-                      return (
-                        <View key={code.id} style={styles.groupedCodeContainer}>
-                          <View style={styles.groupedCodeHeader}>
-                            <View style={{ flex: 1 }}>
-                              <Text
-                                style={styles.groupedCodeText}
-                                numberOfLines={1}
-                                ellipsizeMode="tail"
-                              >
-                                {code.billingCode.code}
-                                {" - "}
-                                {getUnitsText(code.numberOfUnits || 1)}
-                              </Text>
-                              <Text style={styles.groupedDateText}>
-                                {formatDateOrToday(code.serviceDate || "")}{" "}
-                                {"->"} {formatDateOrToday(displayEndDate)}
-                              </Text>
-                            </View>
-                            <TouchableOpacity
-                              onPress={() =>
-                                handleRemoveCode(code.billingCode.id)
-                              }
-                            >
-                              <Ionicons
-                                name="close-circle"
-                                size={20}
-                                color="#ef4444"
-                              />
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-                      );
-                    });
-                  })()}
-                </View>
-              )}
-
-              <TouchableOpacity
-                style={styles.addCodeButton}
-                onPress={() =>
-                  navigation.navigate("BillingCodeSearch", {
-                    onSelect: handleAddCodes,
-                    existingCodes: selectedCodes.map((c) => c.billingCode),
-                    serviceDate: formData.serviceDate,
-                  })
-                }
-              >
-                <Ionicons name="add" size={20} color="#2563eb" />
-                <Text style={styles.addCodeButtonText}>Add Billing Code</Text>
-              </TouchableOpacity>
-            </Card.Content>
-          </Card>
-
-          {requiresReferringPhysician && (
-            <Card style={styles.card}>
-              <Card.Content>
-                <Text style={styles.sectionTitle}>
-                  Referring Physician (Required)
-                </Text>
-                {selectedReferringPhysician ? (
-                  <View style={styles.selectedItem}>
-                    <View style={styles.selectedItemContent}>
-                      <Text style={styles.selectedItemText}>
-                        {selectedReferringPhysician.name} -{" "}
-                        {selectedReferringPhysician.specialty} (
-                        {selectedReferringPhysician.code})
-                      </Text>
-                      <Text style={styles.selectedItemSubtext}>
-                        {selectedReferringPhysician.location}
-                      </Text>
-                    </View>
-                    <TouchableOpacity onPress={handleRemoveReferringPhysician}>
-                      <Ionicons name="close-circle" size={20} color="#ef4444" />
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <TouchableOpacity
-                    style={styles.addCodeButton}
-                    onPress={() => setShowReferringPhysicianModal(true)}
-                  >
-                    <Ionicons name="add" size={20} color="#2563eb" />
-                    <Text style={styles.addCodeButtonText}>
-                      Add Referring Physician
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </Card.Content>
-            </Card>
-          )}
-
           {/* Patient Selection */}
           <Card style={styles.card}>
             <Card.Content>
@@ -3612,41 +3616,37 @@ const ServiceFormScreen = ({ navigation }: any) => {
               )}
             </Card.Content>
           </Card>
-
-          {/* Submit Buttons */}
-          <View style={styles.submitButtonsContainer}>
-            <Button
-              mode="outlined"
-              onPress={handleSave}
-              loading={
-                createServiceMutation.isPending ||
-                updateServiceMutation.isPending
-              }
-              style={[styles.submitButton, styles.saveButton]}
-              disabled={
-                createServiceMutation.isPending ||
-                updateServiceMutation.isPending
-              }
-            >
-              Save
-            </Button>
-            <Button
-              mode="contained"
-              onPress={handleApproveAndFinish}
-              loading={
-                createServiceMutation.isPending ||
-                updateServiceMutation.isPending
-              }
-              style={[styles.submitButton, styles.approveButton]}
-              disabled={
-                createServiceMutation.isPending ||
-                updateServiceMutation.isPending
-              }
-            >
-              Approve & Finish
-            </Button>
-          </View>
         </ScrollView>
+
+        {/* Submit Buttons - Fixed to bottom */}
+        <View style={styles.fixedButtonsContainer}>
+          <Button
+            mode="outlined"
+            onPress={handleSave}
+            loading={
+              createServiceMutation.isPending || updateServiceMutation.isPending
+            }
+            style={[styles.submitButton, styles.saveButton]}
+            disabled={
+              createServiceMutation.isPending || updateServiceMutation.isPending
+            }
+          >
+            Save
+          </Button>
+          <Button
+            mode="contained"
+            onPress={handleApproveAndFinish}
+            loading={
+              createServiceMutation.isPending || updateServiceMutation.isPending
+            }
+            style={[styles.submitButton, styles.approveButton]}
+            disabled={
+              createServiceMutation.isPending || updateServiceMutation.isPending
+            }
+          >
+            Approve & Finish
+          </Button>
+        </View>
       </KeyboardAvoidingView>
 
       {/* Discharge Date Modal */}
@@ -4066,6 +4066,15 @@ const styles = StyleSheet.create({
   submitButtonsContainer: {
     flexDirection: "row",
     gap: 8,
+  },
+  fixedButtonsContainer: {
+    flexDirection: "row",
+    gap: 8,
+    padding: 16,
+    paddingBottom: Platform.OS === "ios" ? 0 : 16,
+    backgroundColor: "#ffffff",
+    borderTopWidth: 1,
+    borderTopColor: "#e5e7eb",
   },
   submitButton: {
     flex: 1,
