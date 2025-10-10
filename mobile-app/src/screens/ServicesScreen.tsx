@@ -2143,6 +2143,7 @@ const ServicesScreen = ({ navigation }: any) => {
                             },
                           ]);
                           setCurrentCodeForSubSelection(item.billingCode);
+                          setShowSuggestionsModal(false);
                           setShowSubSelectionModal(true);
                         }}
                         onLongPress={() =>
@@ -2198,29 +2199,30 @@ const ServicesScreen = ({ navigation }: any) => {
                             const isType57 = full.billing_record_type === 57;
                             const defaultServiceDate = !isType57 ? today : null;
 
-                            setCodeSubSelections([
-                              {
-                                codeId: full.id,
-                                serviceDate: defaultServiceDate,
-                                serviceEndDate: null,
-                                bilateralIndicator: null,
-                                serviceStartTime: null,
-                                serviceEndTime: null,
-                                numberOfUnits: 1,
-                                specialCircumstances: null,
-                              },
-                            ]);
+                            const newSubSelection = {
+                              codeId: full.id,
+                              serviceDate: defaultServiceDate,
+                              serviceEndDate: null,
+                              bilateralIndicator: null,
+                              serviceStartTime: null,
+                              serviceEndTime: null,
+                              numberOfUnits: 1,
+                              specialCircumstances: null,
+                            };
+
+                            setCodeSubSelections([newSubSelection]);
 
                             // If the code requires extra selections, open the modal
                             if (requiresExtraSelectionsInline(full)) {
                               setCurrentCodeForSubSelection(full);
+                              setShowSuggestionsModal(false);
                               setShowSubSelectionModal(true);
                             } else {
                               // If no extra selections, save immediately
                               await addCodesToService(
                                 suggestionsForService,
                                 [full],
-                                codeSubSelections
+                                [newSubSelection]
                               );
                               setShowSuggestionsModal(false);
                             }
