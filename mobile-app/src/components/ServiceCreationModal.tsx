@@ -182,6 +182,8 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
     setShowBillingCodeDetails(null);
     setShowBillingCodeConfigModal(false);
     setCurrentCodeForConfig(null);
+    setSelectedReferringPhysician(null);
+    setReferringPhysicianSearchQuery("");
 
     // Clear patient search and creation state
     setPatientSearchQuery("");

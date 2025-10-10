@@ -97,6 +97,9 @@ const ServiceFormScreen = ({ navigation }: any) => {
   const [expandedProcedureGroups, setExpandedProcedureGroups] = useState<
     Record<number, boolean>
   >({});
+  const [expandedRoundingGroups, setExpandedRoundingGroups] = useState<
+    Record<number, boolean>
+  >({});
   const [editingCode, setEditingCode] = useState<ServiceCode | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [newPatient, setNewPatient] = useState({
@@ -1011,6 +1014,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
       serviceEndDate: code.serviceEndDate,
       fee_determinant: code.billingCode.fee_determinant,
       multiple_unit_indicator: code.billingCode.multiple_unit_indicator,
+      changeLogs: code.changeLogs || [],
     }));
 
     setFormData((prev) => ({
@@ -1118,6 +1122,75 @@ const ServiceFormScreen = ({ navigation }: any) => {
 
     setEditingCode(newCode);
     setShowEditModal(true);
+  };
+
+  const handleDeleteChangeLog = (
+    serviceCodeId: number,
+    changeLogId: number
+  ) => {
+    Alert.alert(
+      "Delete Log Entry",
+      "Are you sure you want to delete this log entry? This will reduce the number of units by 1.",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            setSelectedCodes((prev) => {
+              const updated = prev
+                .map((code) => {
+                  if (code.id === serviceCodeId) {
+                    // Remove the change log
+                    const updatedChangeLogs = (code.changeLogs || []).filter(
+                      (log) => log.id !== changeLogId
+                    );
+
+                    // Reduce units by 1
+                    const newUnits = updatedChangeLogs.length;
+
+                    // If units go to 0, mark this code for removal
+                    if (newUnits <= 0) {
+                      return null; // Will be filtered out
+                    }
+
+                    // Otherwise, update the code with reduced units and removed log
+                    return {
+                      ...code,
+                      numberOfUnits: newUnits,
+                      changeLogs: updatedChangeLogs,
+                    };
+                  }
+                  return code;
+                })
+                .filter((code): code is ServiceCode => code !== null);
+
+              // Sync to formData.billingCodes
+              syncCodesToFormData(updated);
+
+              // Check if we still need a referring physician after this change
+              const stillRequiresReferringPhysician = updated.some(
+                (code) =>
+                  code.billingCode.referring_practitioner_required === "Y"
+              );
+
+              // If no longer required, clear the referring physician
+              if (
+                !stillRequiresReferringPhysician &&
+                selectedReferringPhysician
+              ) {
+                handleRemoveReferringPhysician();
+              }
+
+              return updated;
+            });
+          },
+        },
+      ]
+    );
   };
 
   const handleSaveNewCodeInstance = (subSelection: any) => {
@@ -2295,9 +2368,20 @@ const ServiceFormScreen = ({ navigation }: any) => {
               ) : (
                 <View style={{ marginTop: 16 }}>
                   {(() => {
-                    const roundingCodes = selectedCodes.filter(
-                      (code) => code.billingCode.billing_record_type === 57
-                    );
+                    const roundingCodes = selectedCodes
+                      .filter(
+                        (code) => code.billingCode.billing_record_type === 57
+                      )
+                      .sort((a, b) => {
+                        // Sort by service date descending (most recent first)
+                        const dateA = a.serviceDate
+                          ? new Date(a.serviceDate).getTime()
+                          : 0;
+                        const dateB = b.serviceDate
+                          ? new Date(b.serviceDate).getTime()
+                          : 0;
+                        return dateB - dateA;
+                      });
 
                     if (roundingCodes.length === 0) {
                       return (
@@ -2360,7 +2444,41 @@ const ServiceFormScreen = ({ navigation }: any) => {
                       } ${year}`;
                     };
 
+                    // Helper function to format datetime
+                    const formatDateTime = (dateStr: string): string => {
+                      if (!dateStr) return "";
+                      const date = new Date(dateStr);
+                      const monthNames = [
+                        "Jan",
+                        "Feb",
+                        "Mar",
+                        "Apr",
+                        "May",
+                        "Jun",
+                        "Jul",
+                        "Aug",
+                        "Sep",
+                        "Oct",
+                        "Nov",
+                        "Dec",
+                      ];
+                      const day = date.getDate();
+                      const month = monthNames[date.getMonth()];
+                      const year = date.getFullYear();
+                      const hours = date.getHours();
+                      const minutes = date.getMinutes();
+                      return `${String(day).padStart(
+                        2,
+                        "0"
+                      )} ${month} ${year} ${String(hours).padStart(
+                        2,
+                        "0"
+                      )}:${String(minutes).padStart(2, "0")}`;
+                    };
+
                     return roundingCodes.map((code) => {
+                      const isExpanded = expandedRoundingGroups[code.id];
+
                       // Calculate the display end date
                       let displayEndDate = code.serviceEndDate;
 
@@ -2417,9 +2535,24 @@ const ServiceFormScreen = ({ navigation }: any) => {
                         }
                       }
 
+                      // Get change logs sorted by date (most recent first)
+                      const sortedChangeLogs = (code.changeLogs || []).sort(
+                        (a, b) =>
+                          new Date(b.changedAt).getTime() -
+                          new Date(a.changedAt).getTime()
+                      );
+
                       return (
                         <View key={code.id} style={styles.groupedCodeContainer}>
-                          <View style={styles.groupedCodeHeader}>
+                          <TouchableOpacity
+                            style={styles.groupedCodeHeader}
+                            onPress={() => {
+                              setExpandedRoundingGroups((prev) => ({
+                                ...prev,
+                                [code.id]: !prev[code.id],
+                              }));
+                            }}
+                          >
                             <View style={{ flex: 1 }}>
                               <Text
                                 style={styles.groupedCodeText}
@@ -2434,19 +2567,68 @@ const ServiceFormScreen = ({ navigation }: any) => {
                                 {formatDateOrToday(code.serviceDate || "")}{" "}
                                 {"->"} {formatDateOrToday(displayEndDate)}
                               </Text>
+                              {!isExpanded && sortedChangeLogs.length > 0 && (
+                                <Text style={styles.groupedDateText}>
+                                  {sortedChangeLogs.length} log
+                                  {sortedChangeLogs.length !== 1 ? "s" : ""}
+                                </Text>
+                              )}
                             </View>
-                            <TouchableOpacity
-                              onPress={() =>
-                                handleRemoveCode(code.billingCode.id)
-                              }
-                            >
-                              <Ionicons
-                                name="close-circle"
-                                size={20}
-                                color="#ef4444"
-                              />
-                            </TouchableOpacity>
-                          </View>
+                            <Ionicons
+                              name={isExpanded ? "chevron-up" : "chevron-down"}
+                              size={20}
+                              color="#6b7280"
+                            />
+                          </TouchableOpacity>
+
+                          {isExpanded && (
+                            <View style={styles.expandedCodesContainer}>
+                              {sortedChangeLogs.length > 0 ? (
+                                sortedChangeLogs.map((log) => (
+                                  <View
+                                    key={log.id}
+                                    style={styles.individualCodeItem}
+                                  >
+                                    <View style={{ flex: 1 }}>
+                                      <Text style={styles.individualCodeDate}>
+                                        {log.roundingDate &&
+                                          `${formatDateOrToday(
+                                            log.roundingDate
+                                          )}`}
+                                      </Text>
+                                      <Text
+                                        style={[
+                                          styles.individualCodeUnits,
+                                          { fontSize: 11 },
+                                        ]}
+                                      >
+                                        Entered On{" "}
+                                        {formatDateTime(log.changedAt)}
+                                      </Text>
+                                    </View>
+                                    <View style={styles.individualCodeActions}>
+                                      <TouchableOpacity
+                                        onPress={() =>
+                                          handleDeleteChangeLog(code.id, log.id)
+                                        }
+                                        style={styles.iconButton}
+                                      >
+                                        <Ionicons
+                                          name="trash-outline"
+                                          size={20}
+                                          color="#ef4444"
+                                        />
+                                      </TouchableOpacity>
+                                    </View>
+                                  </View>
+                                ))
+                              ) : (
+                                <Text style={styles.emptyText}>
+                                  No change logs for this code
+                                </Text>
+                              )}
+                            </View>
+                          )}
                         </View>
                       );
                     });
@@ -3735,7 +3917,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
               updateServiceMutation.isPending
             }
           >
-            Save
+            Save for Later
           </Button>
           <Button
             mode="contained"
@@ -3750,7 +3932,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
               updateServiceMutation.isPending
             }
           >
-            Approve & Finish
+            Complete
           </Button>
         </View>
       </KeyboardAvoidingView>

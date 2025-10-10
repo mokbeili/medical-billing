@@ -48,6 +48,7 @@ export async function GET(
         icdCode: true,
         serviceCodes: {
           include: {
+            changeLogs: true,
             billingCode: {
               include: {
                 section: true,
@@ -189,36 +190,60 @@ export async function PUT(
 
     // Handle service codes if provided
     if (billingCodes && Array.isArray(billingCodes)) {
-      // Delete existing service codes
+      // Delete existing service codes (this will cascade delete change logs)
       await prisma.serviceCodes.deleteMany({
         where: {
           serviceId: parseInt(id),
         },
       });
 
-      // Create new service codes
+      // Create new service codes with their change logs
       if (billingCodes.length > 0) {
-        await prisma.serviceCodes.createMany({
-          data: billingCodes.map((code: any) => ({
-            serviceId: parseInt(id),
-            codeId: code.codeId,
-            serviceStartTime: code.serviceStartTime
-              ? new Date(code.serviceStartTime)
-              : null,
-            serviceEndTime: code.serviceEndTime
-              ? new Date(code.serviceEndTime)
-              : null,
-            numberOfUnits: code.numberOfUnits || 1,
-            bilateralIndicator: code.bilateralIndicator,
-            specialCircumstances: code.specialCircumstances,
-            serviceDate: code.serviceDate ? new Date(code.serviceDate) : null,
-            serviceEndDate: code.serviceEndDate
-              ? new Date(code.serviceEndDate)
-              : null,
-            serviceLocation: serviceLocation,
-            locationOfService: locationOfService,
-          })),
-        });
+        for (const code of billingCodes) {
+          const createdServiceCode = await prisma.serviceCodes.create({
+            data: {
+              serviceId: parseInt(id),
+              codeId: code.codeId,
+              serviceStartTime: code.serviceStartTime
+                ? new Date(code.serviceStartTime)
+                : null,
+              serviceEndTime: code.serviceEndTime
+                ? new Date(code.serviceEndTime)
+                : null,
+              numberOfUnits: code.numberOfUnits || 1,
+              bilateralIndicator: code.bilateralIndicator,
+              specialCircumstances: code.specialCircumstances,
+              serviceDate: code.serviceDate ? new Date(code.serviceDate) : null,
+              serviceEndDate: code.serviceEndDate
+                ? new Date(code.serviceEndDate)
+                : null,
+              serviceLocation: serviceLocation,
+              locationOfService: locationOfService,
+            },
+          });
+
+          // Create change logs for this service code if they exist
+          if (
+            code.changeLogs &&
+            Array.isArray(code.changeLogs) &&
+            code.changeLogs.length > 0
+          ) {
+            await prisma.serviceCodeChangeLog.createMany({
+              data: code.changeLogs.map((log: any) => ({
+                serviceCodeId: createdServiceCode.id,
+                changeType: log.changeType,
+                previousData: log.previousData,
+                newData: log.newData,
+                changedBy: log.changedBy,
+                changedAt: log.changedAt ? new Date(log.changedAt) : new Date(),
+                notes: log.notes,
+                roundingDate: log.roundingDate
+                  ? new Date(log.roundingDate)
+                  : null,
+              })),
+            });
+          }
+        }
       }
     }
 
@@ -235,6 +260,7 @@ export async function PUT(
         icdCode: true,
         serviceCodes: {
           include: {
+            changeLogs: true,
             billingCode: {
               include: {
                 section: true,
