@@ -949,6 +949,11 @@ const ServiceFormScreen = ({ navigation }: any) => {
     try {
       const today = getLocalYMD(new Date());
 
+      // Get IDs of codes already added to this service
+      const alreadyAddedIds = new Set(
+        selectedCodes.map((sc) => sc.billingCode.id)
+      );
+
       // Build suggestions: previous patient codes (non-57) and physician frequent codes
       const previousMap = new Map<
         number,
@@ -983,11 +988,13 @@ const ServiceFormScreen = ({ navigation }: any) => {
         });
       });
 
-      const previousList = Array.from(previousMap.values()).sort(
-        (a, b) =>
-          new Date(b.lastUsedDate).getTime() -
-          new Date(a.lastUsedDate).getTime()
-      );
+      const previousList = Array.from(previousMap.values())
+        .filter((item) => !alreadyAddedIds.has(item.billingCode.id))
+        .sort(
+          (a, b) =>
+            new Date(b.lastUsedDate).getTime() -
+            new Date(a.lastUsedDate).getTime()
+        );
       setPatientPreviousCodes(previousList);
 
       // Get physician frequent codes from profile
@@ -1012,9 +1019,11 @@ const ServiceFormScreen = ({ navigation }: any) => {
         })
       ) as unknown as BillingCode[];
 
-      // Filter out codes that are already in previousList
+      // Filter out codes that are already in previousList or already added to service
       const previousIds = new Set(previousList.map((p) => p.billingCode.id));
-      const filteredFrequent = frequent.filter((c) => !previousIds.has(c.id));
+      const filteredFrequent = frequent.filter(
+        (c) => !previousIds.has(c.id) && !alreadyAddedIds.has(c.id)
+      );
       setPhysicianFrequentCodes(filteredFrequent);
 
       setShowBillingCodeSuggestionsModal(true);
