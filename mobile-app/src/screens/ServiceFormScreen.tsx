@@ -115,6 +115,10 @@ const ServiceFormScreen = ({ navigation }: any) => {
   const [dischargeDate, setDischargeDate] = useState("");
   const [pendingApproveAndFinish, setPendingApproveAndFinish] = useState(false);
 
+  // Add state for rounding modal
+  const [showRoundingModal, setShowRoundingModal] = useState(false);
+  const [roundingDate, setRoundingDate] = useState("");
+
   // Patient search state
   const [patientSearchQuery, setPatientSearchQuery] = useState("");
   const [filteredPatients, setFilteredPatients] = useState<any[]>([]);
@@ -181,6 +185,26 @@ const ServiceFormScreen = ({ navigation }: any) => {
       }, 0);
     const remainder = sum % 11 > 0 ? 11 - (sum % 11) : 0;
     return String(remainder) === value[8];
+  };
+
+  // Helper function to get local date in YYYY-MM-DD format
+  const getLocalYMD = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  // Helper function to normalize date to local YYYY-MM-DD format
+  const normalizeToLocalYMD = (input: string | Date): string => {
+    if (typeof input === "string") {
+      if (/^\d{4}-\d{2}-\d{2}/.test(input)) {
+        return input.substring(0, 10);
+      }
+      const d = new Date(input);
+      return getLocalYMD(d);
+    }
+    return getLocalYMD(input);
   };
 
   // Validate new patient form data
@@ -420,6 +444,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
         locationOfService: service.serviceCodes[0]?.locationOfService || null,
         serviceStatus: service.status,
         billingCodes: service.serviceCodes.map((code) => ({
+          id: code.id, // Include service code ID to preserve change logs on update
           codeId: code.billingCode.id,
           status: code.status,
           billing_record_type: code.billingCode.billing_record_type || 1,
@@ -482,6 +507,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
           locationOfService: service.serviceCodes[0]?.locationOfService || null,
           serviceStatus: service.status,
           billingCodes: service.serviceCodes.map((code) => ({
+            id: code.id, // Include service code ID to preserve change logs on update
             codeId: code.billingCode.id,
             status: code.status,
             billing_record_type: code.billingCode.billing_record_type || 1,
@@ -1001,21 +1027,30 @@ const ServiceFormScreen = ({ navigation }: any) => {
 
   // Helper function to sync selectedCodes to formData.billingCodes
   const syncCodesToFormData = (codes: ServiceCode[]) => {
-    const billingCodes = codes.map((code) => ({
-      codeId: code.billingCode.id,
-      status: code.status,
-      billing_record_type: code.billingCode.billing_record_type,
-      serviceStartTime: code.serviceStartTime,
-      serviceEndTime: code.serviceEndTime,
-      numberOfUnits: code.numberOfUnits,
-      bilateralIndicator: code.bilateralIndicator,
-      specialCircumstances: code.specialCircumstances,
-      serviceDate: code.serviceDate,
-      serviceEndDate: code.serviceEndDate,
-      fee_determinant: code.billingCode.fee_determinant,
-      multiple_unit_indicator: code.billingCode.multiple_unit_indicator,
-      changeLogs: code.changeLogs || [],
-    }));
+    const billingCodes = codes.map((code) => {
+      const mappedCode: any = {
+        codeId: code.billingCode.id,
+        status: code.status,
+        billing_record_type: code.billingCode.billing_record_type,
+        serviceStartTime: code.serviceStartTime,
+        serviceEndTime: code.serviceEndTime,
+        numberOfUnits: code.numberOfUnits,
+        bilateralIndicator: code.bilateralIndicator,
+        specialCircumstances: code.specialCircumstances,
+        serviceDate: code.serviceDate,
+        serviceEndDate: code.serviceEndDate,
+        fee_determinant: code.billingCode.fee_determinant,
+        multiple_unit_indicator: code.billingCode.multiple_unit_indicator,
+        changeLogs: code.changeLogs || [],
+      };
+
+      // Preserve service code ID if it exists and is a valid database ID
+      if (code.id && code.id > 0 && code.id < 1000000000) {
+        mappedCode.id = code.id;
+      }
+
+      return mappedCode;
+    });
 
     setFormData((prev) => ({
       ...prev,
@@ -1813,13 +1848,26 @@ const ServiceFormScreen = ({ navigation }: any) => {
     if (!validateForm()) return;
 
     // Ensure all billing codes have required fields
+    // Only include ID for existing service codes (not temporary IDs)
     const validatedFormData = {
       ...formData,
       serviceStatus: "OPEN",
-      billingCodes: formData.billingCodes.map((code) => ({
-        ...code,
-        numberOfUnits: code.numberOfUnits || 1, // Ensure numberOfUnits is set
-      })),
+      billingCodes: formData.billingCodes.map((code) => {
+        const cleanedCode: any = {
+          ...code,
+          numberOfUnits: code.numberOfUnits || 1, // Ensure numberOfUnits is set
+        };
+
+        // Only include ID if it's a valid existing service code ID
+        // (not a temporary ID like Date.now() or negative numbers)
+        if (code.id && code.id > 0 && code.id < 1000000000) {
+          cleanedCode.id = code.id;
+        } else {
+          delete cleanedCode.id;
+        }
+
+        return cleanedCode;
+      }),
     };
 
     if (isEditing) {
@@ -1937,19 +1985,51 @@ const ServiceFormScreen = ({ navigation }: any) => {
 
   const performApproveAndFinish = () => {
     // Ensure all billing codes have required fields
+    // Only include ID for existing service codes (not temporary IDs)
     const validatedFormData = {
       ...formData,
       serviceStatus: "PENDING",
-      billingCodes: formData.billingCodes.map((code) => ({
-        ...code,
-        numberOfUnits: code.numberOfUnits || 1, // Ensure numberOfUnits is set
-      })),
+      billingCodes: formData.billingCodes.map((code) => {
+        const cleanedCode: any = {
+          ...code,
+          numberOfUnits: code.numberOfUnits || 1, // Ensure numberOfUnits is set
+        };
+
+        // Only include ID if it's a valid existing service code ID
+        // (not a temporary ID like Date.now() or negative numbers)
+        if (code.id && code.id > 0 && code.id < 1000000000) {
+          cleanedCode.id = code.id;
+        } else {
+          delete cleanedCode.id;
+        }
+
+        return cleanedCode;
+      }),
     };
 
     if (isEditing) {
       updateServiceMutation.mutate(validatedFormData);
     } else {
       createServiceMutation.mutate(validatedFormData);
+    }
+  };
+
+  // Handle rounding confirmation
+  const handleConfirmRounding = async () => {
+    if (!serviceId || !roundingDate) {
+      Alert.alert("Error", "Please enter a rounding date.");
+      return;
+    }
+    try {
+      const result = await servicesAPI.round(serviceId, roundingDate);
+      Alert.alert("Success", result.message);
+      setShowRoundingModal(false);
+      setRoundingDate("");
+      // Refetch service data to update the UI
+      queryClient.invalidateQueries({ queryKey: ["service", serviceId] });
+    } catch (error) {
+      console.error("Error performing rounding:", error);
+      Alert.alert("Error", "Failed to perform rounding. Please try again.");
     }
   };
 
@@ -1964,6 +2044,112 @@ const ServiceFormScreen = ({ navigation }: any) => {
       </SafeAreaView>
     );
   }
+
+  // Component for date input with navigation buttons
+  const DateInputWithNavigation = ({
+    value,
+    onChangeText,
+    placeholder,
+  }: {
+    value: string;
+    onChangeText: (text: string) => void;
+    placeholder: string;
+  }) => {
+    const navigateDate = (direction: "prev" | "next") => {
+      if (!value) {
+        // If no current date, start with today
+        onChangeText(getLocalYMD(new Date()));
+        return;
+      }
+
+      try {
+        const [year, month, day] = value.split("-").map((v) => parseInt(v, 10));
+        const currentDate = new Date(year, month - 1, day);
+
+        if (direction === "prev") {
+          currentDate.setDate(currentDate.getDate() - 1);
+        } else {
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+
+        onChangeText(getLocalYMD(currentDate));
+      } catch (error) {
+        // If parsing fails, default to today
+        onChangeText(getLocalYMD(new Date()));
+      }
+    };
+
+    const getDisplayValue = () => {
+      if (!value) return "";
+
+      const today = getLocalYMD(new Date());
+      const yesterday = getLocalYMD(new Date(Date.now() - 24 * 60 * 60 * 1000));
+
+      if (value === today) return "Today";
+      if (value === yesterday) return "Yesterday";
+
+      // Format as MM/DD/YYYY for other dates
+      try {
+        const [year, month, day] = value.split("-");
+        return `${month}/${day}/${year}`;
+      } catch {
+        return value;
+      }
+    };
+
+    const handleTextChange = (text: string) => {
+      // If user types "Today", set to today's date
+      if (text.toLowerCase() === "today") {
+        onChangeText(getLocalYMD(new Date()));
+        return;
+      }
+
+      // If user types "Yesterday", set to yesterday's date
+      if (text.toLowerCase() === "yesterday") {
+        const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        onChangeText(getLocalYMD(yesterday));
+        return;
+      }
+
+      // For other text, try to parse as date or pass through
+      onChangeText(text);
+    };
+
+    return (
+      <View style={styles.dateInputWithNavigationContainer}>
+        <TouchableOpacity
+          style={styles.dateNavButton}
+          onPress={() => navigateDate("prev")}
+        >
+          <Ionicons name="chevron-back" size={20} color="#6b7280" />
+        </TouchableOpacity>
+
+        <View style={styles.dateInputCenter}>
+          <TextInput
+            style={styles.dateInputNavigation}
+            placeholder={placeholder}
+            value={getDisplayValue()}
+            onChangeText={handleTextChange}
+          />
+        </View>
+
+        <TouchableOpacity
+          style={[
+            styles.dateNavButton,
+            getLocalYMD(new Date()) === value ? styles.disabledButton : null,
+          ]}
+          onPress={() => navigateDate("next")}
+          disabled={getLocalYMD(new Date()) === value}
+        >
+          <Ionicons
+            name="chevron-forward"
+            size={20}
+            color={getLocalYMD(new Date()) === value ? "#9ca3af" : "#6b7280"}
+          />
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -2636,19 +2822,34 @@ const ServiceFormScreen = ({ navigation }: any) => {
                 </View>
               )}
 
-              <TouchableOpacity
-                style={styles.addCodeButton}
-                onPress={() =>
-                  navigation.navigate("BillingCodeSearch", {
-                    onSelect: handleAddCodes,
-                    existingCodes: selectedCodes.map((c) => c.billingCode),
-                    serviceDate: formData.serviceDate,
-                  })
-                }
-              >
-                <Ionicons name="add" size={20} color="#2563eb" />
-                <Text style={styles.addCodeButtonText}>Add Billing Code</Text>
-              </TouchableOpacity>
+              {billingCodeView === "rounding" ? (
+                <TouchableOpacity
+                  style={styles.addCodeButton}
+                  onPress={() => {
+                    // Open rounding modal and default date to today
+                    const today = getLocalYMD(new Date());
+                    setRoundingDate(today);
+                    setShowRoundingModal(true);
+                  }}
+                >
+                  <Ionicons name="repeat" size={20} color="#2563eb" />
+                  <Text style={styles.addCodeButtonText}>Add Rounding</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={styles.addCodeButton}
+                  onPress={() =>
+                    navigation.navigate("BillingCodeSearch", {
+                      onSelect: handleAddCodes,
+                      existingCodes: selectedCodes.map((c) => c.billingCode),
+                      serviceDate: formData.serviceDate,
+                    })
+                  }
+                >
+                  <Ionicons name="add" size={20} color="#2563eb" />
+                  <Text style={styles.addCodeButtonText}>Add Billing Code</Text>
+                </TouchableOpacity>
+              )}
             </Card.Content>
           </Card>
 
@@ -4031,6 +4232,62 @@ const ServiceFormScreen = ({ navigation }: any) => {
         </TouchableOpacity>
       </Modal>
 
+      {/* Rounding Date Modal */}
+      <Modal
+        visible={showRoundingModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setShowRoundingModal(false);
+          setRoundingDate("");
+        }}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => {
+            setShowRoundingModal(false);
+            setRoundingDate("");
+          }}
+        >
+          <TouchableOpacity
+            style={styles.modalContent}
+            activeOpacity={1}
+            onPress={() => {}} // Prevent closing when tapping inside modal
+          >
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Set Rounding Date</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowRoundingModal(false);
+                  setRoundingDate("");
+                }}
+              >
+                <Ionicons name="close" size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.subSelectionScrollView}>
+              <View style={styles.subSelectionSection}>
+                <DateInputWithNavigation
+                  value={roundingDate}
+                  onChangeText={setRoundingDate}
+                  placeholder="YYYY-MM-DD"
+                />
+              </View>
+            </ScrollView>
+            <View style={styles.modalButtonContainer}>
+              <Button
+                mode="contained"
+                onPress={handleConfirmRounding}
+                style={styles.modalButton}
+              >
+                Confirm
+              </Button>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       {/* Billing Code Configuration Modal for Editing */}
       <BillingCodeConfigurationModal
         visible={showEditModal}
@@ -4818,6 +5075,39 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "500",
     color: "#3b82f6",
+  },
+  dateInputWithNavigationContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "transparent",
+  },
+  dateNavButton: {
+    padding: 24,
+    borderRadius: 6,
+    backgroundColor: "#f8fafc",
+    marginHorizontal: 4,
+  },
+  dateInputCenter: {
+    flex: 1,
+    alignItems: "center",
+    paddingHorizontal: 8,
+  },
+  dateInputNavigation: {
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    backgroundColor: "#ffffff",
+    width: "100%",
+    textAlign: "center",
+  },
+  subSelectionScrollView: {
+    padding: 20,
+  },
+  subSelectionSection: {
+    marginBottom: 16,
   },
 });
 

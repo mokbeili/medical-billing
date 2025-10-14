@@ -281,13 +281,9 @@ export async function GET(request: Request) {
               },
             },
             changeLogs: {
-              where: {
-                changeType: "ROUND",
-              },
               orderBy: {
-                roundingDate: "desc",
+                changedAt: "desc",
               },
-              take: 1,
             },
           },
         },
@@ -454,21 +450,65 @@ export async function PUT(request: Request) {
 
     // Handle billing codes update if provided
     if (billingCodes !== undefined) {
-      // First, delete all existing service codes for this service
-      await prisma.serviceCodes.deleteMany({
+      // Get existing service codes to determine what to update/delete/create
+      const existingServiceCodes = await prisma.serviceCodes.findMany({
         where: {
           serviceId: parseInt(id),
         },
       });
 
-      // Then create new service codes
-      if (billingCodes && billingCodes.length > 0) {
-        const preparedBillingCodes = billingCodes.map((billingCode: any) => ({
-          billingCode: {
-            connect: {
-              id: billingCode.codeId,
+      console.log("=== Service Code Update Debug ===");
+      console.log(
+        "Incoming billing codes:",
+        JSON.stringify(
+          billingCodes.map((bc: any) => ({ id: bc.id, codeId: bc.codeId })),
+          null,
+          2
+        )
+      );
+      console.log(
+        "Existing service codes:",
+        existingServiceCodes.map((sc) => ({ id: sc.id, codeId: sc.codeId }))
+      );
+
+      // Build a map of existing service codes by their ID
+      const existingCodesMap = new Map(
+        existingServiceCodes.map((sc) => [sc.id, sc])
+      );
+
+      // Build a map of incoming billing codes by their ID (if they have one)
+      const incomingCodesMap = new Map(
+        billingCodes.filter((bc: any) => bc.id).map((bc: any) => [bc.id, bc])
+      );
+
+      console.log(
+        "Codes to update (have ID):",
+        Array.from(incomingCodesMap.keys())
+      );
+      console.log(
+        "Codes to create (no ID):",
+        billingCodes.filter((bc: any) => !bc.id).map((bc: any) => bc.codeId)
+      );
+
+      // Determine which service codes to delete (exist in DB but not in incoming)
+      const codesToDelete = existingServiceCodes.filter(
+        (sc) => !incomingCodesMap.has(sc.id)
+      );
+
+      // Delete service codes that are no longer present
+      if (codesToDelete.length > 0) {
+        await prisma.serviceCodes.deleteMany({
+          where: {
+            id: {
+              in: codesToDelete.map((sc) => sc.id),
             },
           },
+        });
+      }
+
+      // Process incoming billing codes
+      for (const billingCode of billingCodes) {
+        const codeData = {
           serviceLocation: serviceLocation || "X",
           locationOfService: locationOfService || "1",
           serviceStartTime: billingCode.serviceStartTime
@@ -486,11 +526,29 @@ export async function PUT(request: Request) {
           serviceEndDate: billingCode.serviceEndDate
             ? new Date(billingCode.serviceEndDate)
             : null,
-        }));
-
-        updateData.serviceCodes = {
-          create: preparedBillingCodes,
         };
+
+        if (billingCode.id && existingCodesMap.has(billingCode.id)) {
+          // Update existing service code
+          await prisma.serviceCodes.update({
+            where: {
+              id: billingCode.id,
+            },
+            data: {
+              ...codeData,
+              codeId: billingCode.codeId,
+            },
+          });
+        } else {
+          // Create new service code
+          await prisma.serviceCodes.create({
+            data: {
+              ...codeData,
+              serviceId: parseInt(id),
+              codeId: billingCode.codeId,
+            },
+          });
+        }
       }
     }
 
@@ -528,6 +586,11 @@ export async function PUT(request: Request) {
                     cumulativeDayRange: "asc",
                   },
                 },
+              },
+            },
+            changeLogs: {
+              orderBy: {
+                changedAt: "desc",
               },
             },
           },

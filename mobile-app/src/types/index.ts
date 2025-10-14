@@ -298,6 +298,7 @@ export interface ServiceFormData {
   locationOfService: string | null;
   serviceStatus: string;
   billingCodes: Array<{
+    id?: number; // Optional service code ID (for existing codes)
     codeId: number;
     status: string;
     billing_record_type: number;

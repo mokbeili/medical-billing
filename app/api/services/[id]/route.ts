@@ -190,59 +190,102 @@ export async function PUT(
 
     // Handle service codes if provided
     if (billingCodes && Array.isArray(billingCodes)) {
-      // Delete existing service codes (this will cascade delete change logs)
-      await prisma.serviceCodes.deleteMany({
+      // Get existing service codes to determine what to update/delete/create
+      const existingServiceCodes = await prisma.serviceCodes.findMany({
         where: {
           serviceId: parseInt(id),
         },
       });
 
-      // Create new service codes with their change logs
-      if (billingCodes.length > 0) {
-        for (const code of billingCodes) {
-          const createdServiceCode = await prisma.serviceCodes.create({
+      console.log("=== Service Code Update Debug (ID route) ===");
+      console.log(
+        "Incoming billing codes:",
+        JSON.stringify(
+          billingCodes.map((bc: any) => ({ id: bc.id, codeId: bc.codeId })),
+          null,
+          2
+        )
+      );
+      console.log(
+        "Existing service codes:",
+        existingServiceCodes.map((sc) => ({ id: sc.id, codeId: sc.codeId }))
+      );
+
+      // Build a map of existing service codes by their ID
+      const existingCodesMap = new Map(
+        existingServiceCodes.map((sc) => [sc.id, sc])
+      );
+
+      // Build a map of incoming billing codes by their ID (if they have one)
+      const incomingCodesMap = new Map(
+        billingCodes.filter((bc: any) => bc.id).map((bc: any) => [bc.id, bc])
+      );
+
+      console.log(
+        "Codes to update (have ID):",
+        Array.from(incomingCodesMap.keys())
+      );
+      console.log(
+        "Codes to create (no ID):",
+        billingCodes.filter((bc: any) => !bc.id).map((bc: any) => bc.codeId)
+      );
+
+      // Determine which service codes to delete (exist in DB but not in incoming)
+      const codesToDelete = existingServiceCodes.filter(
+        (sc) => !incomingCodesMap.has(sc.id)
+      );
+
+      // Delete service codes that are no longer present
+      if (codesToDelete.length > 0) {
+        await prisma.serviceCodes.deleteMany({
+          where: {
+            id: {
+              in: codesToDelete.map((sc) => sc.id),
+            },
+          },
+        });
+      }
+
+      // Process incoming billing codes
+      for (const code of billingCodes) {
+        const codeData = {
+          serviceLocation: serviceLocation || "X",
+          locationOfService: locationOfService || "1",
+          serviceStartTime: code.serviceStartTime
+            ? new Date(code.serviceStartTime)
+            : null,
+          serviceEndTime: code.serviceEndTime
+            ? new Date(code.serviceEndTime)
+            : null,
+          numberOfUnits: code.numberOfUnits || 1,
+          bilateralIndicator: code.bilateralIndicator || null,
+          specialCircumstances: code.specialCircumstances || null,
+          serviceDate: code.serviceDate ? new Date(code.serviceDate) : null,
+          serviceEndDate: code.serviceEndDate
+            ? new Date(code.serviceEndDate)
+            : null,
+        };
+
+        if (code.id && existingCodesMap.has(code.id)) {
+          // Update existing service code (preserves change logs)
+          await prisma.serviceCodes.update({
+            where: {
+              id: code.id,
+            },
             data: {
-              serviceId: parseInt(id),
+              ...codeData,
               codeId: code.codeId,
-              serviceStartTime: code.serviceStartTime
-                ? new Date(code.serviceStartTime)
-                : null,
-              serviceEndTime: code.serviceEndTime
-                ? new Date(code.serviceEndTime)
-                : null,
-              numberOfUnits: code.numberOfUnits || 1,
-              bilateralIndicator: code.bilateralIndicator,
-              specialCircumstances: code.specialCircumstances,
-              serviceDate: code.serviceDate ? new Date(code.serviceDate) : null,
-              serviceEndDate: code.serviceEndDate
-                ? new Date(code.serviceEndDate)
-                : null,
-              serviceLocation: serviceLocation,
-              locationOfService: locationOfService,
             },
           });
-
-          // Create change logs for this service code if they exist
-          if (
-            code.changeLogs &&
-            Array.isArray(code.changeLogs) &&
-            code.changeLogs.length > 0
-          ) {
-            await prisma.serviceCodeChangeLog.createMany({
-              data: code.changeLogs.map((log: any) => ({
-                serviceCodeId: createdServiceCode.id,
-                changeType: log.changeType,
-                previousData: log.previousData,
-                newData: log.newData,
-                changedBy: log.changedBy,
-                changedAt: log.changedAt ? new Date(log.changedAt) : new Date(),
-                notes: log.notes,
-                roundingDate: log.roundingDate
-                  ? new Date(log.roundingDate)
-                  : null,
-              })),
-            });
-          }
+        } else {
+          // Create new service code
+          await prisma.serviceCodes.create({
+            data: {
+              ...codeData,
+              serviceId: parseInt(id),
+              codeId: code.codeId,
+            },
+          });
         }
       }
     }
