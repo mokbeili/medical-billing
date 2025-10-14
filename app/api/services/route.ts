@@ -457,20 +457,6 @@ export async function PUT(request: Request) {
         },
       });
 
-      console.log("=== Service Code Update Debug ===");
-      console.log(
-        "Incoming billing codes:",
-        JSON.stringify(
-          billingCodes.map((bc: any) => ({ id: bc.id, codeId: bc.codeId })),
-          null,
-          2
-        )
-      );
-      console.log(
-        "Existing service codes:",
-        existingServiceCodes.map((sc) => ({ id: sc.id, codeId: sc.codeId }))
-      );
-
       // Build a map of existing service codes by their ID
       const existingCodesMap = new Map(
         existingServiceCodes.map((sc) => [sc.id, sc])
@@ -479,15 +465,6 @@ export async function PUT(request: Request) {
       // Build a map of incoming billing codes by their ID (if they have one)
       const incomingCodesMap = new Map(
         billingCodes.filter((bc: any) => bc.id).map((bc: any) => [bc.id, bc])
-      );
-
-      console.log(
-        "Codes to update (have ID):",
-        Array.from(incomingCodesMap.keys())
-      );
-      console.log(
-        "Codes to create (no ID):",
-        billingCodes.filter((bc: any) => !bc.id).map((bc: any) => bc.codeId)
       );
 
       // Determine which service codes to delete (exist in DB but not in incoming)
