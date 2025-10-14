@@ -87,12 +87,29 @@ export class ExpoTextRecognitionService {
         DEC: "12",
       };
 
+      // Helper function to fix common OCR errors in month names
+      const fixOCRMonthErrors = (monthStr: string): string => {
+        // Replace common OCR errors
+        return monthStr
+          .replace(/^0CT$/i, "OCT") // 0CT -> OCT
+          .replace(/^0EC$/i, "DEC") // 0EC -> DEC
+          .replace(/^N0V$/i, "NOV") // N0V -> NOV
+          .replace(/^MAY$/i, "MAY") // MAY is fine
+          .replace(/^JUN$/i, "JUN") // JUN is fine
+          .replace(/^JUL$/i, "JUL") // JUL is fine
+          .replace(/^AU6$/i, "AUG") // AU6 -> AUG
+          .replace(/^5EP$/i, "SEP") // 5EP -> SEP
+          .replace(/^FE8$/i, "FEB") // FE8 -> FEB
+          .toUpperCase();
+      };
+
       // Helper function to parse date formats
       const parseDate = (dateStr: string): string => {
         // MMM-DD-YYYY format
-        let match = dateStr.match(/([A-Za-z]{3,4})-(\d{1,2})-(\d{2,4})/);
+        let match = dateStr.match(/([A-Za-z0-9]{3,4})-(\d{1,2})-(\d{2,4})/);
         if (match) {
-          const month = monthMap[match[1].toUpperCase()];
+          const fixedMonth = fixOCRMonthErrors(match[1]);
+          const month = monthMap[fixedMonth];
           if (month) {
             const day = match[2].padStart(2, "0");
             let year = match[3];
@@ -104,9 +121,10 @@ export class ExpoTextRecognitionService {
         }
 
         // DD-MMM-YYYY format
-        match = dateStr.match(/(\d{1,2})-([A-Za-z]{3,4})-(\d{2,4})/);
+        match = dateStr.match(/(\d{1,2})-([A-Za-z0-9]{3,4})-(\d{2,4})/);
         if (match) {
-          const month = monthMap[match[2].toUpperCase()];
+          const fixedMonth = fixOCRMonthErrors(match[2]);
+          const month = monthMap[fixedMonth];
           if (month) {
             const day = match[1].padStart(2, "0");
             let year = match[3];
@@ -536,6 +554,7 @@ export class ExpoTextRecognitionService {
       familyPhysician = physicians.family;
 
       // Validate that we have the essential information
+
       if (
         !billingNumber ||
         !firstName ||
