@@ -100,7 +100,7 @@ model BillingCode {
   section                         Section                  @relation(fields: [section_id], references: [id])
   frequentlyUsedCodes             FrequentlyUsedCode[]
   serviceCodes                    ServiceCodes[]
-  BillingCodeChains               BillingCodeChain[]
+  billingCodeChains               BillingCodeChain[]
 
   @@index([section_id])
   @@index([code])
