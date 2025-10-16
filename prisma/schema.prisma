@@ -92,6 +92,7 @@ model BillingCode {
   embedding_vector                Unsupported("tsvector")? @map("embedding_vector")
   day_range                       Int?
   max_units                       Int?
+  billing_unit_type               String?                  @db.VarChar(50)
   changeLogs                      BillingCodeChangeLog[]
   billing_code_embeddings         billing_code_embeddings?
   previousCodes                   BillingCodeRelation[]    @relation("BillingCodeNext")
@@ -99,7 +100,6 @@ model BillingCode {
   section                         Section                  @relation(fields: [section_id], references: [id])
   frequentlyUsedCodes             FrequentlyUsedCode[]
   serviceCodes                    ServiceCodes[]
-  billingCodeChains               BillingCodeChain[]
 
   @@index([section_id])
   @@index([code])
@@ -119,24 +119,6 @@ model BillingCodeRelation {
   @@index([previous_code_id])
   @@index([next_code_id])
   @@map("billing_code_relations")
-}
-
-model BillingCodeChain {
-  codeId             Int     @map("code_id")
-  code               String
-  title              String
-  dayRange           Int     @map("day_range")
-  rootId             Int     @map("root_id")
-  previousCodeId     Int?    @map("previous_code_id")
-  previousDayRange   Int     @map("previous_day_range")
-  cumulativeDayRange Int     @map("cumulative_day_range")
-  prevPlusSelf       Int     @map("prev_plus_self")
-  isLast             Boolean @map("is_last")
-
-  billingCode BillingCode @relation(fields: [codeId], references: [id])
-
-  @@id([codeId])
-  @@map("billing_code_chain")
 }
 
 model BillingCodeChangeLog {
@@ -343,7 +325,7 @@ model Service {
   billingTypeId        Int?                @map("billing_type_id")
   serviceCodes         ServiceCodes[]
   attendingPhysician   ReferringPhysician? @relation("AttendingPhysician", fields: [attendingPhysicianId], references: [id])
-  billingType          BillingType?        @relation(fields: [billingTypeId], references: [id])
+  billingType          BillingType?        @relation(fields: [billingTypeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   claim                BillingClaim?       @relation(fields: [claimId], references: [id])
   familyPhysician      ReferringPhysician? @relation("FamilyPhysician", fields: [familyPhysicianId], references: [id])
   healthInstitution    HealthInstitution?  @relation(fields: [healthInstitutionId], references: [id])
@@ -360,7 +342,6 @@ model Service {
   @@index([healthInstitutionId])
   @@index([attendingPhysicianId])
   @@index([familyPhysicianId])
-  @@index([billingTypeId])
   @@map("services")
 }
 
@@ -478,9 +459,9 @@ model FrequentlyUsedCode {
   billingCodeId Int         @map("billing_code_id")
   sortMetric    Int         @default(0) @map("sort_metric")
   createdAt     DateTime    @default(now()) @map("created_at")
-  updatedAt     DateTime    @updatedAt @map("updated_at")
-  billingCode   BillingCode @relation(fields: [billingCodeId], references: [id], onDelete: Cascade)
-  physician     Physician   @relation(fields: [physicianId], references: [id], onDelete: Cascade)
+  updatedAt     DateTime    @default(now()) @updatedAt @map("updated_at")
+  billingCode   BillingCode @relation(fields: [billingCodeId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  physician     Physician   @relation(fields: [physicianId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([physicianId, billingCodeId])
   @@index([billingCodeId], map: "idx_frequently_used_codes_billing_code_id")
