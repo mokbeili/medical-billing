@@ -536,7 +536,10 @@ const BillingCodeConfigurationModal: React.FC<
                     ]}
                     onPress={() =>
                       handleUpdateSubSelection({
-                        specialCircumstances: "TA",
+                        specialCircumstances:
+                          localSubSelection.specialCircumstances === "TA"
+                            ? null
+                            : "TA",
                       })
                     }
                   >
@@ -547,51 +550,7 @@ const BillingCodeConfigurationModal: React.FC<
                           styles.selectedSpecialCircumstancesButtonText,
                       ]}
                     >
-                      Technical
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.specialCircumstancesButton,
-                      localSubSelection.specialCircumstances === "PA" &&
-                        styles.selectedSpecialCircumstancesButton,
-                    ]}
-                    onPress={() =>
-                      handleUpdateSubSelection({
-                        specialCircumstances: "PA",
-                      })
-                    }
-                  >
-                    <Text
-                      style={[
-                        styles.specialCircumstancesButtonText,
-                        localSubSelection.specialCircumstances === "PA" &&
-                          styles.selectedSpecialCircumstancesButtonText,
-                      ]}
-                    >
-                      Interpretation
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.specialCircumstancesButton,
-                      localSubSelection.specialCircumstances === "CA" &&
-                        styles.selectedSpecialCircumstancesButton,
-                    ]}
-                    onPress={() =>
-                      handleUpdateSubSelection({
-                        specialCircumstances: "CA",
-                      })
-                    }
-                  >
-                    <Text
-                      style={[
-                        styles.specialCircumstancesButtonText,
-                        localSubSelection.specialCircumstances === "CA" &&
-                          styles.selectedSpecialCircumstancesButtonText,
-                      ]}
-                    >
-                      Both
+                      Takeover
                     </Text>
                   </TouchableOpacity>
                 </View>
