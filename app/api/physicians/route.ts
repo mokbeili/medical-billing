@@ -50,6 +50,7 @@ export async function GET(request: Request) {
         lastName: true,
         middleInitial: true,
         billingNumber: true,
+        timezone: true,
         physicianBillingTypes: {
           select: {
             id: true,

@@ -169,6 +169,7 @@ export interface Physician {
   middleInitial: string | null;
   billingNumber: string;
   jurisdictionId: number;
+  timezone: string;
   healthInstitution?: {
     city: string;
   } | null;

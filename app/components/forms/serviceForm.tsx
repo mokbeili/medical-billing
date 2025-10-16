@@ -14,7 +14,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  convertLocalDateToTimezoneUTC,
   formatFullDate,
+  getTodayInTimezone,
   isValidFlexibleDate,
   parseFlexibleDate,
 } from "@/lib/dateUtils";
@@ -22,10 +24,14 @@ import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-// Helper function to get today's date in local timezone (not UTC)
-const getTodayLocalDate = (): string => {
+// Helper function to get today's date in physician's timezone
+const getTodayLocalDate = (timezone?: string): string => {
+  if (timezone) {
+    return getTodayInTimezone(timezone);
+  }
+  // Fallback to browser's local timezone if no physician timezone provided
   const today = new Date();
   const year = today.getFullYear();
   const month = String(today.getMonth() + 1).padStart(2, "0");
@@ -82,6 +88,7 @@ interface Physician {
   middleInitial: string | null;
   billingNumber: string;
   jurisdictionId: number;
+  timezone: string;
   physicianBillingTypes: {
     billingTypeId: number;
     active: boolean;
@@ -252,13 +259,31 @@ export default function ServiceForm({
 
   const [duplicatePatient, setDuplicatePatient] = useState<any>(null);
 
+  // Get the selected physician's timezone
+  const physicianTimezone = useMemo(() => {
+    if (formData.physicianId && physicians.length > 0) {
+      const selectedPhysician = physicians.find(
+        (p) => p.id === formData.physicianId
+      );
+      return selectedPhysician?.timezone || "America/Regina";
+    }
+    return "America/Regina"; // Default timezone
+  }, [formData.physicianId, physicians]);
+
   // Add state for discharge date modal
   const [showDischargeDateModal, setShowDischargeDateModal] = useState(false);
-  const [dischargeDate, setDischargeDate] = useState(getTodayLocalDate());
+  const [dischargeDate, setDischargeDate] = useState("");
   const [pendingApproveAndFinish, setPendingApproveAndFinish] = useState(false);
 
   // Add state for active tab
   const [activeTab, setActiveTab] = useState<"type50" | "type57">("type50");
+
+  // Update discharge date when physician timezone changes
+  useEffect(() => {
+    if (physicianTimezone && !dischargeDate) {
+      setDischargeDate(getTodayLocalDate(physicianTimezone));
+    }
+  }, [physicianTimezone]);
 
   // Load existing service data for editing
   useEffect(() => {
@@ -372,10 +397,16 @@ export default function ServiceForm({
               );
             }
 
+            // Get today's date in the physician's timezone
+            const todayInPhysicianTimezone = getTodayLocalDate(
+              data[0].timezone
+            );
+
             setFormData({
               ...formData,
               physicianId: data[0].id,
               serviceLocation: newServiceLocation,
+              serviceDate: todayInPhysicianTimezone,
             });
           }
           setPhysicians(data);
@@ -727,8 +758,8 @@ export default function ServiceForm({
         serviceEndDate = null;
       }
     } else {
-      // For non-type 57 codes, use today's date as default
-      const today = new Date().toISOString().split("T")[0];
+      // For non-type 57 codes, use today's date in physician's timezone as default
+      const today = getTodayLocalDate(physicianTimezone);
       serviceStartDate = today;
 
       // Calculate service end date based on day range
@@ -1067,16 +1098,30 @@ export default function ServiceForm({
     }
 
     try {
-      // Use the user's selected service date as the primary service date
-      const primaryServiceDate = new Date(formData.serviceDate);
+      // Convert the service date to a UTC timestamp representing midnight in the physician's timezone
+      const primaryServiceDateISO = convertLocalDateToTimezoneUTC(
+        formData.serviceDate,
+        physicianTimezone
+      );
+      const primaryServiceDate = new Date(primaryServiceDateISO);
 
-      // Helper function to combine date and time
-      const combineDateTime = (date: Date, timeStr: string) => {
+      // Helper function to combine date and time in physician's timezone
+      const combineDateTime = (dateStr: string, timeStr: string) => {
         if (!timeStr) return null;
         const [hours, minutes] = timeStr.split(":").map(Number);
-        const newDate = new Date(date);
-        newDate.setHours(hours, minutes, 0, 0);
-        return newDate.toISOString();
+
+        // Convert the date to physician's timezone at midnight
+        const dateAtMidnight = convertLocalDateToTimezoneUTC(
+          dateStr,
+          physicianTimezone
+        );
+        const date = new Date(dateAtMidnight);
+
+        // Add the hours and minutes
+        date.setUTCHours(date.getUTCHours() + hours);
+        date.setUTCMinutes(date.getUTCMinutes() + minutes);
+
+        return date.toISOString();
       };
 
       if (type === "new") {
@@ -1095,7 +1140,7 @@ export default function ServiceForm({
           icdCodeId: formData.icdCodeId,
           healthInstitutionId: formData.healthInstitutionId,
           summary: formData.summary,
-          serviceDate: primaryServiceDate.toISOString(),
+          serviceDate: primaryServiceDateISO,
           serviceLocation: formData.serviceLocation,
           locationOfService: formData.locationOfService,
           serviceStatus: "OPEN",
@@ -1104,13 +1149,13 @@ export default function ServiceForm({
             status: "OPEN", // Set all codes to OPEN
             serviceStartTime: code.serviceStartTime
               ? combineDateTime(
-                  new Date(code.serviceDate || formData.serviceDate),
+                  code.serviceDate || formData.serviceDate,
                   code.serviceStartTime
                 )
               : null,
             serviceEndTime: code.serviceEndTime
               ? combineDateTime(
-                  new Date(code.serviceDate || formData.serviceDate),
+                  code.serviceDate || formData.serviceDate,
                   code.serviceEndTime
                 )
               : null,
@@ -1118,10 +1163,16 @@ export default function ServiceForm({
             bilateralIndicator: code.bilateralIndicator,
             specialCircumstances: code.specialCircumstances,
             serviceDate: code.serviceDate
-              ? new Date(code.serviceDate).toISOString()
-              : primaryServiceDate.toISOString(),
+              ? convertLocalDateToTimezoneUTC(
+                  code.serviceDate,
+                  physicianTimezone
+                )
+              : primaryServiceDateISO,
             serviceEndDate: code.serviceEndDate
-              ? new Date(code.serviceEndDate).toISOString()
+              ? convertLocalDateToTimezoneUTC(
+                  code.serviceEndDate,
+                  physicianTimezone
+                )
               : null,
           })),
         };
@@ -1160,7 +1211,7 @@ export default function ServiceForm({
           icdCodeId: formData.icdCodeId,
           healthInstitutionId: formData.healthInstitutionId,
           summary: formData.summary,
-          serviceDate: primaryServiceDate.toISOString(),
+          serviceDate: primaryServiceDateISO,
           serviceLocation: formData.serviceLocation,
           locationOfService: formData.locationOfService,
           serviceStatus: "OPEN",
@@ -1169,13 +1220,13 @@ export default function ServiceForm({
             status: "OPEN", // Set all codes to OPEN
             serviceStartTime: code.serviceStartTime
               ? combineDateTime(
-                  new Date(code.serviceDate || formData.serviceDate),
+                  code.serviceDate || formData.serviceDate,
                   code.serviceStartTime
                 )
               : null,
             serviceEndTime: code.serviceEndTime
               ? combineDateTime(
-                  new Date(code.serviceDate || formData.serviceDate),
+                  code.serviceDate || formData.serviceDate,
                   code.serviceEndTime
                 )
               : null,
@@ -1183,10 +1234,16 @@ export default function ServiceForm({
             bilateralIndicator: code.bilateralIndicator,
             specialCircumstances: code.specialCircumstances,
             serviceDate: code.serviceDate
-              ? new Date(code.serviceDate).toISOString()
-              : primaryServiceDate.toISOString(),
+              ? convertLocalDateToTimezoneUTC(
+                  code.serviceDate,
+                  physicianTimezone
+                )
+              : primaryServiceDateISO,
             serviceEndDate: code.serviceEndDate
-              ? new Date(code.serviceEndDate).toISOString()
+              ? convertLocalDateToTimezoneUTC(
+                  code.serviceEndDate,
+                  physicianTimezone
+                )
               : null,
           })),
         };
@@ -1346,7 +1403,7 @@ export default function ServiceForm({
     }
 
     setShowDischargeDateModal(false);
-    setDischargeDate(getTodayLocalDate());
+    setDischargeDate(getTodayLocalDate(physicianTimezone));
     setPendingApproveAndFinish(false);
 
     // Now proceed with approve and finish, passing the updated billing codes
@@ -1363,15 +1420,30 @@ export default function ServiceForm({
     }
 
     try {
-      // Use the user's selected service date as the primary service date
-      const primaryServiceDate = new Date(formData.serviceDate);
-      // Helper function to combine date and time
-      const combineDateTime = (date: Date, timeStr: string) => {
+      // Convert the service date to a UTC timestamp representing midnight in the physician's timezone
+      const primaryServiceDateISO = convertLocalDateToTimezoneUTC(
+        formData.serviceDate,
+        physicianTimezone
+      );
+      const primaryServiceDate = new Date(primaryServiceDateISO);
+
+      // Helper function to combine date and time in physician's timezone
+      const combineDateTime = (dateStr: string, timeStr: string) => {
         if (!timeStr) return null;
         const [hours, minutes] = timeStr.split(":").map(Number);
-        const newDate = new Date(date);
-        newDate.setHours(hours, minutes, 0, 0);
-        return newDate.toISOString();
+
+        // Convert the date to physician's timezone at midnight
+        const dateAtMidnight = convertLocalDateToTimezoneUTC(
+          dateStr,
+          physicianTimezone
+        );
+        const date = new Date(dateAtMidnight);
+
+        // Add the hours and minutes
+        date.setUTCHours(date.getUTCHours() + hours);
+        date.setUTCMinutes(date.getUTCMinutes() + minutes);
+
+        return date.toISOString();
       };
 
       if (type === "new") {
@@ -1389,7 +1461,7 @@ export default function ServiceForm({
           icdCodeId: formData.icdCodeId,
           healthInstitutionId: formData.healthInstitutionId,
           summary: formData.summary,
-          serviceDate: primaryServiceDate.toISOString(),
+          serviceDate: primaryServiceDateISO,
           serviceLocation: formData.serviceLocation,
           locationOfService: formData.locationOfService,
           serviceStatus: "PENDING",
@@ -1398,13 +1470,13 @@ export default function ServiceForm({
             status: code.status,
             serviceStartTime: code.serviceStartTime
               ? combineDateTime(
-                  new Date(code.serviceDate || formData.serviceDate),
+                  code.serviceDate || formData.serviceDate,
                   code.serviceStartTime
                 )
               : null,
             serviceEndTime: code.serviceEndTime
               ? combineDateTime(
-                  new Date(code.serviceDate || formData.serviceDate),
+                  code.serviceDate || formData.serviceDate,
                   code.serviceEndTime
                 )
               : null,
@@ -1412,10 +1484,16 @@ export default function ServiceForm({
             bilateralIndicator: code.bilateralIndicator,
             specialCircumstances: code.specialCircumstances,
             serviceDate: code.serviceDate
-              ? new Date(code.serviceDate).toISOString()
-              : primaryServiceDate.toISOString(),
+              ? convertLocalDateToTimezoneUTC(
+                  code.serviceDate,
+                  physicianTimezone
+                )
+              : primaryServiceDateISO,
             serviceEndDate: code.serviceEndDate
-              ? new Date(code.serviceEndDate).toISOString()
+              ? convertLocalDateToTimezoneUTC(
+                  code.serviceEndDate,
+                  physicianTimezone
+                )
               : null,
           })),
         };
@@ -1444,7 +1522,7 @@ export default function ServiceForm({
           icdCodeId: formData.icdCodeId,
           healthInstitutionId: formData.healthInstitutionId,
           summary: formData.summary,
-          serviceDate: primaryServiceDate.toISOString(),
+          serviceDate: primaryServiceDateISO,
           serviceLocation: formData.serviceLocation,
           locationOfService: formData.locationOfService,
           serviceStatus: "PENDING",
@@ -1453,13 +1531,13 @@ export default function ServiceForm({
             status: code.status,
             serviceStartTime: code.serviceStartTime
               ? combineDateTime(
-                  new Date(code.serviceDate || formData.serviceDate),
+                  code.serviceDate || formData.serviceDate,
                   code.serviceStartTime
                 )
               : null,
             serviceEndTime: code.serviceEndTime
               ? combineDateTime(
-                  new Date(code.serviceDate || formData.serviceDate),
+                  code.serviceDate || formData.serviceDate,
                   code.serviceEndTime
                 )
               : null,
@@ -1467,10 +1545,16 @@ export default function ServiceForm({
             bilateralIndicator: code.bilateralIndicator,
             specialCircumstances: code.specialCircumstances,
             serviceDate: code.serviceDate
-              ? new Date(code.serviceDate).toISOString()
-              : primaryServiceDate.toISOString(),
+              ? convertLocalDateToTimezoneUTC(
+                  code.serviceDate,
+                  physicianTimezone
+                )
+              : primaryServiceDateISO,
             serviceEndDate: code.serviceEndDate
-              ? new Date(code.serviceEndDate).toISOString()
+              ? convertLocalDateToTimezoneUTC(
+                  code.serviceEndDate,
+                  physicianTimezone
+                )
               : null,
           })),
         };
@@ -3344,7 +3428,7 @@ export default function ServiceForm({
                   value={dischargeDate}
                   onChange={(e) => setDischargeDate(e.target.value)}
                   min={formData.serviceDate}
-                  max={getTodayLocalDate()}
+                  max={getTodayLocalDate(physicianTimezone)}
                 />
               </div>
               <div className="flex justify-end space-x-2">
@@ -3353,7 +3437,7 @@ export default function ServiceForm({
                   variant="outline"
                   onClick={() => {
                     setShowDischargeDateModal(false);
-                    setDischargeDate(getTodayLocalDate());
+                    setDischargeDate(getTodayLocalDate(physicianTimezone));
                     setPendingApproveAndFinish(false);
                   }}
                 >

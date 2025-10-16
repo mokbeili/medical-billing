@@ -122,6 +122,9 @@ model BillingCodeRelation {
   @@map("billing_code_relations")
 }
 
+/// This model represents a database VIEW, not a table.
+/// It is managed via raw SQL migrations and should not be modified by Prisma.
+/// See: prisma/migrations/20250829000000_add_billing_code_chain_view/migration.sql
 model BillingCodeChain {
   codeId             Int     @map("code_id")
   code               String
@@ -240,6 +243,7 @@ model Physician {
   province              String?
   streetAddress         String?                @map("street_address")
   mostRecentClaimNumber Int                    @default(10000) @map("most_recent_claim_number")
+  timezone              String                 @default("America/Regina")
   billingClaims         BillingClaim[]
   frequentlyUsedCodes   FrequentlyUsedCode[]
   patients              Patient[]
@@ -334,7 +338,7 @@ model Service {
   icdCodeId            Int?                @map("icd_code_id")
   referringPhysicianId Int?                @map("referring_physician_id")
   healthInstitutionId  Int?                @map("health_institution_id")
-  serviceDate          DateTime            @default(now()) @map("service_date")
+  serviceDate          DateTime            @default(now()) @map("service_date") @db.Timestamptz(6)
   summary              String              @default("")
   physicianId          String              @map("physician_id")
   status               ServiceStatus       @default(OPEN)
@@ -367,14 +371,14 @@ model Service {
 model ServiceCodes {
   id                   Int                    @id @default(autoincrement())
   codeId               Int                    @map("code_id")
-  serviceStartTime     DateTime?              @map("service_start_time")
-  serviceEndTime       DateTime?              @map("service_end_time")
+  serviceStartTime     DateTime?              @map("service_start_time") @db.Timestamptz(6)
+  serviceEndTime       DateTime?              @map("service_end_time") @db.Timestamptz(6)
   bilateralIndicator   String?                @map("bilateral_indicator")
   numberOfUnits        Int                    @map("number_of_units")
   serviceId            Int                    @map("service_id")
   specialCircumstances String?                @map("special_circumstances")
-  serviceDate          DateTime?              @map("service_date")
-  serviceEndDate       DateTime?              @map("service_end_date")
+  serviceDate          DateTime?              @map("service_date") @db.Timestamptz(6)
+  serviceEndDate       DateTime?              @map("service_end_date") @db.Timestamptz(6)
   serviceLocation      String                 @map("service_location")
   locationOfService    String                 @map("location_of_service")
   claimNumber          Int?                   @map("claim_number")
@@ -517,13 +521,6 @@ enum ServiceStatus {
   OPEN
   PENDING
   SENT
-}
-
-enum ClaimStatus {
-  PENDING
-  SENT
-  APPROVED
-  REJECTED
 }
 
 enum ServiceCodeChangeType {

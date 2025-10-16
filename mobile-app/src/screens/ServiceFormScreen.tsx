@@ -35,8 +35,10 @@ import {
   ServiceFormData,
 } from "../types";
 import {
+  convertLocalDateToTimezoneUTC,
   formatFullDate,
   formatRelativeDate,
+  getTodayInTimezone,
   parseFlexibleDate,
 } from "../utils/dateUtils";
 
@@ -65,7 +67,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
     icdCodeId: null,
     healthInstitutionId: null,
     summary: "",
-    serviceDate: new Date().toISOString().split("T")[0],
+    serviceDate: "", // Will be set when physician is selected
     serviceLocation: null,
     locationOfService: null,
     serviceStatus: "OPEN",
@@ -238,7 +240,11 @@ const ServiceFormScreen = ({ navigation }: any) => {
   };
 
   // Helper function to get local date in YYYY-MM-DD format
-  const getLocalYMD = (date: Date): string => {
+  // Can optionally use a specific timezone
+  const getLocalYMD = (date: Date, timezone?: string): string => {
+    if (timezone) {
+      return getTodayInTimezone(timezone);
+    }
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, "0");
     const day = String(date.getDate()).padStart(2, "0");
@@ -390,6 +396,17 @@ const ServiceFormScreen = ({ navigation }: any) => {
     queryFn: physiciansAPI.getAll,
   });
 
+  // Get the selected physician's timezone
+  const physicianTimezone = React.useMemo(() => {
+    if (formData.physicianId && physicians) {
+      const selectedPhysician = physicians.find(
+        (p: any) => p.id === formData.physicianId
+      );
+      return selectedPhysician?.timezone || "America/Regina";
+    }
+    return "America/Regina"; // Default timezone
+  }, [formData.physicianId, physicians]);
+
   const { data: patients, isLoading: patientsLoading } = useQuery({
     queryKey: ["patients"],
     queryFn: patientsAPI.getAll,
@@ -414,10 +431,16 @@ const ServiceFormScreen = ({ navigation }: any) => {
         );
       }
 
+      // Get today's date in the physician's timezone
+      const todayInPhysicianTz = getTodayInTimezone(
+        physician.timezone || "America/Regina"
+      );
+
       setFormData((prev) => ({
         ...prev,
         physicianId: physician.id,
         serviceLocation: newServiceLocation,
+        serviceDate: todayInPhysicianTz,
       }));
     }
 
@@ -947,7 +970,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
   // Handler to show billing code suggestions modal
   const handleAddBillingCodeWithSuggestions = async () => {
     try {
-      const today = getLocalYMD(new Date());
+      const today = getLocalYMD(new Date(), physicianTimezone);
 
       // Get IDs of codes already added to this service
       const alreadyAddedIds = new Set(
@@ -1313,7 +1336,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
       id: newId,
       billingCode: billingCode,
       status: "ACTIVE",
-      serviceDate: new Date().toISOString().split("T")[0],
+      serviceDate: getTodayInTimezone(physicianTimezone),
       serviceEndDate: null,
       bilateralIndicator: null,
       serviceStartTime: null,
@@ -2019,16 +2042,37 @@ const ServiceFormScreen = ({ navigation }: any) => {
   const handleSave = () => {
     if (!validateForm()) return;
 
+    // Convert service date to physician's timezone
+    const serviceDateUTC = convertLocalDateToTimezoneUTC(
+      formData.serviceDate,
+      physicianTimezone
+    );
+
     // Ensure all billing codes have required fields
     // Only include ID for existing service codes (not temporary IDs)
     const validatedFormData = {
       ...formData,
+      serviceDate: serviceDateUTC,
       serviceStatus: "OPEN",
       billingCodes: formData.billingCodes.map((code) => {
         const cleanedCode: any = {
           ...code,
           numberOfUnits: code.numberOfUnits || 1, // Ensure numberOfUnits is set
         };
+
+        // Convert billing code dates to physician's timezone
+        if (code.serviceDate) {
+          cleanedCode.serviceDate = convertLocalDateToTimezoneUTC(
+            code.serviceDate,
+            physicianTimezone
+          );
+        }
+        if (code.serviceEndDate) {
+          cleanedCode.serviceEndDate = convertLocalDateToTimezoneUTC(
+            code.serviceEndDate,
+            physicianTimezone
+          );
+        }
 
         // Only include ID if it's a valid existing service code ID
         // (not a temporary ID like Date.now() or negative numbers)
@@ -2156,16 +2200,37 @@ const ServiceFormScreen = ({ navigation }: any) => {
   };
 
   const performApproveAndFinish = () => {
+    // Convert service date to physician's timezone
+    const serviceDateUTC = convertLocalDateToTimezoneUTC(
+      formData.serviceDate,
+      physicianTimezone
+    );
+
     // Ensure all billing codes have required fields
     // Only include ID for existing service codes (not temporary IDs)
     const validatedFormData = {
       ...formData,
+      serviceDate: serviceDateUTC,
       serviceStatus: "PENDING",
       billingCodes: formData.billingCodes.map((code) => {
         const cleanedCode: any = {
           ...code,
           numberOfUnits: code.numberOfUnits || 1, // Ensure numberOfUnits is set
         };
+
+        // Convert billing code dates to physician's timezone
+        if (code.serviceDate) {
+          cleanedCode.serviceDate = convertLocalDateToTimezoneUTC(
+            code.serviceDate,
+            physicianTimezone
+          );
+        }
+        if (code.serviceEndDate) {
+          cleanedCode.serviceEndDate = convertLocalDateToTimezoneUTC(
+            code.serviceEndDate,
+            physicianTimezone
+          );
+        }
 
         // Only include ID if it's a valid existing service code ID
         // (not a temporary ID like Date.now() or negative numbers)
@@ -2229,8 +2294,8 @@ const ServiceFormScreen = ({ navigation }: any) => {
   }) => {
     const navigateDate = (direction: "prev" | "next") => {
       if (!value) {
-        // If no current date, start with today
-        onChangeText(getLocalYMD(new Date()));
+        // If no current date, start with today in physician's timezone
+        onChangeText(getLocalYMD(new Date(), physicianTimezone));
         return;
       }
 
@@ -2246,15 +2311,15 @@ const ServiceFormScreen = ({ navigation }: any) => {
 
         onChangeText(getLocalYMD(currentDate));
       } catch (error) {
-        // If parsing fails, default to today
-        onChangeText(getLocalYMD(new Date()));
+        // If parsing fails, default to today in physician's timezone
+        onChangeText(getLocalYMD(new Date(), physicianTimezone));
       }
     };
 
     const getDisplayValue = () => {
       if (!value) return "";
 
-      const today = getLocalYMD(new Date());
+      const today = getLocalYMD(new Date(), physicianTimezone);
       const yesterday = getLocalYMD(new Date(Date.now() - 24 * 60 * 60 * 1000));
 
       if (value === today) return "Today";
@@ -2270,9 +2335,9 @@ const ServiceFormScreen = ({ navigation }: any) => {
     };
 
     const handleTextChange = (text: string) => {
-      // If user types "Today", set to today's date
+      // If user types "Today", set to today's date in physician's timezone
       if (text.toLowerCase() === "today") {
-        onChangeText(getLocalYMD(new Date()));
+        onChangeText(getLocalYMD(new Date(), physicianTimezone));
         return;
       }
 
@@ -2308,15 +2373,21 @@ const ServiceFormScreen = ({ navigation }: any) => {
         <TouchableOpacity
           style={[
             styles.dateNavButton,
-            getLocalYMD(new Date()) === value ? styles.disabledButton : null,
+            getLocalYMD(new Date(), physicianTimezone) === value
+              ? styles.disabledButton
+              : null,
           ]}
           onPress={() => navigateDate("next")}
-          disabled={getLocalYMD(new Date()) === value}
+          disabled={getLocalYMD(new Date(), physicianTimezone) === value}
         >
           <Ionicons
             name="chevron-forward"
             size={20}
-            color={getLocalYMD(new Date()) === value ? "#9ca3af" : "#6b7280"}
+            color={
+              getLocalYMD(new Date(), physicianTimezone) === value
+                ? "#9ca3af"
+                : "#6b7280"
+            }
           />
         </TouchableOpacity>
       </View>
@@ -2998,8 +3069,8 @@ const ServiceFormScreen = ({ navigation }: any) => {
                 <TouchableOpacity
                   style={styles.addCodeButton}
                   onPress={() => {
-                    // Open rounding modal and default date to today
-                    const today = getLocalYMD(new Date());
+                    // Open rounding modal and default date to today in physician's timezone
+                    const today = getLocalYMD(new Date(), physicianTimezone);
                     setRoundingDate(today);
                     setShowRoundingModal(true);
                   }}
@@ -4576,7 +4647,10 @@ const ServiceFormScreen = ({ navigation }: any) => {
                               matches.find((m) => m.id === code.id) ||
                               matches[0] ||
                               code;
-                            const today = getLocalYMD(new Date());
+                            const today = getLocalYMD(
+                              new Date(),
+                              physicianTimezone
+                            );
 
                             // Initialize selection and sub-selection
                             setBillingCodeSelections([full]);

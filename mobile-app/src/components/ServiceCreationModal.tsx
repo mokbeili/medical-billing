@@ -24,7 +24,10 @@ import {
   servicesAPI,
 } from "../services/api";
 import { BillingCode, ReferringPhysician } from "../types";
-import { formatFullDate } from "../utils/dateUtils";
+import {
+  convertLocalDateToTimezoneUTC,
+  formatFullDate,
+} from "../utils/dateUtils";
 import BillingCodeConfigurationModal from "./BillingCodeConfigurationModal";
 
 interface ScannedPatientData {
@@ -362,6 +365,11 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
     },
     enabled: !!physicianId,
   });
+
+  // Get the physician's timezone
+  const physicianTimezone = React.useMemo(() => {
+    return physician?.timezone || "America/Regina"; // Default to Regina timezone
+  }, [physician]);
 
   // Auto-set service location based on physician's city (like ServiceFormScreen)
   React.useEffect(() => {
@@ -942,9 +950,29 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
 
   const handleCreateService = async () => {
     try {
+      // Convert service date to physician's timezone
+      const serviceDateUTC = convertLocalDateToTimezoneUTC(
+        serviceDate,
+        physicianTimezone
+      );
+
       // Prepare billing codes data using configured sub-selections
       const billingCodesData = selectedBillingCodes.map((code) => {
         const subSelection = getSubSelectionForCode(code.id);
+
+        // Convert billing code dates to physician's timezone
+        const codeServiceDate = subSelection?.serviceDate || serviceDate;
+        const codeServiceDateUTC = convertLocalDateToTimezoneUTC(
+          codeServiceDate,
+          physicianTimezone
+        );
+        const codeServiceEndDateUTC = subSelection?.serviceEndDate
+          ? convertLocalDateToTimezoneUTC(
+              subSelection.serviceEndDate,
+              physicianTimezone
+            )
+          : null;
+
         return {
           codeId: code.id,
           status: "ACTIVE",
@@ -954,8 +982,8 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
           numberOfUnits: subSelection?.numberOfUnits || 1,
           bilateralIndicator: subSelection?.bilateralIndicator || null,
           specialCircumstances: subSelection?.specialCircumstances || null,
-          serviceDate: subSelection?.serviceDate || serviceDate,
-          serviceEndDate: subSelection?.serviceEndDate || null,
+          serviceDate: codeServiceDateUTC,
+          serviceEndDate: codeServiceEndDateUTC,
           fee_determinant: code.fee_determinant || "A",
           multiple_unit_indicator: code.multiple_unit_indicator || null,
         };
@@ -969,7 +997,7 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
             ? null
             : currentPatient?.id || createPatientMutation.data?.id,
         referringPhysicianId: selectedReferringPhysician?.id || null,
-        serviceDate,
+        serviceDate: serviceDateUTC,
         serviceLocation:
           selectedBillingCodes.length > 0 ? serviceLocation : null,
         locationOfService:

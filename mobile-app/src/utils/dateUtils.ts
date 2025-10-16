@@ -429,6 +429,129 @@ export function formatDateToMonthDay(dateString: string): string {
 }
 
 /**
+ * Get the current date in a specific timezone as YYYY-MM-DD string
+ * @param timezone - IANA timezone string (e.g., "America/Regina")
+ * @returns Current date in the specified timezone as YYYY-MM-DD string
+ */
+export function getTodayInTimezone(timezone: string): string {
+  try {
+    const now = new Date();
+
+    // Get date parts in the specified timezone
+    const formatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+
+    const parts = formatter.formatToParts(now);
+    const year = parts.find((p) => p.type === "year")?.value || "";
+    const month = parts.find((p) => p.type === "month")?.value || "";
+    const day = parts.find((p) => p.type === "day")?.value || "";
+
+    return `${year}-${month}-${day}`;
+  } catch (error) {
+    console.error("Error getting today's date in timezone:", error);
+    // Fallback to local date
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, "0");
+    const dayNum = String(today.getDate()).padStart(2, "0");
+    return `${year}-${month}-${dayNum}`;
+  }
+}
+
+/**
+ * Get today's date in the physician's timezone as YYYY-MM-DD
+ * This is a convenience wrapper around getTodayInTimezone
+ * @param physicianTimezone - IANA timezone string (e.g., "America/Regina")
+ * @returns Today's date in YYYY-MM-DD format in the physician's timezone
+ */
+export function getTodayForPhysician(physicianTimezone: string): string {
+  return getTodayInTimezone(physicianTimezone);
+}
+
+/**
+ * Convert a local date string (YYYY-MM-DD) to a UTC timestamp representing
+ * midnight (00:00:00) in the specified timezone
+ *
+ * Example: "2025-01-25" in "America/Regina" (UTC-6) becomes
+ * "2025-01-25T06:00:00.000Z" (which is Jan 25 midnight in Regina)
+ *
+ * @param dateString - Date in YYYY-MM-DD format
+ * @param timezone - IANA timezone string (e.g., "America/Regina")
+ * @returns ISO string representing midnight in the specified timezone
+ */
+export function convertLocalDateToTimezoneUTC(
+  dateString: string,
+  timezone: string
+): string {
+  try {
+    // Parse the date string to get year, month, day
+    const [year, month, day] = dateString.split("-").map(Number);
+
+    // Create a string representing midnight in the target timezone
+    // Format: YYYY-MM-DDTHH:MM:SS
+    const localDateTimeString = `${year}-${String(month).padStart(
+      2,
+      "0"
+    )}-${String(day).padStart(2, "0")}T00:00:00`;
+
+    // Use Intl.DateTimeFormat to convert this to UTC
+    // The trick is to format a known UTC time in the target timezone,
+    // then calculate the offset
+
+    // Create two dates: one that we'll interpret as being in the target timezone
+    // and we want to find what UTC time that corresponds to
+
+    // Method: Create the date, format it in the target timezone,
+    // and calculate the offset from that
+    const tentativeDate = new Date(`${localDateTimeString}Z`); // Start with UTC interpretation
+
+    // Get the date/time components as they would appear in the target timezone
+    const formatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
+
+    // What does our tentative UTC date look like in the target timezone?
+    const formatted = formatter.format(tentativeDate);
+    const [datePart, timePart] = formatted.split(", ");
+
+    // Parse the parts to see the difference
+    const [fYear, fMonth, fDay] = datePart.split("-").map(Number);
+    const [fHour, fMinute, fSecond] = timePart.split(":").map(Number);
+
+    // Calculate the offset: the difference between what we want (00:00:00 on the date)
+    // and what we got when interpreting the date as UTC
+    const targetMillis = new Date(
+      Date.UTC(year, month - 1, day, 0, 0, 0, 0)
+    ).getTime();
+    const actualMillis = new Date(
+      Date.UTC(fYear, fMonth - 1, fDay, fHour, fMinute, fSecond, 0)
+    ).getTime();
+
+    const offset = actualMillis - targetMillis;
+
+    // Adjust the tentative date by the offset to get the correct UTC time
+    const correctedDate = new Date(tentativeDate.getTime() - offset);
+
+    return correctedDate.toISOString();
+  } catch (error) {
+    console.error("Error converting local date to timezone UTC:", error);
+    // Fallback: return the date as-is in ISO format
+    return `${dateString}T00:00:00.000Z`;
+  }
+}
+
+/**
  * Formats a date string (YYYY-MM-DD) for relative display
  * Shows "Today", "Yesterday", weekday name, or formatted date
  *
