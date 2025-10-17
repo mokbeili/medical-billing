@@ -226,7 +226,7 @@ export async function PUT(
       for (const code of billingCodes) {
         const codeData = {
           serviceLocation: serviceLocation || "X",
-          locationOfService: code.locationOfService || "11",
+          locationOfService: code.locationOfService,
           serviceStartTime: code.serviceStartTime
             ? new Date(code.serviceStartTime)
             : null,

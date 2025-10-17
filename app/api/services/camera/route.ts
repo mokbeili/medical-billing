@@ -138,7 +138,7 @@ export async function POST(request: Request) {
           },
         },
         serviceLocation: serviceLocation || "X", // Default to Rural/Northern if not provided
-        locationOfService: billingCode.locationOfService || "11", // Use code's location or default to Office
+        locationOfService: billingCode.locationOfService, // Use code's location or default to Office
         serviceStartTime: billingCode.serviceStartTime
           ? new Date(billingCode.serviceStartTime)
           : null,

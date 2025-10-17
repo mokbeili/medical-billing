@@ -163,6 +163,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
     serviceEndTime: string | null;
     numberOfUnits: number;
     specialCircumstances: string | null;
+    locationOfService: string | null;
   }
 
   const [billingCodeSelections, setBillingCodeSelections] = useState<
@@ -1029,7 +1030,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
     const mostRecentLocationOfService =
       selectedCodes.length > 0
         ? selectedCodes[selectedCodes.length - 1].locationOfService
-        : "1"; // Default to Office
+        : null; // Must be set through modal
 
     // Create ServiceCode objects from BillingCode objects
     const newServiceCodes: ServiceCode[] = newCodes.map((code) => ({
@@ -1042,15 +1043,13 @@ const ServiceFormScreen = ({ navigation }: any) => {
       serviceDate: formData.serviceDate,
       serviceEndDate: null,
       serviceLocation: formData.serviceLocation,
-      locationOfService: mostRecentLocationOfService || "1", // Remember last location or default to Office
+      locationOfService: mostRecentLocationOfService, // Will be set through modal
       numberOfUnits: 1,
       summary: "",
       createdAt: new Date().toISOString(),
       billingCode: code,
       changeLogs: [], // Add empty changeLogs array
     }));
-
-    setSelectedCodes([...selectedCodes, ...newServiceCodes]);
 
     // Update formData.billingCodes to match the new ServiceCode structure
     setFormData((prev) => {
@@ -1066,6 +1065,13 @@ const ServiceFormScreen = ({ navigation }: any) => {
         let serviceStartDate =
           subSelection?.serviceDate || formData.serviceDate;
         let serviceEndDate = subSelection?.serviceEndDate || null;
+
+        // Debug logging
+        console.log("Adding code:", serviceCode.billingCode.code, {
+          subSelectionDate: subSelection?.serviceDate,
+          formServiceDate: formData.serviceDate,
+          finalStartDate: serviceStartDate,
+        });
 
         if (serviceCode.billingCode.billing_record_type === 57) {
           // Check if this code has previous codes defined and if any of them are already selected
@@ -1094,9 +1100,17 @@ const ServiceFormScreen = ({ navigation }: any) => {
               );
 
               if (previousCodeIndex >= 0 && previousSelectedCode) {
-                const previousStartDate = new Date(
+                // Parse date without timezone conversion
+                const prevDateStr =
                   updatedBillingCodes[previousCodeIndex].serviceDate ||
-                    formData.serviceDate
+                  formData.serviceDate;
+                const [prevYear, prevMonth, prevDay] = prevDateStr
+                  .split("-")
+                  .map(Number);
+                const previousStartDate = new Date(
+                  prevYear,
+                  prevMonth - 1,
+                  prevDay
                 );
 
                 // Set the previous code's end date as previous start date + day range - 1
@@ -1111,10 +1125,20 @@ const ServiceFormScreen = ({ navigation }: any) => {
                       1
                   );
 
+                  // Format as YYYY-MM-DD
+                  const endYear = previousEndDate.getFullYear();
+                  const endMonth = String(
+                    previousEndDate.getMonth() + 1
+                  ).padStart(2, "0");
+                  const endDay = String(previousEndDate.getDate()).padStart(
+                    2,
+                    "0"
+                  );
+
                   // Update the previous code's end date
                   updatedBillingCodes[previousCodeIndex] = {
                     ...updatedBillingCodes[previousCodeIndex],
-                    serviceEndDate: previousEndDate.toISOString().split("T")[0],
+                    serviceEndDate: `${endYear}-${endMonth}-${endDay}`,
                   };
                 }
 
@@ -1128,12 +1152,28 @@ const ServiceFormScreen = ({ navigation }: any) => {
                     newStartDate.getDate() +
                       previousSelectedCode.billingCode.day_range
                   );
-                  serviceStartDate = newStartDate.toISOString().split("T")[0];
+                  const startYear = newStartDate.getFullYear();
+                  const startMonth = String(
+                    newStartDate.getMonth() + 1
+                  ).padStart(2, "0");
+                  const startDay = String(newStartDate.getDate()).padStart(
+                    2,
+                    "0"
+                  );
+                  serviceStartDate = `${startYear}-${startMonth}-${startDay}`;
                 } else {
                   // If previous code has no day range, start the next day
                   const newStartDate = new Date(previousStartDate);
                   newStartDate.setDate(newStartDate.getDate() + 1);
-                  serviceStartDate = newStartDate.toISOString().split("T")[0];
+                  const startYear = newStartDate.getFullYear();
+                  const startMonth = String(
+                    newStartDate.getMonth() + 1
+                  ).padStart(2, "0");
+                  const startDay = String(newStartDate.getDate()).padStart(
+                    2,
+                    "0"
+                  );
+                  serviceStartDate = `${startYear}-${startMonth}-${startDay}`;
                 }
               }
             }
@@ -1147,11 +1187,20 @@ const ServiceFormScreen = ({ navigation }: any) => {
             serviceCode.billingCode.day_range &&
             serviceCode.billingCode.day_range > 0
           ) {
-            const startDate = new Date(serviceStartDate);
+            // Parse date without timezone conversion
+            const [startYear, startMonth, startDay] = serviceStartDate
+              .split("-")
+              .map(Number);
+            const startDate = new Date(startYear, startMonth - 1, startDay);
             startDate.setDate(
               startDate.getDate() + serviceCode.billingCode.day_range - 1
             ); // -1 because it's inclusive
-            serviceEndDate = startDate.toISOString().split("T")[0];
+
+            // Format as YYYY-MM-DD
+            const endYear = startDate.getFullYear();
+            const endMonth = String(startDate.getMonth() + 1).padStart(2, "0");
+            const endDay = String(startDate.getDate()).padStart(2, "0");
+            serviceEndDate = `${endYear}-${endMonth}-${endDay}`;
           }
         }
 
@@ -1167,7 +1216,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
           specialCircumstances: subSelection?.specialCircumstances || null,
           serviceDate: serviceStartDate,
           serviceEndDate: serviceEndDate,
-          locationOfService: subSelection?.locationOfService || "1",
+          locationOfService: subSelection?.locationOfService || null,
           fee_determinant: serviceCode.billingCode.fee_determinant,
           multiple_unit_indicator:
             serviceCode.billingCode.multiple_unit_indicator,
@@ -1179,6 +1228,33 @@ const ServiceFormScreen = ({ navigation }: any) => {
         billingCodes: updatedBillingCodes,
       };
     });
+
+    // Update selectedCodes with the correct dates from subSelections
+    const updatedServiceCodes = newServiceCodes.map((serviceCode) => {
+      const subSelection = subSelections?.find(
+        (s) => s.codeId === serviceCode.billingCode.id
+      );
+      return {
+        ...serviceCode,
+        serviceDate: subSelection?.serviceDate || serviceCode.serviceDate,
+        serviceEndDate:
+          subSelection?.serviceEndDate || serviceCode.serviceEndDate,
+        serviceStartTime:
+          subSelection?.serviceStartTime || serviceCode.serviceStartTime,
+        serviceEndTime:
+          subSelection?.serviceEndTime || serviceCode.serviceEndTime,
+        numberOfUnits: subSelection?.numberOfUnits || serviceCode.numberOfUnits,
+        bilateralIndicator:
+          subSelection?.bilateralIndicator || serviceCode.bilateralIndicator,
+        specialCircumstances:
+          subSelection?.specialCircumstances ||
+          serviceCode.specialCircumstances,
+        locationOfService:
+          subSelection?.locationOfService || serviceCode.locationOfService,
+      };
+    });
+
+    setSelectedCodes([...selectedCodes, ...updatedServiceCodes]);
   };
 
   // Helper function to sync selectedCodes to formData.billingCodes
@@ -1198,6 +1274,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
         fee_determinant: code.billingCode.fee_determinant,
         multiple_unit_indicator: code.billingCode.multiple_unit_indicator,
         changeLogs: code.changeLogs || [],
+        locationOfService: code.locationOfService,
       };
 
       // Preserve service code ID if it exists and is a valid database ID
@@ -1295,7 +1372,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
     const mostRecentLocationOfService =
       selectedCodes.length > 0
         ? selectedCodes[selectedCodes.length - 1].locationOfService
-        : "1"; // Default to Office
+        : null; // Must be set through modal
 
     // Create a new code instance with a temporary negative ID
     const newId = -Math.floor(Math.random() * 1000000);
@@ -1396,7 +1473,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
       handleSaveEditedCode(subSelection);
       return;
     }
-
+    console.log(subSelection);
     // This is a new instance, add it to selectedCodes
     const newCode: ServiceCode = {
       id: editingCode.id, // Keep the temporary negative ID
@@ -1408,7 +1485,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
       serviceStartTime: subSelection.serviceStartTime,
       serviceEndTime: subSelection.serviceEndTime,
       serviceLocation: null,
-      locationOfService: subSelection.locationOfService || "1", // Use from subSelection
+      locationOfService: subSelection.locationOfService, // Use from subSelection
       numberOfUnits: subSelection.numberOfUnits,
       specialCircumstances: subSelection.specialCircumstances,
       summary: "",
@@ -1997,6 +2074,21 @@ const ServiceFormScreen = ({ navigation }: any) => {
     return true;
   };
 
+  // Helper to validate and clean date strings
+  const isValidDateString = (dateStr: any): dateStr is string => {
+    if (!dateStr || typeof dateStr !== "string") return false;
+    const trimmed = dateStr.trim();
+    if (trimmed === "") return false;
+    // Check if it matches YYYY-MM-DD format
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(trimmed.split("T")[0])) return false;
+    // Verify it's a parseable date
+    const [year, month, day] = trimmed.split("T")[0].split("-").map(Number);
+    if (isNaN(year) || isNaN(month) || isNaN(day)) return false;
+    if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+    return true;
+  };
+
   const handleSave = () => {
     if (!validateForm()) return;
 
@@ -2019,17 +2111,49 @@ const ServiceFormScreen = ({ navigation }: any) => {
         };
 
         // Convert billing code dates to physician's timezone
-        if (code.serviceDate) {
-          cleanedCode.serviceDate = convertLocalDateToTimezoneUTC(
+        // Only convert if we have a valid date string
+        if (isValidDateString(code.serviceDate)) {
+          try {
+            cleanedCode.serviceDate = convertLocalDateToTimezoneUTC(
+              code.serviceDate.split("T")[0], // Ensure we only use the date part
+              physicianTimezone
+            );
+          } catch (error) {
+            console.error(
+              "Error converting serviceDate:",
+              code.serviceDate,
+              error
+            );
+            cleanedCode.serviceDate = null;
+          }
+        } else {
+          console.log(
+            "Invalid or missing serviceDate for code:",
+            code.codeId,
+            "value:",
             code.serviceDate,
-            physicianTimezone
+            "type:",
+            typeof code.serviceDate
           );
+          // For codes without a service date, keep it as null
+          cleanedCode.serviceDate = null;
         }
-        if (code.serviceEndDate) {
-          cleanedCode.serviceEndDate = convertLocalDateToTimezoneUTC(
-            code.serviceEndDate,
-            physicianTimezone
-          );
+        if (isValidDateString(code.serviceEndDate)) {
+          try {
+            cleanedCode.serviceEndDate = convertLocalDateToTimezoneUTC(
+              code.serviceEndDate.split("T")[0], // Ensure we only use the date part
+              physicianTimezone
+            );
+          } catch (error) {
+            console.error(
+              "Error converting serviceEndDate:",
+              code.serviceEndDate,
+              error
+            );
+            cleanedCode.serviceEndDate = null;
+          }
+        } else {
+          cleanedCode.serviceEndDate = null;
         }
 
         // Only include ID if it's a valid existing service code ID
@@ -2177,17 +2301,49 @@ const ServiceFormScreen = ({ navigation }: any) => {
         };
 
         // Convert billing code dates to physician's timezone
-        if (code.serviceDate) {
-          cleanedCode.serviceDate = convertLocalDateToTimezoneUTC(
+        // Only convert if we have a valid date string
+        if (isValidDateString(code.serviceDate)) {
+          try {
+            cleanedCode.serviceDate = convertLocalDateToTimezoneUTC(
+              code.serviceDate.split("T")[0], // Ensure we only use the date part
+              physicianTimezone
+            );
+          } catch (error) {
+            console.error(
+              "Error converting serviceDate:",
+              code.serviceDate,
+              error
+            );
+            cleanedCode.serviceDate = null;
+          }
+        } else {
+          console.log(
+            "Invalid or missing serviceDate for code:",
+            code.codeId,
+            "value:",
             code.serviceDate,
-            physicianTimezone
+            "type:",
+            typeof code.serviceDate
           );
+          // For codes without a service date, keep it as null
+          cleanedCode.serviceDate = null;
         }
-        if (code.serviceEndDate) {
-          cleanedCode.serviceEndDate = convertLocalDateToTimezoneUTC(
-            code.serviceEndDate,
-            physicianTimezone
-          );
+        if (isValidDateString(code.serviceEndDate)) {
+          try {
+            cleanedCode.serviceEndDate = convertLocalDateToTimezoneUTC(
+              code.serviceEndDate.split("T")[0], // Ensure we only use the date part
+              physicianTimezone
+            );
+          } catch (error) {
+            console.error(
+              "Error converting serviceEndDate:",
+              code.serviceEndDate,
+              error
+            );
+            cleanedCode.serviceEndDate = null;
+          }
+        } else {
+          cleanedCode.serviceEndDate = null;
         }
 
         // Only include ID if it's a valid existing service code ID
@@ -4408,7 +4564,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
                 serviceEndTime: editingCode.serviceEndTime,
                 numberOfUnits: editingCode.numberOfUnits,
                 specialCircumstances: editingCode.specialCircumstances,
-                locationOfService: editingCode.locationOfService || "1",
+                locationOfService: editingCode.locationOfService,
               }
             : null
         }
@@ -4462,6 +4618,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
                               ...item.lastServiceCodePayload,
                               numberOfUnits:
                                 item.lastServiceCodePayload.numberOfUnits ?? 1,
+                              locationOfService: "1", // Default to Office
                             },
                           ]);
                           setCurrentCodeForSubSelection(item.billingCode);
@@ -4532,6 +4689,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
                               serviceEndTime: null,
                               numberOfUnits: 1,
                               specialCircumstances: null,
+                              locationOfService: "1", // Default to Office
                             };
 
                             setCodeSubSelections([newSubSelection]);
@@ -4592,386 +4750,48 @@ const ServiceFormScreen = ({ navigation }: any) => {
       </Modal>
 
       {/* Sub-selection Modal for code customization */}
-      {currentCodeForSubSelection && (
-        <Modal
-          visible={showSubSelectionModal}
-          transparent={true}
-          animationType="slide"
-          onRequestClose={() => setShowSubSelectionModal(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>
-                  Configure {currentCodeForSubSelection.code}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => setShowSubSelectionModal(false)}
-                >
-                  <Ionicons name="close" size={24} color="#6b7280" />
-                </TouchableOpacity>
-              </View>
+      <BillingCodeConfigurationModal
+        visible={showSubSelectionModal}
+        billingCode={currentCodeForSubSelection}
+        subSelection={
+          currentCodeForSubSelection
+            ? getSubSelectionForCodeInline(currentCodeForSubSelection.id) ||
+              null
+            : null
+        }
+        onClose={() => setShowSubSelectionModal(false)}
+        onSave={(updatedSubSelection) => {
+          // Create the updated sub-selection array with the new values
+          const updatedSubSelections = codeSubSelections.map((s) =>
+            s.codeId === updatedSubSelection.codeId
+              ? {
+                  ...s,
+                  serviceDate: updatedSubSelection.serviceDate,
+                  serviceEndDate: updatedSubSelection.serviceEndDate,
+                  bilateralIndicator: updatedSubSelection.bilateralIndicator,
+                  serviceStartTime: updatedSubSelection.serviceStartTime,
+                  serviceEndTime: updatedSubSelection.serviceEndTime,
+                  numberOfUnits: updatedSubSelection.numberOfUnits ?? 1,
+                  specialCircumstances:
+                    updatedSubSelection.specialCircumstances,
+                  locationOfService: updatedSubSelection.locationOfService,
+                }
+              : s
+          );
 
-              <ScrollView style={styles.subSelectionScrollView}>
-                {/* Service Date - Required for all codes except Type 57 */}
-                {!isType57CodeInline(currentCodeForSubSelection) && (
-                  <View style={styles.subSelectionSection}>
-                    <Text style={styles.subSelectionSectionTitle}>
-                      Service Date <Text style={styles.requiredText}>*</Text>
-                    </Text>
-                    <DateInputWithNavigation
-                      value={
-                        getSubSelectionForCodeInline(
-                          currentCodeForSubSelection.id
-                        )?.serviceDate || ""
-                      }
-                      onChangeText={(text) =>
-                        handleUpdateSubSelectionInline(
-                          currentCodeForSubSelection.id,
-                          { serviceDate: text }
-                        )
-                      }
-                      placeholder="YYYY-MM-DD"
-                    />
-                  </View>
-                )}
+          // Add the code with the updated sub-selection
+          if (billingCodeSelections.length > 0) {
+            handleAddCodes(billingCodeSelections, updatedSubSelections);
+          }
 
-                {/* Service Start/End Date - Only for Type 57 codes */}
-                {isType57CodeInline(currentCodeForSubSelection) && (
-                  <View style={styles.subSelectionSection}>
-                    <Text style={styles.subSelectionSectionTitle}>
-                      Service Dates
-                    </Text>
-                    <View style={styles.dateRow}>
-                      <View style={styles.dateInputContainer}>
-                        <Text style={styles.dateLabel}>Start Date</Text>
-                        <TextInput
-                          style={[styles.dateInput, styles.readOnlyInput]}
-                          placeholder="YYYY-MM-DD"
-                          value={
-                            getSubSelectionForCodeInline(
-                              currentCodeForSubSelection.id
-                            )?.serviceDate || ""
-                          }
-                          editable={false}
-                        />
-                      </View>
-                      <View style={styles.dateInputContainer}>
-                        <Text style={styles.dateLabel}>End Date</Text>
-                        <TextInput
-                          style={[styles.dateInput, styles.readOnlyInput]}
-                          placeholder="YYYY-MM-DD"
-                          value={
-                            getSubSelectionForCodeInline(
-                              currentCodeForSubSelection.id
-                            )?.serviceEndDate || ""
-                          }
-                          editable={false}
-                        />
-                      </View>
-                    </View>
-                    <Text style={styles.calculatedDateNote}>
-                      Dates are automatically calculated based on service date
-                      and previous codes
-                    </Text>
-                  </View>
-                )}
-
-                {/* Units - Only for codes with multiple_unit_indicator === "U" */}
-                {currentCodeForSubSelection.multiple_unit_indicator === "U" && (
-                  <View style={styles.subSelectionSection}>
-                    <Text style={styles.subSelectionSectionTitle}>
-                      Number of Units
-                      {currentCodeForSubSelection.max_units && (
-                        <Text style={styles.maxUnitsText}>
-                          {" "}
-                          (Max: {currentCodeForSubSelection.max_units})
-                        </Text>
-                      )}
-                    </Text>
-                    <View style={styles.unitsContainer}>
-                      <TouchableOpacity
-                        style={[
-                          styles.unitButton,
-                          (getSubSelectionForCodeInline(
-                            currentCodeForSubSelection.id
-                          )?.numberOfUnits || 1) <= 1
-                            ? styles.disabledButton
-                            : null,
-                        ]}
-                        onPress={() => {
-                          const sub = getSubSelectionForCodeInline(
-                            currentCodeForSubSelection.id
-                          );
-                          if (!sub) return;
-                          if (sub.numberOfUnits > 1) {
-                            handleUpdateSubSelectionInline(
-                              currentCodeForSubSelection.id,
-                              { numberOfUnits: sub.numberOfUnits - 1 }
-                            );
-                          }
-                        }}
-                        disabled={
-                          (getSubSelectionForCodeInline(
-                            currentCodeForSubSelection.id
-                          )?.numberOfUnits || 1) <= 1
-                        }
-                      >
-                        <Text style={styles.unitButtonText}>-</Text>
-                      </TouchableOpacity>
-                      <TextInput
-                        style={styles.unitsInput}
-                        value={String(
-                          getSubSelectionForCodeInline(
-                            currentCodeForSubSelection.id
-                          )?.numberOfUnits || 1
-                        )}
-                        onChangeText={(text) => {
-                          const value = parseInt(text) || 1;
-                          const maxUnits =
-                            currentCodeForSubSelection.max_units || value;
-                          handleUpdateSubSelectionInline(
-                            currentCodeForSubSelection.id,
-                            { numberOfUnits: Math.min(value, maxUnits) }
-                          );
-                        }}
-                        keyboardType="numeric"
-                      />
-                      <TouchableOpacity
-                        style={[
-                          styles.unitButton,
-                          currentCodeForSubSelection.max_units &&
-                          (getSubSelectionForCodeInline(
-                            currentCodeForSubSelection.id
-                          )?.numberOfUnits || 1) >=
-                            (currentCodeForSubSelection.max_units || 0)
-                            ? styles.disabledButton
-                            : null,
-                        ]}
-                        onPress={() => {
-                          const sub = getSubSelectionForCodeInline(
-                            currentCodeForSubSelection.id
-                          );
-                          if (!sub) return;
-                          const maxUnits =
-                            currentCodeForSubSelection.max_units ||
-                            sub.numberOfUnits + 1;
-                          handleUpdateSubSelectionInline(
-                            currentCodeForSubSelection.id,
-                            {
-                              numberOfUnits: Math.min(
-                                sub.numberOfUnits + 1,
-                                maxUnits
-                              ),
-                            }
-                          );
-                        }}
-                        disabled={
-                          !!(
-                            currentCodeForSubSelection.max_units &&
-                            (getSubSelectionForCodeInline(
-                              currentCodeForSubSelection.id
-                            )?.numberOfUnits || 1) >=
-                              (currentCodeForSubSelection.max_units || 0)
-                          )
-                        }
-                      >
-                        <Text style={styles.unitButtonText}>+</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                )}
-
-                {/* Service Start/End Time */}
-                {(currentCodeForSubSelection.start_time_required === "Y" ||
-                  currentCodeForSubSelection.stop_time_required === "Y") && (
-                  <View style={styles.subSelectionSection}>
-                    <Text style={styles.subSelectionSectionTitle}>
-                      Service Times
-                    </Text>
-                    <View style={styles.timeRow}>
-                      {currentCodeForSubSelection.start_time_required ===
-                        "Y" && (
-                        <View style={styles.timeInputContainer}>
-                          <Text style={styles.timeLabel}>Start Time</Text>
-                          <TextInput
-                            style={styles.timeInput}
-                            placeholder="HH:MM"
-                            value={
-                              getSubSelectionForCodeInline(
-                                currentCodeForSubSelection.id
-                              )?.serviceStartTime || ""
-                            }
-                            onChangeText={(text) =>
-                              handleUpdateSubSelectionInline(
-                                currentCodeForSubSelection.id,
-                                { serviceStartTime: text }
-                              )
-                            }
-                          />
-                        </View>
-                      )}
-                      {currentCodeForSubSelection.stop_time_required ===
-                        "Y" && (
-                        <View style={styles.timeInputContainer}>
-                          <Text style={styles.timeLabel}>End Time</Text>
-                          <TextInput
-                            style={styles.timeInput}
-                            placeholder="HH:MM"
-                            value={
-                              getSubSelectionForCodeInline(
-                                currentCodeForSubSelection.id
-                              )?.serviceEndTime || ""
-                            }
-                            onChangeText={(text) =>
-                              handleUpdateSubSelectionInline(
-                                currentCodeForSubSelection.id,
-                                { serviceEndTime: text }
-                              )
-                            }
-                          />
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                )}
-
-                {/* Bilateral Indicator */}
-                {currentCodeForSubSelection.title?.includes("Bilateral") && (
-                  <View style={styles.subSelectionSection}>
-                    <Text style={styles.subSelectionSectionTitle}>
-                      Bilateral Indicator
-                    </Text>
-                    <View style={styles.bilateralContainer}>
-                      <TouchableOpacity
-                        style={[
-                          styles.bilateralButton,
-                          getSubSelectionForCodeInline(
-                            currentCodeForSubSelection.id
-                          )?.bilateralIndicator === "L" &&
-                            styles.selectedBilateralButton,
-                        ]}
-                        onPress={() =>
-                          handleUpdateSubSelectionInline(
-                            currentCodeForSubSelection.id,
-                            {
-                              bilateralIndicator:
-                                getSubSelectionForCodeInline(
-                                  currentCodeForSubSelection.id
-                                )?.bilateralIndicator === "L"
-                                  ? null
-                                  : "L",
-                            }
-                          )
-                        }
-                      >
-                        <Text
-                          style={[
-                            styles.bilateralButtonText,
-                            getSubSelectionForCodeInline(
-                              currentCodeForSubSelection.id
-                            )?.bilateralIndicator === "L" &&
-                              styles.selectedBilateralButtonText,
-                          ]}
-                        >
-                          Left
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[
-                          styles.bilateralButton,
-                          getSubSelectionForCodeInline(
-                            currentCodeForSubSelection.id
-                          )?.bilateralIndicator === "R" &&
-                            styles.selectedBilateralButton,
-                        ]}
-                        onPress={() =>
-                          handleUpdateSubSelectionInline(
-                            currentCodeForSubSelection.id,
-                            {
-                              bilateralIndicator:
-                                getSubSelectionForCodeInline(
-                                  currentCodeForSubSelection.id
-                                )?.bilateralIndicator === "R"
-                                  ? null
-                                  : "R",
-                            }
-                          )
-                        }
-                      >
-                        <Text
-                          style={[
-                            styles.bilateralButtonText,
-                            getSubSelectionForCodeInline(
-                              currentCodeForSubSelection.id
-                            )?.bilateralIndicator === "R" &&
-                              styles.selectedBilateralButtonText,
-                          ]}
-                        >
-                          Right
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[
-                          styles.bilateralButton,
-                          getSubSelectionForCodeInline(
-                            currentCodeForSubSelection.id
-                          )?.bilateralIndicator === "B" &&
-                            styles.selectedBilateralButton,
-                        ]}
-                        onPress={() =>
-                          handleUpdateSubSelectionInline(
-                            currentCodeForSubSelection.id,
-                            {
-                              bilateralIndicator:
-                                getSubSelectionForCodeInline(
-                                  currentCodeForSubSelection.id
-                                )?.bilateralIndicator === "B"
-                                  ? null
-                                  : "B",
-                            }
-                          )
-                        }
-                      >
-                        <Text
-                          style={[
-                            styles.bilateralButtonText,
-                            getSubSelectionForCodeInline(
-                              currentCodeForSubSelection.id
-                            )?.bilateralIndicator === "B" &&
-                              styles.selectedBilateralButtonText,
-                          ]}
-                        >
-                          Both
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                )}
-              </ScrollView>
-
-              <View style={styles.modalButtonContainer}>
-                <Button
-                  mode="contained"
-                  onPress={() => {
-                    // Add the code with the configured sub-selection
-                    if (billingCodeSelections.length > 0) {
-                      handleAddCodes(billingCodeSelections, codeSubSelections);
-                    }
-                    setShowSubSelectionModal(false);
-                    setBillingCodeSelections([]);
-                    setCodeSubSelections([]);
-                    setCurrentCodeForSubSelection(null);
-                  }}
-                  style={styles.confirmButton}
-                >
-                  Add Code
-                </Button>
-              </View>
-            </View>
-          </View>
-        </Modal>
-      )}
+          // Clean up and close
+          setShowSubSelectionModal(false);
+          setBillingCodeSelections([]);
+          setCodeSubSelections([]);
+          setCurrentCodeForSubSelection(null);
+        }}
+        serviceDate={formData.serviceDate}
+      />
     </SafeAreaView>
   );
 };

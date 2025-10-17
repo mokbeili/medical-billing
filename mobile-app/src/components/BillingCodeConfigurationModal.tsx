@@ -42,23 +42,31 @@ const BillingCodeConfigurationModal: React.FC<
   // Initialize local state when modal opens
   React.useEffect(() => {
     if (visible && subSelection) {
-      setLocalSubSelection(subSelection);
+      // Use the provided subSelection, but use serviceDate prop as fallback if null
+      const effectiveServiceDate =
+        subSelection.serviceDate ||
+        serviceDate ||
+        new Date().toISOString().split("T")[0];
+      setLocalSubSelection({
+        ...subSelection,
+        serviceDate: effectiveServiceDate,
+      });
     } else if (visible && !subSelection) {
-      // If no subSelection provided, create default with today's date
-      const today = new Date().toISOString().split("T")[0];
+      // If no subSelection provided, create default
+      const defaultDate = serviceDate || new Date().toISOString().split("T")[0];
       setLocalSubSelection({
         codeId: billingCode?.id || 0,
-        serviceDate: today,
+        serviceDate: defaultDate,
         serviceEndDate: null,
         bilateralIndicator: null,
         serviceStartTime: null,
         serviceEndTime: null,
         numberOfUnits: 1,
         specialCircumstances: null,
-        locationOfService: "1", // Default to Office
+        locationOfService: null, // User must select
       });
     }
-  }, [visible, subSelection, billingCode]);
+  }, [visible, subSelection, billingCode, serviceDate]);
 
   if (!billingCode || !localSubSelection) return null;
 
@@ -68,6 +76,13 @@ const BillingCodeConfigurationModal: React.FC<
 
   const handleSave = () => {
     if (localSubSelection) {
+      // Validate that locationOfService is selected
+      if (!localSubSelection.locationOfService) {
+        // You can use Alert from react-native if imported, or just prevent save
+        // For now, we'll just prevent the save
+        console.warn("Location of Service must be selected");
+        return;
+      }
       onSave(localSubSelection);
     }
     onClose();
@@ -85,7 +100,12 @@ const BillingCodeConfigurationModal: React.FC<
     if (!localSubSelection?.serviceDate) return false;
     // Parse date without timezone conversion
     const dateOnly = localSubSelection.serviceDate.split("T")[0];
-    const today = new Date().toISOString().split("T")[0];
+    // Get today in local timezone (not UTC)
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(
+      2,
+      "0"
+    )}-${String(now.getDate()).padStart(2, "0")}`;
     // Disable if current date is today or in the future
     return dateOnly < today;
   };
