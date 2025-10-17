@@ -2364,57 +2364,57 @@ export default function ServiceForm({
                                             )
                                           }
                                         >
-                                          <SelectTrigger className="w-32 h-7 text-xs">
+                                          <SelectTrigger className="w-64 h-7 text-xs">
                                             <SelectValue placeholder="Select" />
                                           </SelectTrigger>
                                           <SelectContent>
                                             <SelectItem value="1">
-                                              Office
+                                              1 - Office
                                             </SelectItem>
                                             <SelectItem value="2">
-                                              Hospital In-Patient
+                                              2 - Hospital In-Patient
                                             </SelectItem>
                                             <SelectItem value="3">
-                                              Hospital Out-Patient
+                                              3 - Hospital Out-Patient
                                             </SelectItem>
                                             <SelectItem value="4">
-                                              Patient's Home
+                                              4 - Patient's Home
                                             </SelectItem>
                                             <SelectItem value="5">
-                                              Other
+                                              5 - Other
                                             </SelectItem>
                                             <SelectItem value="7">
-                                              Premium
+                                              7 - Premium
                                             </SelectItem>
                                             <SelectItem value="9">
-                                              Emergency Room
+                                              9 - Emergency Room
                                             </SelectItem>
                                             <SelectItem value="B">
-                                              Hospital In-Patient (Premium)
+                                              B - Hospital In-Patient (Premium)
                                             </SelectItem>
                                             <SelectItem value="C">
-                                              Hospital Out-Patient (Premium)
+                                              C - Hospital Out-Patient (Premium)
                                             </SelectItem>
                                             <SelectItem value="D">
-                                              Patient's Home (Premium)
+                                              D - Patient's Home (Premium)
                                             </SelectItem>
                                             <SelectItem value="E">
-                                              Other (Premium)
+                                              E - Other (Premium)
                                             </SelectItem>
                                             <SelectItem value="F">
-                                              After-Hours-Clinic (Premium)
+                                              F - After-Hours-Clinic (Premium)
                                             </SelectItem>
                                             <SelectItem value="K">
-                                              In Hospital (Premium)
+                                              K - In Hospital (Premium)
                                             </SelectItem>
                                             <SelectItem value="M">
-                                              Out Patient (Premium)
+                                              M - Out Patient (Premium)
                                             </SelectItem>
                                             <SelectItem value="P">
-                                              Home (Premium)
+                                              P - Home (Premium)
                                             </SelectItem>
                                             <SelectItem value="T">
-                                              Other (Premium)
+                                              T - Other (Premium)
                                             </SelectItem>
                                           </SelectContent>
                                         </Select>
