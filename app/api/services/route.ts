@@ -49,7 +49,6 @@ export async function POST(request: Request) {
       summary,
       billingCodes,
       serviceLocation,
-      locationOfService,
       serviceStatus,
       visitNumber,
       billingTypeId,
@@ -82,7 +81,7 @@ export async function POST(request: Request) {
           },
         },
         serviceLocation: serviceLocation || "X", // Default to Rural/Northern if not provided
-        locationOfService: locationOfService || "1", // Default to Office if not provided
+        locationOfService: billingCode.locationOfService || "11", // Use individual code's location or default to Office
         serviceStartTime: billingCode.serviceStartTime
           ? new Date(billingCode.serviceStartTime)
           : null,
@@ -369,7 +368,6 @@ export async function PUT(request: Request) {
       serviceStatus,
       billingCodes,
       serviceLocation,
-      locationOfService,
     } = data;
 
     // Validate required fields
@@ -399,12 +397,42 @@ export async function PUT(request: Request) {
     // Prepare update data
     const updateData: any = {};
 
-    if (physicianId !== undefined) {
-      updateData.physician = { connect: { id: physicianId } };
+    if (
+      physicianId !== undefined &&
+      physicianId !== null &&
+      physicianId !== ""
+    ) {
+      // Validate that the physician exists
+      const physicianIdStr = String(physicianId);
+      const physicianExists = await prisma.physician.findUnique({
+        where: { id: physicianIdStr },
+      });
+
+      if (!physicianExists) {
+        return NextResponse.json(
+          { error: "Physician not found" },
+          { status: 400 }
+        );
+      }
+
+      updateData.physician = { connect: { id: physicianIdStr } };
     }
 
-    if (patientId !== undefined) {
-      updateData.patient = { connect: { id: patientId } };
+    if (patientId !== undefined && patientId !== null && patientId !== "") {
+      // Validate that the patient exists
+      const patientIdStr = String(patientId);
+      const patientExists = await prisma.patient.findUnique({
+        where: { id: patientIdStr },
+      });
+
+      if (!patientExists) {
+        return NextResponse.json(
+          { error: "Patient not found" },
+          { status: 400 }
+        );
+      }
+
+      updateData.patient = { connect: { id: patientIdStr } };
     }
 
     if (serviceDate !== undefined) {
@@ -487,7 +515,7 @@ export async function PUT(request: Request) {
       for (const billingCode of billingCodes) {
         const codeData = {
           serviceLocation: serviceLocation || "X",
-          locationOfService: locationOfService || "1",
+          locationOfService: billingCode.locationOfService || "11", // Use individual code's location or default to Office
           serviceStartTime: billingCode.serviceStartTime
             ? new Date(billingCode.serviceStartTime)
             : null,

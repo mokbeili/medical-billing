@@ -149,6 +149,7 @@ export async function POST(
         bc.title,
         bc.max_units,
         bc.section_id,
+        bc.billing_unit_type,
         COALESCE(
           json_agg(
             jsonb_build_object(
@@ -251,10 +252,12 @@ export async function POST(
       );
     }
 
-    // Get location values from existing service codes
-    const existingServiceCode = service.serviceCodes.find(
-      (code) => code.serviceLocation || code.locationOfService
-    );
+    // Get location values from the most recent existing service code
+    const existingServiceCode = service.serviceCodes.sort((a, b) => {
+      const dateA = a.serviceDate || new Date(0);
+      const dateB = b.serviceDate || new Date(0);
+      return new Date(dateB).getTime() - new Date(dateA).getTime();
+    })[0];
     const serviceLocation = existingServiceCode?.serviceLocation || "";
     const locationOfService = existingServiceCode?.locationOfService || "";
 

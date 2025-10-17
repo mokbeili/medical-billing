@@ -251,6 +251,7 @@ export async function GET(request: Request) {
         bc.max_units,
         bc.day_range,
         bc.billing_record_type,
+        bc.billing_unit_type,
         json_build_object(
           'code', s.code,
           'title', s.title
@@ -521,6 +522,7 @@ export async function GET(request: Request) {
         bc.stop_time_required,
         bc.max_units,
         bc.day_range,
+        bc.billing_unit_type,
         json_build_object(
           'code', s.code,
           'title', s.title
@@ -670,6 +672,7 @@ export async function GET(request: Request) {
           bc.stop_time_required,
           bc.max_units,
           bc.day_range,
+          bc.billing_unit_type,
           json_build_object(
             'code', s.code,
             'title', s.title

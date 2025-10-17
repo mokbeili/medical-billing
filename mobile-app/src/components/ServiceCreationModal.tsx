@@ -80,7 +80,6 @@ type Step =
   | "referringPhysician"
   | "serviceDate"
   | "serviceLocation"
-  | "locationOfService"
   | "icdCode"
   | "summary";
 
@@ -180,7 +179,6 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
     setIcdSearchQuery("");
     setServiceDate(format(new Date(), "yyyy-MM-dd"));
     setServiceLocation("X"); // Default to Rural/Northern
-    setLocationOfService("1"); // Default to Office
     setIsPatientConfirmed(false);
     setShowBillingCodeDetails(null);
     setShowBillingCodeConfigModal(false);
@@ -247,7 +245,6 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
     scannedData?.serviceDate || format(new Date(), "yyyy-MM-dd")
   );
   const [serviceLocation, setServiceLocation] = useState<string>("X"); // Default to Rural/Northern
-  const [locationOfService, setLocationOfService] = useState<string>("1"); // Default to Office
   const [selectedICDCode, setSelectedICDCode] = useState<ICDCode | null>(null);
   const [icdSearchQuery, setIcdSearchQuery] = useState<string>("");
   const [isPatientConfirmed, setIsPatientConfirmed] = useState<boolean>(false);
@@ -321,26 +318,6 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
     { value: "R", label: "Regina" },
     { value: "S", label: "Saskatoon" },
     { value: "X", label: "Rural/Northern" },
-  ];
-
-  // Location of service options (based on ServiceFormScreen)
-  const locationOfServiceOptions = [
-    { value: "1", label: "Office" },
-    { value: "2", label: "Hospital In-Patient" },
-    { value: "3", label: "Hospital Out-Patient" },
-    { value: "4", label: "Patient's Home" },
-    { value: "5", label: "Other" },
-    { value: "7", label: "Premium" },
-    { value: "9", label: "Emergency Room" },
-    { value: "B", label: "Hospital In-Patient (Premium)" },
-    { value: "C", label: "Hospital Out-Patient (Premium)" },
-    { value: "D", label: "Patient's Home (Premium)" },
-    { value: "E", label: "Other (Premium)" },
-    { value: "F", label: "After-Hours-Clinic (Premium)" },
-    { value: "K", label: "In Hospital (Premium)" },
-    { value: "M", label: "Out Patient (Premium)" },
-    { value: "P", label: "Home (Premium)" },
-    { value: "T", label: "Other (Premium)" },
   ];
 
   // Fetch health institutions
@@ -874,9 +851,6 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
         setCurrentStep("serviceLocation");
         break;
       case "serviceLocation":
-        setCurrentStep("locationOfService");
-        break;
-      case "locationOfService":
         setCurrentStep("icdCode");
         break;
       case "icdCode":
@@ -908,19 +882,9 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
       case "serviceLocation":
         setCurrentStep("serviceDate");
         break;
-      case "locationOfService":
-        setCurrentStep("serviceLocation");
-        break;
       case "icdCode":
-        // If we have billing codes, go back to locationOfService
-        // If no billing codes, go back to billingCodes or referring physician
-        if (selectedBillingCodes.length > 0) {
-          setCurrentStep("locationOfService");
-        } else if (requiresReferringPhysician) {
-          setCurrentStep("referringPhysician");
-        } else {
-          setCurrentStep("billingCodes");
-        }
+        // Go back to serviceLocation
+        setCurrentStep("serviceLocation");
         break;
       case "summary":
         setCurrentStep("icdCode");
@@ -1000,8 +964,6 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
         serviceDate: serviceDateUTC,
         serviceLocation:
           selectedBillingCodes.length > 0 ? serviceLocation : null,
-        locationOfService:
-          selectedBillingCodes.length > 0 ? locationOfService : null,
         icdCodeId: selectedICDCode?.id,
         summary: `Service created ${
           scannedData ? "from camera scan" : "manually"
@@ -1070,7 +1032,12 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
     }
 
     // Check if start/stop time is required
-    if (code.start_time_required === "Y" || code.stop_time_required === "Y") {
+    if (
+      code.start_time_required === "Y" ||
+      code.stop_time_required === "Y" ||
+      (code.multiple_unit_indicator === "U" &&
+        code.billing_unit_type?.includes("MINUTES"))
+    ) {
       return true;
     }
 
@@ -1170,8 +1137,6 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
         return serviceDate.length > 0;
       case "serviceLocation":
         return serviceLocation.length > 0;
-      case "locationOfService":
-        return locationOfService.length > 0;
       case "icdCode":
         return selectedICDCode !== null;
       case "summary":
@@ -1941,40 +1906,6 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
     </View>
   );
 
-  const renderLocationOfServiceStep = () => (
-    <View style={styles.stepContainer}>
-      <Text style={styles.stepTitle}>Location of Service</Text>
-      <ScrollView
-        style={styles.scrollableButtonGrid}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.buttonGrid}>
-          {locationOfServiceOptions.map((option) => (
-            <TouchableOpacity
-              key={option.value}
-              style={[
-                styles.optionButton,
-                locationOfService === option.value &&
-                  styles.selectedOptionButton,
-              ]}
-              onPress={() => setLocationOfService(option.value)}
-            >
-              <Text
-                style={[
-                  styles.optionButtonText,
-                  locationOfService === option.value &&
-                    styles.selectedOptionButtonText,
-                ]}
-              >
-                {option.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </ScrollView>
-    </View>
-  );
-
   const renderICDCodeStep = () => (
     <View style={styles.stepContainer}>
       <Text style={styles.stepTitle}>ICD Code</Text>
@@ -2069,16 +2000,6 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
                 }{" "}
                 (will be applied to all billing codes)
               </Text>
-
-              <Text style={styles.fieldLabel}>Location of Service:</Text>
-              <Text style={styles.fieldValue}>
-                {
-                  locationOfServiceOptions.find(
-                    (opt) => opt.value === locationOfService
-                  )?.label
-                }{" "}
-                (will be applied to all billing codes)
-              </Text>
             </>
           )}
 
@@ -2111,8 +2032,6 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
         return renderServiceDateStep();
       case "serviceLocation":
         return renderServiceLocationStep();
-      case "locationOfService":
-        return renderLocationOfServiceStep();
       case "icdCode":
         return renderICDCodeStep();
       case "summary":

@@ -69,7 +69,6 @@ const ServiceFormScreen = ({ navigation }: any) => {
     summary: "",
     serviceDate: "", // Will be set when physician is selected
     serviceLocation: null,
-    locationOfService: null,
     serviceStatus: "OPEN",
     billingCodes: [],
   });
@@ -337,39 +336,6 @@ const ServiceFormScreen = ({ navigation }: any) => {
     return true;
   };
 
-  // Location of Service options
-  const locationOfServiceOptions = [
-    { value: "1", label: "Office" },
-    { value: "2", label: "Hospital In-Patient" },
-    { value: "3", label: "Hospital Out-Patient" },
-    { value: "4", label: "Patient's Home" },
-    { value: "5", label: "Other" },
-    { value: "7", label: "Premium" },
-    { value: "9", label: "Emergency Room" },
-    { value: "B", label: "Hospital In-Patient (Premium)" },
-    { value: "C", label: "Hospital Out-Patient (Premium)" },
-    { value: "D", label: "Patient's Home (Premium)" },
-    { value: "E", label: "Other (Premium)" },
-    { value: "F", label: "After-Hours-Clinic (Premium)" },
-    { value: "K", label: "In Hospital (Premium)" },
-    { value: "M", label: "Out Patient (Premium)" },
-    { value: "P", label: "Home (Premium)" },
-    { value: "T", label: "Other (Premium)" },
-  ];
-
-  // Location dropdown state
-  const [showLocationDropdown, setShowLocationDropdown] = useState(false);
-  const [locationSearchQuery, setLocationSearchQuery] = useState("");
-  const [filteredLocationOptions, setFilteredLocationOptions] = useState(
-    locationOfServiceOptions
-  );
-
-  // Helper function to get location of service text
-  const getLocationOfServiceText = (value: string) => {
-    const option = locationOfServiceOptions.find((opt) => opt.value === value);
-    return option ? option.label : value;
-  };
-
   // Helper function to get service location from physician city
   const getServiceLocationFromCity = (city: string): string | null => {
     const cityLower = city.toLowerCase();
@@ -500,18 +466,6 @@ const ServiceFormScreen = ({ navigation }: any) => {
     };
   }, []);
 
-  // Filter location options based on search query
-  useEffect(() => {
-    if (locationSearchQuery.trim() === "") {
-      setFilteredLocationOptions(locationOfServiceOptions);
-    } else {
-      const filtered = locationOfServiceOptions.filter((option) =>
-        option.label.toLowerCase().includes(locationSearchQuery.toLowerCase())
-      );
-      setFilteredLocationOptions(filtered);
-    }
-  }, [locationSearchQuery]);
-
   // Filter patients based on search query
   useEffect(() => {
     if (patients) {
@@ -543,7 +497,6 @@ const ServiceFormScreen = ({ navigation }: any) => {
         summary: service.serviceCodes[0]?.summary || "",
         serviceDate: new Date(service.serviceDate).toISOString().split("T")[0],
         serviceLocation: service.serviceCodes[0]?.serviceLocation || null,
-        locationOfService: service.serviceCodes[0]?.locationOfService || null,
         serviceStatus: service.status,
         billingCodes: service.serviceCodes.map((code) => ({
           id: code.id, // Include service code ID to preserve change logs on update
@@ -557,6 +510,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
           specialCircumstances: code.specialCircumstances,
           serviceDate: code.serviceDate,
           serviceEndDate: code.serviceEndDate,
+          locationOfService: code.locationOfService || "1",
           fee_determinant: code.billingCode.fee_determinant,
           multiple_unit_indicator: code.billingCode.multiple_unit_indicator,
         })),
@@ -606,7 +560,6 @@ const ServiceFormScreen = ({ navigation }: any) => {
             .toISOString()
             .split("T")[0],
           serviceLocation: service.serviceCodes[0]?.serviceLocation || null,
-          locationOfService: service.serviceCodes[0]?.locationOfService || null,
           serviceStatus: service.status,
           billingCodes: service.serviceCodes.map((code) => ({
             id: code.id, // Include service code ID to preserve change logs on update
@@ -620,6 +573,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
             specialCircumstances: code.specialCircumstances,
             serviceDate: code.serviceDate,
             serviceEndDate: code.serviceEndDate,
+            locationOfService: code.locationOfService || "1",
             fee_determinant: code.billingCode.fee_determinant,
             multiple_unit_indicator: code.billingCode.multiple_unit_indicator,
           })),
@@ -1071,6 +1025,12 @@ const ServiceFormScreen = ({ navigation }: any) => {
       return;
     }
 
+    // Get the most recent billing code's locationOfService, or use default
+    const mostRecentLocationOfService =
+      selectedCodes.length > 0
+        ? selectedCodes[selectedCodes.length - 1].locationOfService
+        : "1"; // Default to Office
+
     // Create ServiceCode objects from BillingCode objects
     const newServiceCodes: ServiceCode[] = newCodes.map((code) => ({
       id: Date.now() + Math.random(), // Generate temporary ID
@@ -1082,7 +1042,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
       serviceDate: formData.serviceDate,
       serviceEndDate: null,
       serviceLocation: formData.serviceLocation,
-      locationOfService: formData.locationOfService,
+      locationOfService: mostRecentLocationOfService || "1", // Remember last location or default to Office
       numberOfUnits: 1,
       summary: "",
       createdAt: new Date().toISOString(),
@@ -1207,6 +1167,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
           specialCircumstances: subSelection?.specialCircumstances || null,
           serviceDate: serviceStartDate,
           serviceEndDate: serviceEndDate,
+          locationOfService: subSelection?.locationOfService || "1",
           fee_determinant: serviceCode.billingCode.fee_determinant,
           multiple_unit_indicator:
             serviceCode.billingCode.multiple_unit_indicator,
@@ -1330,6 +1291,12 @@ const ServiceFormScreen = ({ navigation }: any) => {
   };
 
   const handleAddNewInstanceOfCode = (billingCode: BillingCode) => {
+    // Get the most recent billing code's locationOfService, or use default
+    const mostRecentLocationOfService =
+      selectedCodes.length > 0
+        ? selectedCodes[selectedCodes.length - 1].locationOfService
+        : "1"; // Default to Office
+
     // Create a new code instance with a temporary negative ID
     const newId = -Math.floor(Math.random() * 1000000);
     const newCode: ServiceCode = {
@@ -1342,7 +1309,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
       serviceStartTime: null,
       serviceEndTime: null,
       serviceLocation: null,
-      locationOfService: null,
+      locationOfService: mostRecentLocationOfService || "1", // Remember last location or default to Office
       numberOfUnits: 1,
       specialCircumstances: null,
       summary: "",
@@ -1441,7 +1408,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
       serviceStartTime: subSelection.serviceStartTime,
       serviceEndTime: subSelection.serviceEndTime,
       serviceLocation: null,
-      locationOfService: null,
+      locationOfService: subSelection.locationOfService || "1", // Use from subSelection
       numberOfUnits: subSelection.numberOfUnits,
       specialCircumstances: subSelection.specialCircumstances,
       summary: "",
@@ -1484,11 +1451,6 @@ const ServiceFormScreen = ({ navigation }: any) => {
   const requiresReferringPhysician = selectedCodes.some(
     (code) => code.billingCode.referring_practitioner_required === "Y"
   );
-
-  const handleCloseLocationModal = () => {
-    setShowLocationDropdown(false);
-    setLocationSearchQuery(""); // Clear search when modal is closed
-  };
 
   const handleClosePatientModal = () => {
     setShowPatientDropdown(false);
@@ -2032,10 +1994,6 @@ const ServiceFormScreen = ({ navigation }: any) => {
       Alert.alert("Error", "Please select a service location");
       return false;
     }
-    if (!formData.locationOfService) {
-      Alert.alert("Error", "Please select a location of service");
-      return false;
-    }
     return true;
   };
 
@@ -2404,8 +2362,8 @@ const ServiceFormScreen = ({ navigation }: any) => {
           {service?.patient
             ? `${service.patient.firstName} ${service.patient.lastName}`
             : isEditing
-            ? "Edit Service"
-            : "New Service"}
+            ? "Edit Claim"
+            : "New Claim"}
         </Text>
         <View style={{ width: 24 }} />
       </View>
@@ -3183,100 +3141,6 @@ const ServiceFormScreen = ({ navigation }: any) => {
               </Card.Content>
             </Card>
           )}
-
-          {/* Location of Service */}
-          <Card style={styles.card}>
-            <Card.Content>
-              <Text style={styles.sectionTitle}>Location of Service *</Text>
-              <View style={styles.dropdownContainer}>
-                <TouchableOpacity
-                  style={[styles.input, styles.dropdownInput]}
-                  onPress={() => setShowLocationDropdown(!showLocationDropdown)}
-                >
-                  <Text
-                    style={
-                      formData.locationOfService
-                        ? styles.dropdownText
-                        : styles.placeholderText
-                    }
-                  >
-                    {formData.locationOfService
-                      ? getLocationOfServiceText(formData.locationOfService)
-                      : "Select location of service"}
-                  </Text>
-                  <Ionicons name="chevron-down" size={20} color="#6b7280" />
-                </TouchableOpacity>
-                <Modal
-                  visible={showLocationDropdown}
-                  transparent={true}
-                  animationType="fade"
-                  onRequestClose={handleCloseLocationModal}
-                >
-                  <TouchableOpacity
-                    style={styles.modalOverlay}
-                    activeOpacity={1}
-                    onPress={handleCloseLocationModal}
-                  >
-                    <TouchableOpacity
-                      style={styles.modalContent}
-                      activeOpacity={1}
-                      onPress={() => {}} // Prevent closing when tapping inside modal
-                    >
-                      <View style={styles.modalHeader}>
-                        <Text style={styles.modalTitle}>
-                          Select Location of Service
-                        </Text>
-                        <TouchableOpacity onPress={handleCloseLocationModal}>
-                          <Ionicons name="close" size={24} color="#6b7280" />
-                        </TouchableOpacity>
-                      </View>
-                      <TextInput
-                        style={styles.modalSearchInput}
-                        placeholder="Search locations..."
-                        value={locationSearchQuery}
-                        onChangeText={setLocationSearchQuery}
-                        autoFocus={true}
-                      />
-                      <ScrollView style={styles.modalScrollView}>
-                        <Text style={styles.debugText}>
-                          Location options: {filteredLocationOptions.length} of{" "}
-                          {locationOfServiceOptions.length}
-                        </Text>
-                        {filteredLocationOptions.length > 0 ? (
-                          filteredLocationOptions.map((option) => (
-                            <TouchableOpacity
-                              key={option.value}
-                              style={styles.modalOption}
-                              onPress={() => {
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  locationOfService: option.value,
-                                }));
-                                handleCloseLocationModal();
-                              }}
-                            >
-                              <Text style={styles.modalOptionText}>
-                                {option.label}
-                              </Text>
-                            </TouchableOpacity>
-                          ))
-                        ) : (
-                          <Text style={styles.noResultsText}>
-                            No location options available.
-                          </Text>
-                        )}
-                      </ScrollView>
-                    </TouchableOpacity>
-                  </TouchableOpacity>
-                </Modal>
-              </View>
-              {!formData.locationOfService && (
-                <Text style={styles.errorText}>
-                  Please select a location of service
-                </Text>
-              )}
-            </Card.Content>
-          </Card>
 
           {/* Service Location */}
           <Card style={styles.card}>
@@ -4544,6 +4408,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
                 serviceEndTime: editingCode.serviceEndTime,
                 numberOfUnits: editingCode.numberOfUnits,
                 specialCircumstances: editingCode.specialCircumstances,
+                locationOfService: editingCode.locationOfService || "1",
               }
             : null
         }

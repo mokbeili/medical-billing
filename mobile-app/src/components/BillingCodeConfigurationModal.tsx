@@ -21,6 +21,7 @@ interface CodeSubSelection {
   serviceEndTime: string | null;
   numberOfUnits: number | null;
   specialCircumstances: string | null;
+  locationOfService: string | null;
 }
 
 interface BillingCodeConfigurationModalProps {
@@ -54,6 +55,7 @@ const BillingCodeConfigurationModal: React.FC<
         serviceEndTime: null,
         numberOfUnits: 1,
         specialCircumstances: null,
+        locationOfService: "1", // Default to Office
       });
     }
   }, [visible, subSelection, billingCode]);
@@ -138,6 +140,26 @@ const BillingCodeConfigurationModal: React.FC<
   const isHSection = (code: BillingCode) => {
     return code.section.code === "H";
   };
+
+  // Location of Service options
+  const locationOfServiceOptions = [
+    { value: "1", label: "Office" },
+    { value: "2", label: "Hospital In-Patient" },
+    { value: "3", label: "Hospital Out-Patient" },
+    { value: "4", label: "Patient's Home" },
+    { value: "5", label: "Other" },
+    { value: "7", label: "Premium" },
+    { value: "9", label: "Emergency Room" },
+    { value: "B", label: "Hospital In-Patient (Premium)" },
+    { value: "C", label: "Hospital Out-Patient (Premium)" },
+    { value: "D", label: "Patient's Home (Premium)" },
+    { value: "E", label: "Other (Premium)" },
+    { value: "F", label: "After-Hours-Clinic (Premium)" },
+    { value: "K", label: "In Hospital (Premium)" },
+    { value: "M", label: "Out Patient (Premium)" },
+    { value: "P", label: "Home (Premium)" },
+    { value: "T", label: "Other (Premium)" },
+  ];
 
   return (
     <Modal
@@ -321,13 +343,17 @@ const BillingCodeConfigurationModal: React.FC<
 
             {/* Service Start/End Time */}
             {(billingCode.start_time_required === "Y" ||
-              billingCode.stop_time_required === "Y") && (
+              billingCode.stop_time_required === "Y" ||
+              (billingCode.multiple_unit_indicator === "U" &&
+                billingCode.billing_unit_type?.includes("MINUTES"))) && (
               <View style={styles.subSelectionSection}>
                 <Text style={styles.subSelectionSectionTitle}>
                   Service Times
                 </Text>
                 <View style={styles.timeRow}>
-                  {billingCode.start_time_required === "Y" && (
+                  {(billingCode.start_time_required === "Y" ||
+                    (billingCode.multiple_unit_indicator === "U" &&
+                      billingCode.billing_unit_type?.includes("MINUTES"))) && (
                     <View style={styles.timeInputContainer}>
                       <Text style={styles.timeLabel}>Start Time</Text>
                       <TextInput
@@ -340,7 +366,9 @@ const BillingCodeConfigurationModal: React.FC<
                       />
                     </View>
                   )}
-                  {billingCode.stop_time_required === "Y" && (
+                  {(billingCode.stop_time_required === "Y" ||
+                    (billingCode.multiple_unit_indicator === "U" &&
+                      billingCode.billing_unit_type?.includes("MINUTES"))) && (
                     <View style={styles.timeInputContainer}>
                       <Text style={styles.timeLabel}>End Time</Text>
                       <TextInput
@@ -556,6 +584,43 @@ const BillingCodeConfigurationModal: React.FC<
                 </View>
               </View>
             )}
+
+            {/* Location of Service - Required for all codes */}
+            <View style={styles.subSelectionSection}>
+              <Text style={styles.subSelectionSectionTitle}>
+                Location of Service <Text style={styles.requiredText}>*</Text>
+              </Text>
+              <ScrollView
+                style={styles.locationOfServiceScrollView}
+                nestedScrollEnabled={true}
+              >
+                {locationOfServiceOptions.map((option) => (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[
+                      styles.locationOfServiceOption,
+                      localSubSelection.locationOfService === option.value &&
+                        styles.selectedLocationOfServiceOption,
+                    ]}
+                    onPress={() =>
+                      handleUpdateSubSelection({
+                        locationOfService: option.value,
+                      })
+                    }
+                  >
+                    <Text
+                      style={[
+                        styles.locationOfServiceOptionText,
+                        localSubSelection.locationOfService === option.value &&
+                          styles.selectedLocationOfServiceOptionText,
+                      ]}
+                    >
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
           </ScrollView>
 
           <View style={styles.modalFooter}>
@@ -808,6 +873,31 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "500",
     color: "#fff",
+  },
+  locationOfServiceScrollView: {
+    maxHeight: 200,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 8,
+    backgroundColor: "#fff",
+  },
+  locationOfServiceOption: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb",
+    backgroundColor: "#fff",
+  },
+  selectedLocationOfServiceOption: {
+    backgroundColor: "#eff6ff",
+  },
+  locationOfServiceOptionText: {
+    fontSize: 14,
+    color: "#374151",
+  },
+  selectedLocationOfServiceOptionText: {
+    color: "#3b82f6",
+    fontWeight: "600",
   },
 });
 

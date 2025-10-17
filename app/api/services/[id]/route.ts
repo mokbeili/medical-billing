@@ -130,7 +130,6 @@ export async function PUT(
       icdCodeId,
       summary,
       serviceLocation,
-      locationOfService,
       billingCodes,
       serviceStatus,
     } = data;
@@ -227,7 +226,7 @@ export async function PUT(
       for (const code of billingCodes) {
         const codeData = {
           serviceLocation: serviceLocation || "X",
-          locationOfService: locationOfService || "1",
+          locationOfService: code.locationOfService || "11",
           serviceStartTime: code.serviceStartTime
             ? new Date(code.serviceStartTime)
             : null,

@@ -92,6 +92,7 @@ export interface BillingCode {
   code: string;
   title: string;
   description: string | null;
+  billing_unit_type: string | null;
   section: {
     code: string;
     title: string;
@@ -296,7 +297,6 @@ export interface ServiceFormData {
   summary: string;
   serviceDate: string;
   serviceLocation: string | null;
-  locationOfService: string | null;
   serviceStatus: string;
   billingCodes: Array<{
     id?: number; // Optional service code ID (for existing codes)
@@ -310,6 +310,7 @@ export interface ServiceFormData {
     specialCircumstances: string | null;
     serviceDate: string | null;
     serviceEndDate: string | null;
+    locationOfService: string | null;
     fee_determinant: string;
     multiple_unit_indicator: string | null;
   }>;

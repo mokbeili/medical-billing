@@ -128,6 +128,7 @@ interface BillingCode {
   max_units: number | null;
   day_range: number | null;
   billing_record_type: number;
+  billing_unit_type: string | null;
   section: {
     code: string;
     title: string;
@@ -227,7 +228,6 @@ export default function ServiceForm({
     summary: "",
     serviceDate: new Date().toISOString().split("T")[0],
     serviceLocation: null as string | null,
-    locationOfService: null as string | null,
     status: "OPEN",
     billingCodes: [] as Array<{
       codeId: number;
@@ -240,6 +240,7 @@ export default function ServiceForm({
       specialCircumstances: string | null;
       serviceDate: string | null;
       serviceEndDate: string | null;
+      locationOfService: string | null;
     }>,
   });
   const [serviceErrors, setServiceErrors] = useState<ServiceErrors>({
@@ -307,8 +308,6 @@ export default function ServiceForm({
                 .toISOString()
                 .split("T")[0],
               serviceLocation: service.serviceCodes[0]?.serviceLocation || null,
-              locationOfService:
-                service.serviceCodes[0]?.locationOfService || null,
               billingCodes: service.serviceCodes.map((sc: any) => ({
                 codeId: sc.codeId,
                 status: sc.status,
@@ -328,6 +327,7 @@ export default function ServiceForm({
                 serviceEndDate: sc.serviceEndDate
                   ? new Date(sc.serviceEndDate).toISOString().split("T")[0]
                   : null,
+                locationOfService: sc.locationOfService || "1", // Keep from service code
               })),
             });
 
@@ -770,6 +770,12 @@ export default function ServiceForm({
       }
     }
 
+    // Get the most recent billing code's locationOfService, or use default
+    const mostRecentLocationOfService =
+      updatedBillingCodes.length > 0
+        ? updatedBillingCodes[updatedBillingCodes.length - 1].locationOfService
+        : "1"; // Default to Office
+
     // Add the new code to the updated billing codes array
     updatedBillingCodes.push({
       codeId: code.id,
@@ -782,6 +788,7 @@ export default function ServiceForm({
       specialCircumstances: null,
       serviceDate: serviceStartDate,
       serviceEndDate: serviceEndDate,
+      locationOfService: mostRecentLocationOfService,
     });
 
     // Update form data with both the updated previous code and the new code
@@ -1049,8 +1056,8 @@ export default function ServiceForm({
     };
     setServiceErrors(newServiceErrors);
 
-    // Check if service location and location of service are selected
-    if (!formData.serviceLocation || !formData.locationOfService) {
+    // Check if service location is selected
+    if (!formData.serviceLocation) {
       return false;
     }
 
@@ -1142,7 +1149,6 @@ export default function ServiceForm({
           summary: formData.summary,
           serviceDate: primaryServiceDateISO,
           serviceLocation: formData.serviceLocation,
-          locationOfService: formData.locationOfService,
           serviceStatus: "OPEN",
           billingCodes: formData.billingCodes.map((code) => ({
             codeId: code.codeId,
@@ -1162,6 +1168,7 @@ export default function ServiceForm({
             numberOfUnits: code.numberOfUnits || null,
             bilateralIndicator: code.bilateralIndicator,
             specialCircumstances: code.specialCircumstances,
+            locationOfService: code.locationOfService,
             serviceDate: code.serviceDate
               ? convertLocalDateToTimezoneUTC(
                   code.serviceDate,
@@ -1213,7 +1220,6 @@ export default function ServiceForm({
           summary: formData.summary,
           serviceDate: primaryServiceDateISO,
           serviceLocation: formData.serviceLocation,
-          locationOfService: formData.locationOfService,
           serviceStatus: "OPEN",
           billingCodes: formData.billingCodes.map((code) => ({
             codeId: code.codeId,
@@ -1233,6 +1239,7 @@ export default function ServiceForm({
             numberOfUnits: code.numberOfUnits || null,
             bilateralIndicator: code.bilateralIndicator,
             specialCircumstances: code.specialCircumstances,
+            locationOfService: code.locationOfService,
             serviceDate: code.serviceDate
               ? convertLocalDateToTimezoneUTC(
                   code.serviceDate,
@@ -1463,7 +1470,6 @@ export default function ServiceForm({
           summary: formData.summary,
           serviceDate: primaryServiceDateISO,
           serviceLocation: formData.serviceLocation,
-          locationOfService: formData.locationOfService,
           serviceStatus: "PENDING",
           billingCodes: billingCodesToUse.map((code) => ({
             codeId: code.codeId,
@@ -1483,6 +1489,7 @@ export default function ServiceForm({
             numberOfUnits: code.numberOfUnits || null,
             bilateralIndicator: code.bilateralIndicator,
             specialCircumstances: code.specialCircumstances,
+            locationOfService: code.locationOfService,
             serviceDate: code.serviceDate
               ? convertLocalDateToTimezoneUTC(
                   code.serviceDate,
@@ -1524,7 +1531,6 @@ export default function ServiceForm({
           summary: formData.summary,
           serviceDate: primaryServiceDateISO,
           serviceLocation: formData.serviceLocation,
-          locationOfService: formData.locationOfService,
           serviceStatus: "PENDING",
           billingCodes: billingCodesToUse.map((code) => ({
             codeId: code.codeId,
@@ -1544,6 +1550,7 @@ export default function ServiceForm({
             numberOfUnits: code.numberOfUnits || null,
             bilateralIndicator: code.bilateralIndicator,
             specialCircumstances: code.specialCircumstances,
+            locationOfService: code.locationOfService,
             serviceDate: code.serviceDate
               ? convertLocalDateToTimezoneUTC(
                   code.serviceDate,
@@ -1796,52 +1803,6 @@ export default function ServiceForm({
             {!formData.serviceLocation && (
               <p className="text-sm text-red-500">
                 Please select a service location
-              </p>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium">
-              Location of Service <span className="text-red-500">*</span>
-            </label>
-            <Select
-              value={formData.locationOfService || ""}
-              onValueChange={(value) =>
-                setFormData({
-                  ...formData,
-                  locationOfService: value || null,
-                })
-              }
-            >
-              <SelectTrigger
-                className={!formData.locationOfService ? "border-red-500" : ""}
-              >
-                <SelectValue placeholder="Select location of service" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="1">Office</SelectItem>
-                <SelectItem value="2">Hospital In-Patient</SelectItem>
-                <SelectItem value="3">Hospital Out-Patient</SelectItem>
-                <SelectItem value="4">Patient's Home</SelectItem>
-                <SelectItem value="5">Other</SelectItem>
-                <SelectItem value="7">Premium</SelectItem>
-                <SelectItem value="9">Emergency Room</SelectItem>
-                <SelectItem value="B">Hospital In-Patient (Premium)</SelectItem>
-                <SelectItem value="C">
-                  Hospital Out-Patient (Premium)
-                </SelectItem>
-                <SelectItem value="D">Patient's Home (Premium)</SelectItem>
-                <SelectItem value="E">Other (Premium)</SelectItem>
-                <SelectItem value="F">After-Hours-Clinic (Premium)</SelectItem>
-                <SelectItem value="K">In Hospital (Premium)</SelectItem>
-                <SelectItem value="M">Out Patient (Premium)</SelectItem>
-                <SelectItem value="P">Home (Premium)</SelectItem>
-                <SelectItem value="T">Other (Premium)</SelectItem>
-              </SelectContent>
-            </Select>
-            {!formData.locationOfService && (
-              <p className="text-sm text-red-500">
-                Please select a location of service
               </p>
             )}
           </div>
@@ -2122,7 +2083,11 @@ export default function ServiceForm({
                                       )}
 
                                       {/* Start Time */}
-                                      {code.start_time_required === "Y" && (
+                                      {(code.start_time_required === "Y" ||
+                                        (code.multiple_unit_indicator === "U" &&
+                                          code.billing_unit_type?.includes(
+                                            "MINUTES"
+                                          ))) && (
                                         <div className="flex items-center gap-1">
                                           <label className="text-gray-600">
                                             Start:
@@ -2149,7 +2114,11 @@ export default function ServiceForm({
                                       )}
 
                                       {/* End Time */}
-                                      {code.stop_time_required === "Y" && (
+                                      {(code.stop_time_required === "Y" ||
+                                        (code.multiple_unit_indicator === "U" &&
+                                          code.billing_unit_type?.includes(
+                                            "MINUTES"
+                                          ))) && (
                                         <div className="flex items-center gap-1">
                                           <label className="text-gray-600">
                                             Stop:
@@ -2373,6 +2342,83 @@ export default function ServiceForm({
                                           </Button>
                                         </div>
                                       )}
+
+                                      {/* Location of Service */}
+                                      <div className="flex items-center gap-1">
+                                        <label className="text-gray-600">
+                                          Loc:
+                                        </label>
+                                        <Select
+                                          value={
+                                            formData.billingCodes[
+                                              billingCodeIndex
+                                            ]?.locationOfService || ""
+                                          }
+                                          onValueChange={(value) =>
+                                            handleUpdateBillingCode(
+                                              billingCodeIndex,
+                                              {
+                                                locationOfService:
+                                                  value || null,
+                                              }
+                                            )
+                                          }
+                                        >
+                                          <SelectTrigger className="w-32 h-7 text-xs">
+                                            <SelectValue placeholder="Select" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="1">
+                                              Office
+                                            </SelectItem>
+                                            <SelectItem value="2">
+                                              Hospital In-Patient
+                                            </SelectItem>
+                                            <SelectItem value="3">
+                                              Hospital Out-Patient
+                                            </SelectItem>
+                                            <SelectItem value="4">
+                                              Patient's Home
+                                            </SelectItem>
+                                            <SelectItem value="5">
+                                              Other
+                                            </SelectItem>
+                                            <SelectItem value="7">
+                                              Premium
+                                            </SelectItem>
+                                            <SelectItem value="9">
+                                              Emergency Room
+                                            </SelectItem>
+                                            <SelectItem value="B">
+                                              Hospital In-Patient (Premium)
+                                            </SelectItem>
+                                            <SelectItem value="C">
+                                              Hospital Out-Patient (Premium)
+                                            </SelectItem>
+                                            <SelectItem value="D">
+                                              Patient's Home (Premium)
+                                            </SelectItem>
+                                            <SelectItem value="E">
+                                              Other (Premium)
+                                            </SelectItem>
+                                            <SelectItem value="F">
+                                              After-Hours-Clinic (Premium)
+                                            </SelectItem>
+                                            <SelectItem value="K">
+                                              In Hospital (Premium)
+                                            </SelectItem>
+                                            <SelectItem value="M">
+                                              Out Patient (Premium)
+                                            </SelectItem>
+                                            <SelectItem value="P">
+                                              Home (Premium)
+                                            </SelectItem>
+                                            <SelectItem value="T">
+                                              Other (Premium)
+                                            </SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
 
                                       {/* Remove button */}
                                       <div className="ml-auto">
@@ -2661,7 +2707,11 @@ export default function ServiceForm({
                                   </div>
 
                                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    {code.start_time_required === "Y" && (
+                                    {(code.start_time_required === "Y" ||
+                                      (code.multiple_unit_indicator === "U" &&
+                                        code.billing_unit_type?.includes(
+                                          "MINUTES"
+                                        ))) && (
                                       <div className="space-y-2">
                                         <label className="block text-sm font-medium">
                                           Service Start Time
@@ -2934,6 +2984,82 @@ export default function ServiceForm({
                                         </div>
                                       </div>
                                     )}
+
+                                    {/* Location of Service */}
+                                    <div className="col-span-1 sm:col-span-2 space-y-2">
+                                      <label className="block text-sm font-medium text-center sm:text-left">
+                                        Location of Service
+                                      </label>
+                                      <Select
+                                        value={
+                                          formData.billingCodes[
+                                            billingCodeIndex
+                                          ]?.locationOfService || ""
+                                        }
+                                        onValueChange={(value) =>
+                                          handleUpdateBillingCode(
+                                            billingCodeIndex,
+                                            {
+                                              locationOfService: value || null,
+                                            }
+                                          )
+                                        }
+                                      >
+                                        <SelectTrigger className="w-full">
+                                          <SelectValue placeholder="Select location of service" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="1">
+                                            Office
+                                          </SelectItem>
+                                          <SelectItem value="2">
+                                            Hospital In-Patient
+                                          </SelectItem>
+                                          <SelectItem value="3">
+                                            Hospital Out-Patient
+                                          </SelectItem>
+                                          <SelectItem value="4">
+                                            Patient's Home
+                                          </SelectItem>
+                                          <SelectItem value="5">
+                                            Other
+                                          </SelectItem>
+                                          <SelectItem value="7">
+                                            Premium
+                                          </SelectItem>
+                                          <SelectItem value="9">
+                                            Emergency Room
+                                          </SelectItem>
+                                          <SelectItem value="B">
+                                            Hospital In-Patient (Premium)
+                                          </SelectItem>
+                                          <SelectItem value="C">
+                                            Hospital Out-Patient (Premium)
+                                          </SelectItem>
+                                          <SelectItem value="D">
+                                            Patient's Home (Premium)
+                                          </SelectItem>
+                                          <SelectItem value="E">
+                                            Other (Premium)
+                                          </SelectItem>
+                                          <SelectItem value="F">
+                                            After-Hours-Clinic (Premium)
+                                          </SelectItem>
+                                          <SelectItem value="K">
+                                            In Hospital (Premium)
+                                          </SelectItem>
+                                          <SelectItem value="M">
+                                            Out Patient (Premium)
+                                          </SelectItem>
+                                          <SelectItem value="P">
+                                            Home (Premium)
+                                          </SelectItem>
+                                          <SelectItem value="T">
+                                            Other (Premium)
+                                          </SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
                                   </div>
                                 </div>
                               );

@@ -89,6 +89,7 @@ const ServicesScreen = ({ navigation }: any) => {
     serviceEndTime: string | null;
     numberOfUnits: number;
     specialCircumstances: string | null;
+    locationOfService: string | null;
   }
 
   const [selectedCodes, setSelectedCodes] = useState<BillingCode[]>([]);
@@ -583,7 +584,7 @@ const ServicesScreen = ({ navigation }: any) => {
           bilateralIndicator: subSelection?.bilateralIndicator || null,
           numberOfUnits: subSelection?.numberOfUnits || 1,
           specialCircumstances: subSelection?.specialCircumstances || null,
-          // serviceLocation and locationOfService will be determined by the backend according to the rules
+          locationOfService: subSelection?.locationOfService || "1",
         };
       });
 
@@ -2066,6 +2067,66 @@ const ServicesScreen = ({ navigation }: any) => {
                     </View>
                   </View>
                 )}
+
+                {/* Location of Service - Required for all codes */}
+                <View style={styles.subSelectionSection}>
+                  <Text style={styles.subSelectionSectionTitle}>
+                    Location of Service{" "}
+                    <Text style={styles.requiredText}>*</Text>
+                  </Text>
+                  <ScrollView
+                    style={styles.locationOfServiceScrollView}
+                    nestedScrollEnabled={true}
+                  >
+                    {[
+                      { value: "1", label: "Office" },
+                      { value: "2", label: "Hospital In-Patient" },
+                      { value: "3", label: "Hospital Out-Patient" },
+                      { value: "4", label: "Patient's Home" },
+                      { value: "5", label: "Other" },
+                      { value: "7", label: "Premium" },
+                      { value: "9", label: "Emergency Room" },
+                      { value: "B", label: "Hospital In-Patient (Premium)" },
+                      { value: "C", label: "Hospital Out-Patient (Premium)" },
+                      { value: "D", label: "Patient's Home (Premium)" },
+                      { value: "E", label: "Other (Premium)" },
+                      { value: "F", label: "After-Hours-Clinic (Premium)" },
+                      { value: "K", label: "In Hospital (Premium)" },
+                      { value: "M", label: "Out Patient (Premium)" },
+                      { value: "P", label: "Home (Premium)" },
+                      { value: "T", label: "Other (Premium)" },
+                    ].map((option) => (
+                      <TouchableOpacity
+                        key={option.value}
+                        style={[
+                          styles.locationOfServiceOption,
+                          getSubSelectionForCodeInline(
+                            currentCodeForSubSelection.id
+                          )?.locationOfService === option.value &&
+                            styles.selectedLocationOfServiceOption,
+                        ]}
+                        onPress={() =>
+                          handleUpdateSubSelectionInline(
+                            currentCodeForSubSelection.id,
+                            { locationOfService: option.value }
+                          )
+                        }
+                      >
+                        <Text
+                          style={[
+                            styles.locationOfServiceOptionText,
+                            getSubSelectionForCodeInline(
+                              currentCodeForSubSelection.id
+                            )?.locationOfService === option.value &&
+                              styles.selectedLocationOfServiceOptionText,
+                          ]}
+                        >
+                          {option.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
               </ScrollView>
 
               <View style={styles.modalButtonContainer}>
@@ -2140,6 +2201,9 @@ const ServicesScreen = ({ navigation }: any) => {
                               ...item.lastServiceCodePayload,
                               numberOfUnits:
                                 item.lastServiceCodePayload.numberOfUnits ?? 1,
+                              locationOfService:
+                                (item.lastServiceCodePayload as any)
+                                  .locationOfService ?? "1",
                             },
                           ]);
                           setCurrentCodeForSubSelection(item.billingCode);
@@ -2208,6 +2272,7 @@ const ServicesScreen = ({ navigation }: any) => {
                               serviceEndTime: null,
                               numberOfUnits: 1,
                               specialCircumstances: null,
+                              locationOfService: "1", // Default to Office
                             };
 
                             setCodeSubSelections([newSubSelection]);
@@ -3083,6 +3148,31 @@ const styles = StyleSheet.create({
   },
   emptyCodesList: {
     width: 0,
+  },
+  locationOfServiceScrollView: {
+    maxHeight: 200,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 8,
+    backgroundColor: "#fff",
+  },
+  locationOfServiceOption: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb",
+    backgroundColor: "#fff",
+  },
+  selectedLocationOfServiceOption: {
+    backgroundColor: "#eff6ff",
+  },
+  locationOfServiceOptionText: {
+    fontSize: 14,
+    color: "#374151",
+  },
+  selectedLocationOfServiceOptionText: {
+    color: "#3b82f6",
+    fontWeight: "600",
   },
 });
 
