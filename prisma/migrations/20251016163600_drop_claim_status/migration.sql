@@ -1,1 +1,0 @@
-DROP TYPE public."ClaimStatus";

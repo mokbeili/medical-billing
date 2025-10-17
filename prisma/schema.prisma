@@ -8,14 +8,29 @@ datasource db {
 }
 
 model Provider {
-  id                 Int            @id @default(autoincrement())
+  id                 Int               @id @default(autoincrement())
   name               String
-  generalInformation String?        @map("general_information")
-  createdAt          DateTime       @default(now()) @map("created_at")
-  updatedAt          DateTime       @updatedAt @map("updated_at")
+  generalInformation String?           @map("general_information")
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
   jurisdictions      Jurisdiction[]
+  holidays           ProviderHoliday[]
 
   @@map("providers")
+}
+
+model ProviderHoliday {
+  id          Int      @id @default(autoincrement())
+  providerId  Int      @map("provider_id")
+  date        DateTime @db.Date
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  provider    Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId])
+  @@index([date])
+  @@map("provider_holidays")
 }
 
 model Jurisdiction {
