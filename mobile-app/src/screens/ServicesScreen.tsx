@@ -525,6 +525,7 @@ const ServicesScreen = ({ navigation }: any) => {
           referring_practitioner_required: null,
           fee_determinant: "",
           multiple_unit_indicator: null,
+          billing_unit_type: null,
           max_units: null,
           start_time_required: null,
           stop_time_required: null,

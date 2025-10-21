@@ -39,6 +39,7 @@ const BillingCodeConfigurationModal: React.FC<
   const [localSubSelection, setLocalSubSelection] =
     useState<CodeSubSelection | null>(null);
 
+  console.log("billingCode", billingCode);
   // Initialize local state when modal opens
   React.useEffect(() => {
     if (visible && subSelection) {

@@ -8,13 +8,14 @@ datasource db {
 }
 
 model Provider {
-  id                 Int               @id @default(autoincrement())
+  id                 Int                 @id @default(autoincrement())
   name               String
-  generalInformation String?           @map("general_information")
-  createdAt          DateTime          @default(now()) @map("created_at")
-  updatedAt          DateTime          @updatedAt @map("updated_at")
+  generalInformation String?             @map("general_information")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
   jurisdictions      Jurisdiction[]
   holidays           ProviderHoliday[]
+  locationsOfService LocationOfService[]
 
   @@map("providers")
 }
@@ -242,34 +243,35 @@ model Patient {
 }
 
 model Physician {
-  id                    String                 @id
-  firstName             String                 @map("first_name")
-  lastName              String                 @map("last_name")
-  middleInitial         String?                @map("middle_initial")
-  billingNumber         String                 @map("billing_number")
-  userId                Int                    @map("user_id")
-  jurisdictionId        Int                    @map("jurisdiction_id")
-  createdAt             DateTime               @default(now()) @map("created_at")
-  updatedAt             DateTime               @updatedAt @map("updated_at")
-  city                  String?
-  groupNumber           String?                @map("group_number")
-  healthInstitutionId   Int?                   @map("health_institution_id")
-  postalCode            String?                @map("postal_code")
-  province              String?
-  streetAddress         String?                @map("street_address")
-  mostRecentClaimNumber Int                    @default(10000) @map("most_recent_claim_number")
-  timezone              String                 @default("America/Regina")
-  billingClaims         BillingClaim[]
-  frequentlyUsedCodes   FrequentlyUsedCode[]
-  patients              Patient[]
-  physicianBillingTypes PhysicianBillingType[]
-  healthInstitution     HealthInstitution?     @relation(fields: [healthInstitutionId], references: [id])
-  jurisdiction          Jurisdiction           @relation(fields: [jurisdictionId], references: [id])
-  user                  User                   @relation(fields: [userId], references: [id])
-  preferredSections     PreferredSection[]
-  referringPhysicians   ReferringPhysician[]
-  SearchQueryLog        SearchQueryLog[]
-  Service               Service[]
+  id                          String                       @id
+  firstName                   String                       @map("first_name")
+  lastName                    String                       @map("last_name")
+  middleInitial               String?                      @map("middle_initial")
+  billingNumber               String                       @map("billing_number")
+  userId                      Int                          @map("user_id")
+  jurisdictionId              Int                          @map("jurisdiction_id")
+  createdAt                   DateTime                     @default(now()) @map("created_at")
+  updatedAt                   DateTime                     @updatedAt @map("updated_at")
+  city                        String?
+  groupNumber                 String?                      @map("group_number")
+  healthInstitutionId         Int?                         @map("health_institution_id")
+  postalCode                  String?                      @map("postal_code")
+  province                    String?
+  streetAddress               String?                      @map("street_address")
+  mostRecentClaimNumber       Int                          @default(10000) @map("most_recent_claim_number")
+  timezone                    String                       @default("America/Regina")
+  billingClaims               BillingClaim[]
+  frequentlyUsedCodes         FrequentlyUsedCode[]
+  patients                    Patient[]
+  physicianBillingTypes       PhysicianBillingType[]
+  physicianLocationsOfService PhysicianLocationOfService[]
+  healthInstitution           HealthInstitution?           @relation(fields: [healthInstitutionId], references: [id])
+  jurisdiction                Jurisdiction                 @relation(fields: [jurisdictionId], references: [id])
+  user                        User                         @relation(fields: [userId], references: [id])
+  preferredSections           PreferredSection[]
+  referringPhysicians         ReferringPhysician[]
+  SearchQueryLog              SearchQueryLog[]
+  Service                     Service[]
 
   @@map("physicians")
 }
@@ -543,4 +545,35 @@ enum ServiceCodeChangeType {
   DELETE
   UPDATE
   ROUND
+}
+
+model LocationOfService {
+  id                          Int                          @id @default(autoincrement())
+  code                        String                       @db.VarChar(50)
+  name                        String                       @db.VarChar(255)
+  startTime                   DateTime?                    @map("start_time") @db.Time
+  endTime                     DateTime?                    @map("end_time") @db.Time
+  providerId                  Int                          @map("provider_id")
+  createdAt                   DateTime                     @default(now()) @map("created_at")
+  updatedAt                   DateTime                     @updatedAt @map("updated_at")
+  provider                    Provider                     @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  physicianLocationsOfService PhysicianLocationOfService[]
+
+  @@index([providerId])
+  @@map("locations_of_service")
+}
+
+model PhysicianLocationOfService {
+  id                  Int               @id @default(autoincrement())
+  physicianId         String            @map("physician_id")
+  locationOfServiceId Int               @map("location_of_service_id")
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+  physician           Physician         @relation(fields: [physicianId], references: [id], onDelete: Cascade)
+  locationOfService   LocationOfService @relation(fields: [locationOfServiceId], references: [id], onDelete: Cascade)
+
+  @@unique([physicianId, locationOfServiceId])
+  @@index([physicianId])
+  @@index([locationOfServiceId])
+  @@map("physician_locations_of_service")
 }

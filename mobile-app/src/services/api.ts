@@ -193,6 +193,7 @@ export const billingCodesAPI = {
       previousCodes: result.previousCodes,
       nextCodes: result.nextCodes,
       billingCodeChains: result.billingCodeChains,
+      billing_unit_type: result.billing_unit_type,
       jurisdiction: {
         id: 1, // Default jurisdiction
         name: "Saskatchewan",

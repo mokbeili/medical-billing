@@ -18,6 +18,7 @@ interface BaseSearchResult {
   stop_time_required: string | null;
   max_units: number | null;
   day_range: number | null;
+  billing_unit_type: string | null;
   section: {
     code: string;
     title: string;
@@ -69,6 +70,7 @@ interface PrismaSearchResult {
   stop_time_required: string | null;
   max_units: number | null;
   day_range: number | null;
+  billing_unit_type: string | null;
   section: {
     code: string;
     title: string;
@@ -344,6 +346,7 @@ export async function GET(request: Request) {
           title: true,
           description: true,
           billing_record_type: true,
+          billing_unit_type: true,
           referring_practitioner_required: true,
           multiple_unit_indicator: true,
           start_time_required: true,
@@ -430,6 +433,7 @@ export async function GET(request: Request) {
           title: true,
           description: true,
           billing_record_type: true,
+          billing_unit_type: true,
           referring_practitioner_required: true,
           multiple_unit_indicator: true,
           start_time_required: true,
