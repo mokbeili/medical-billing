@@ -1,5 +1,6 @@
 "use client";
 
+import { BillingCodeSplitDialog } from "@/app/components/BillingCodeSplitDialog";
 import { HybridDateInput } from "@/app/components/forms/HybridDateInput";
 import Layout from "@/app/components/layout/Layout";
 import { useToast } from "@/app/components/ui/use-toast";
@@ -13,6 +14,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  generateSplitDescription,
+  splitBillingCodeByTimeAndLocation,
+  type LocationOfService,
+  type ProviderHoliday,
+} from "@/lib/billingCodeUtils";
 import {
   convertLocalDateToTimezoneUTC,
   formatFullDate,
@@ -96,6 +103,15 @@ interface Physician {
   healthInstitution?: {
     city: string;
   } | null;
+  physicianLocationsOfService?: {
+    id: number;
+    locationOfService: LocationOfService;
+  }[];
+  jurisdiction?: {
+    provider: {
+      id: number;
+    };
+  };
 }
 
 interface Patient {
@@ -213,6 +229,14 @@ export default function ServiceForm({
     dateOfBirth: "",
     sex: "",
   });
+
+  // State for billing code split dialog
+  const [showSplitDialog, setShowSplitDialog] = useState(false);
+  const [splitDescription, setSplitDescription] = useState("");
+  const [pendingSaveData, setPendingSaveData] = useState<any>(null);
+  const [providerHolidays, setProviderHolidays] = useState<ProviderHoliday[]>(
+    []
+  );
 
   const [formData, setFormData] = useState({
     physicianId: physicians.length === 1 ? physicians[0].id : "",
@@ -432,6 +456,34 @@ export default function ServiceForm({
     fetchPatients();
     fetchReferringPhysicians();
   }, []);
+
+  // Fetch provider holidays when physician changes
+  useEffect(() => {
+    const fetchProviderHolidays = async () => {
+      if (!formData.physicianId || !physicians.length) {
+        return;
+      }
+
+      const physician = physicians.find((p) => p.id === formData.physicianId);
+      if (!physician?.jurisdiction?.provider?.id) {
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `/api/provider-holidays?providerId=${physician.jurisdiction.provider.id}`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setProviderHolidays(data);
+        }
+      } catch (error) {
+        console.error("Error fetching provider holidays:", error);
+      }
+    };
+
+    fetchProviderHolidays();
+  }, [formData.physicianId, physicians]);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -1079,7 +1131,7 @@ export default function ServiceForm({
     );
   };
 
-  const handleSave = async (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent, skipDialog = false) => {
     e.preventDefault();
 
     if (status === "loading") {
@@ -1103,7 +1155,15 @@ export default function ServiceForm({
       // Helper function to combine date and time in physician's timezone
       const combineDateTime = (dateStr: string, timeStr: string) => {
         if (!timeStr) return null;
+        if (!dateStr) return null; // Safety check for date
+
         const [hours, minutes] = timeStr.split(":").map(Number);
+
+        // Validate parsed time values
+        if (isNaN(hours) || isNaN(minutes)) {
+          console.error("Invalid time string:", timeStr);
+          return null;
+        }
 
         // Convert the date to physician's timezone at midnight
         const dateAtMidnight = convertLocalDateToTimezoneUTC(
@@ -1112,12 +1172,128 @@ export default function ServiceForm({
         );
         const date = new Date(dateAtMidnight);
 
+        // Check if date is valid
+        if (isNaN(date.getTime())) {
+          console.error(
+            "Invalid date after conversion:",
+            dateStr,
+            dateAtMidnight
+          );
+          return null;
+        }
+
         // Add the hours and minutes
         date.setUTCHours(date.getUTCHours() + hours);
         date.setUTCMinutes(date.getUTCMinutes() + minutes);
 
         return date.toISOString();
       };
+
+      // Get physician's locations of service
+      const physician = physicians.find((p) => p.id === formData.physicianId);
+      const locationsOfService: LocationOfService[] =
+        physician?.physicianLocationsOfService?.map(
+          (plos) => plos.locationOfService
+        ) || [];
+
+      // Check if any billing codes need to be split
+      const codesToSplit = formData.billingCodes.filter((code) => {
+        const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
+        return (
+          selectedCode?.multiple_unit_indicator === "U" &&
+          selectedCode?.billing_unit_type?.includes("MINUTES") &&
+          code.serviceStartTime &&
+          code.serviceEndTime
+        );
+      });
+
+      // If codes need to be split and we haven't shown the dialog yet, show it
+      if (
+        codesToSplit.length > 0 &&
+        !skipDialog &&
+        locationsOfService.length > 0
+      ) {
+        let splitDescriptions: string[] = [];
+
+        codesToSplit.forEach((code) => {
+          const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
+          if (!selectedCode) return;
+
+          const splitCodes = splitBillingCodeByTimeAndLocation(
+            {
+              ...code,
+              code: selectedCode.code,
+              title: selectedCode.title,
+              multiple_unit_indicator: selectedCode.multiple_unit_indicator,
+              billing_unit_type: selectedCode.billing_unit_type,
+              serviceStartTime: code.serviceStartTime ?? undefined,
+              serviceEndTime: code.serviceEndTime ?? undefined,
+              locationOfService: code.locationOfService ?? undefined,
+            },
+            locationsOfService,
+            physicianTimezone
+          );
+
+          if (splitCodes.length > 1) {
+            const description = generateSplitDescription(
+              {
+                ...code,
+                code: selectedCode.code,
+                title: selectedCode.title,
+                locationOfService: code.locationOfService ?? undefined,
+              },
+              splitCodes,
+              locationsOfService
+            );
+            splitDescriptions.push(description);
+          }
+        });
+
+        if (splitDescriptions.length > 0) {
+          setSplitDescription(splitDescriptions.join("\n\n"));
+          setPendingSaveData({ type, serviceId });
+          setShowSplitDialog(true);
+          return; // Don't proceed with save yet
+        }
+      }
+
+      // Apply split logic to billing codes
+      let processedBillingCodes: any[] = [];
+
+      formData.billingCodes.forEach((code) => {
+        const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
+
+        // Check if this code should be split
+        if (
+          selectedCode?.multiple_unit_indicator === "U" &&
+          selectedCode?.billing_unit_type?.includes("MINUTES") &&
+          code.serviceStartTime &&
+          code.serviceEndTime &&
+          locationsOfService.length > 0
+        ) {
+          // Split the code
+          const splitCodes = splitBillingCodeByTimeAndLocation(
+            {
+              ...code,
+              code: selectedCode.code,
+              title: selectedCode.title,
+              multiple_unit_indicator: selectedCode.multiple_unit_indicator,
+              billing_unit_type: selectedCode.billing_unit_type,
+              serviceStartTime: code.serviceStartTime ?? undefined,
+              serviceEndTime: code.serviceEndTime ?? undefined,
+              locationOfService: code.locationOfService ?? undefined,
+            },
+            locationsOfService,
+            physicianTimezone
+          );
+
+          // Add all split codes
+          processedBillingCodes.push(...splitCodes);
+        } else {
+          // Keep the code as-is
+          processedBillingCodes.push(code);
+        }
+      });
 
       if (type === "new") {
         // Create new service with all billing codes set to OPEN status
@@ -1138,7 +1314,7 @@ export default function ServiceForm({
           serviceDate: primaryServiceDateISO,
           serviceLocation: formData.serviceLocation,
           serviceStatus: "OPEN",
-          billingCodes: formData.billingCodes.map((code) => ({
+          billingCodes: processedBillingCodes.map((code) => ({
             codeId: code.codeId,
             status: "OPEN", // Set all codes to OPEN
             serviceStartTime: code.serviceStartTime
@@ -1209,7 +1385,7 @@ export default function ServiceForm({
           serviceDate: primaryServiceDateISO,
           serviceLocation: formData.serviceLocation,
           serviceStatus: "OPEN",
-          billingCodes: formData.billingCodes.map((code) => ({
+          billingCodes: processedBillingCodes.map((code) => ({
             codeId: code.codeId,
             status: "OPEN", // Set all codes to OPEN
             serviceStartTime: code.serviceStartTime
@@ -1275,6 +1451,21 @@ export default function ServiceForm({
     }
   };
 
+  // Handle split dialog confirmation
+  const handleSplitConfirm = () => {
+    setShowSplitDialog(false);
+    // Create a synthetic event and call handleSave with skipDialog=true
+    const syntheticEvent = { preventDefault: () => {} } as React.FormEvent;
+    handleSave(syntheticEvent, true);
+  };
+
+  // Handle split dialog cancellation
+  const handleSplitCancel = () => {
+    setShowSplitDialog(false);
+    setPendingSaveData(null);
+    setSplitDescription("");
+  };
+
   const handleApproveAndFinish = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -1318,7 +1509,15 @@ export default function ServiceForm({
       // Helper function to combine date and time in physician's timezone
       const combineDateTime = (dateStr: string, timeStr: string) => {
         if (!timeStr) return null;
+        if (!dateStr) return null; // Safety check for date
+
         const [hours, minutes] = timeStr.split(":").map(Number);
+
+        // Validate parsed time values
+        if (isNaN(hours) || isNaN(minutes)) {
+          console.error("Invalid time string:", timeStr);
+          return null;
+        }
 
         // Convert the date to physician's timezone at midnight
         const dateAtMidnight = convertLocalDateToTimezoneUTC(
@@ -1326,6 +1525,16 @@ export default function ServiceForm({
           physicianTimezone
         );
         const date = new Date(dateAtMidnight);
+
+        // Check if date is valid
+        if (isNaN(date.getTime())) {
+          console.error(
+            "Invalid date after conversion:",
+            dateStr,
+            dateAtMidnight
+          );
+          return null;
+        }
 
         // Add the hours and minutes
         date.setUTCHours(date.getUTCHours() + hours);
@@ -3374,6 +3583,15 @@ export default function ServiceForm({
           </p>
         </div>
       )}
+
+      {/* Billing Code Split Dialog */}
+      <BillingCodeSplitDialog
+        open={showSplitDialog}
+        onOpenChange={setShowSplitDialog}
+        onConfirm={handleSplitConfirm}
+        onCancel={handleSplitCancel}
+        splitDescription={splitDescription}
+      />
     </form>
   );
 }
