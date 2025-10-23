@@ -485,6 +485,7 @@ const BillingCodeSearchScreen = ({ navigation }: any) => {
         onClose={() => setShowSubSelectionModal(false)}
         onSave={handleSaveSubSelection}
         serviceDate={serviceDate}
+        physician={null}
       />
     </SafeAreaView>
   );

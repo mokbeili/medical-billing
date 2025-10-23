@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { BillingCode } from "../types";
+import { BillingCode, Physician } from "../types";
 import { formatFullDate } from "../utils/dateUtils";
 
 interface CodeSubSelection {
@@ -31,15 +31,64 @@ interface BillingCodeConfigurationModalProps {
   onClose: () => void;
   onSave: (subSelection: CodeSubSelection) => void;
   serviceDate?: string;
+  physician?: Physician | null;
 }
 
 const BillingCodeConfigurationModal: React.FC<
   BillingCodeConfigurationModalProps
-> = ({ visible, billingCode, subSelection, onClose, onSave, serviceDate }) => {
+> = ({
+  visible,
+  billingCode,
+  subSelection,
+  onClose,
+  onSave,
+  serviceDate,
+  physician,
+}) => {
   const [localSubSelection, setLocalSubSelection] =
     useState<CodeSubSelection | null>(null);
+  const [showFullList, setShowFullList] = useState(false);
 
-  console.log("billingCode", billingCode);
+  // Full Location of Service options
+  const fullLocationOfServiceOptions = React.useMemo(
+    () => [
+      { value: "1", label: "Office" },
+      { value: "2", label: "Hospital In-Patient" },
+      { value: "3", label: "Hospital Out-Patient" },
+      { value: "4", label: "Patient's Home" },
+      { value: "5", label: "Other" },
+      { value: "7", label: "Premium" },
+      { value: "9", label: "Emergency Room" },
+      { value: "B", label: "Hospital In-Patient (Premium)" },
+      { value: "C", label: "Hospital Out-Patient (Premium)" },
+      { value: "D", label: "Patient's Home (Premium)" },
+      { value: "E", label: "Other (Premium)" },
+      { value: "F", label: "After-Hours-Clinic (Premium)" },
+      { value: "K", label: "In Hospital (Premium)" },
+      { value: "M", label: "Out Patient (Premium)" },
+      { value: "P", label: "Home (Premium)" },
+      { value: "T", label: "Other (Premium)" },
+    ],
+    []
+  );
+
+  // Physician's Location of Service options
+  const physicianLocationOptions = React.useMemo(() => {
+    if (!physician?.physicianLocationsOfService) return [];
+    return physician.physicianLocationsOfService.map((plos) => ({
+      value: plos.locationOfService.code,
+      label: plos.locationOfService.name,
+    }));
+  }, [physician]);
+
+  // Determine which options to display
+  const locationOfServiceOptions = React.useMemo(() => {
+    if (showFullList || physicianLocationOptions.length === 0) {
+      return fullLocationOfServiceOptions;
+    }
+    return physicianLocationOptions;
+  }, [showFullList, physicianLocationOptions, fullLocationOfServiceOptions]);
+
   // Initialize local state when modal opens
   React.useEffect(() => {
     if (visible && subSelection) {
@@ -161,26 +210,6 @@ const BillingCodeConfigurationModal: React.FC<
   const isHSection = (code: BillingCode) => {
     return code.section.code === "H";
   };
-
-  // Location of Service options
-  const locationOfServiceOptions = [
-    { value: "1", label: "Office" },
-    { value: "2", label: "Hospital In-Patient" },
-    { value: "3", label: "Hospital Out-Patient" },
-    { value: "4", label: "Patient's Home" },
-    { value: "5", label: "Other" },
-    { value: "7", label: "Premium" },
-    { value: "9", label: "Emergency Room" },
-    { value: "B", label: "Hospital In-Patient (Premium)" },
-    { value: "C", label: "Hospital Out-Patient (Premium)" },
-    { value: "D", label: "Patient's Home (Premium)" },
-    { value: "E", label: "Other (Premium)" },
-    { value: "F", label: "After-Hours-Clinic (Premium)" },
-    { value: "K", label: "In Hospital (Premium)" },
-    { value: "M", label: "Out Patient (Premium)" },
-    { value: "P", label: "Home (Premium)" },
-    { value: "T", label: "Other (Premium)" },
-  ];
 
   return (
     <Modal
@@ -608,9 +637,23 @@ const BillingCodeConfigurationModal: React.FC<
 
             {/* Location of Service - Required for all codes */}
             <View style={styles.subSelectionSection}>
-              <Text style={styles.subSelectionSectionTitle}>
-                Location of Service <Text style={styles.requiredText}>*</Text>
-              </Text>
+              <View style={styles.locationOfServiceHeader}>
+                <Text style={styles.subSelectionSectionTitle}>
+                  Location of Service <Text style={styles.requiredText}>*</Text>
+                </Text>
+                {physicianLocationOptions.length > 0 && (
+                  <TouchableOpacity
+                    style={styles.toggleButton}
+                    onPress={() => setShowFullList(!showFullList)}
+                  >
+                    <Text style={styles.toggleButtonText}>
+                      {showFullList
+                        ? "Show My Locations"
+                        : "Show All Locations"}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
               <ScrollView
                 style={styles.locationOfServiceScrollView}
                 nestedScrollEnabled={true}
@@ -894,6 +937,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "500",
     color: "#fff",
+  },
+  locationOfServiceHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  toggleButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    backgroundColor: "#f3f4f6",
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+  },
+  toggleButtonText: {
+    fontSize: 12,
+    color: "#3b82f6",
+    fontWeight: "500",
   },
   locationOfServiceScrollView: {
     maxHeight: 200,

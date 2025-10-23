@@ -1613,6 +1613,7 @@ const ServicesScreen = ({ navigation }: any) => {
                 .split("T")[0]
             : undefined
         }
+        physician={physicians?.[0] || null}
       />
 
       {/* Suggestions Modal for adding codes */}

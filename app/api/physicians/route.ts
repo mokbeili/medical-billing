@@ -87,6 +87,20 @@ export async function GET(request: Request) {
             city: true,
           },
         },
+        physicianLocationsOfService: {
+          select: {
+            id: true,
+            locationOfService: {
+              select: {
+                id: true,
+                code: true,
+                name: true,
+                startTime: true,
+                endTime: true,
+              },
+            },
+          },
+        },
       },
       orderBy: {
         lastName: "asc",

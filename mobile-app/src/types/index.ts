@@ -163,6 +163,19 @@ export interface AIPrompt {
   };
 }
 
+export interface LocationOfService {
+  id: number;
+  code: string;
+  name: string;
+  startTime?: string | null;
+  endTime?: string | null;
+}
+
+export interface PhysicianLocationOfService {
+  id: number;
+  locationOfService: LocationOfService;
+}
+
 export interface Physician {
   id: string;
   firstName: string;
@@ -184,6 +197,7 @@ export interface Physician {
     };
   }>;
   physicianBillingTypes?: PhysicianBillingType[];
+  physicianLocationsOfService?: PhysicianLocationOfService[];
 }
 
 export interface Patient {

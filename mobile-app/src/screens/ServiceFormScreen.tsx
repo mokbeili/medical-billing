@@ -4574,6 +4574,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
         }}
         onSave={handleSaveNewCodeInstance}
         serviceDate={formData.serviceDate}
+        physician={physicians?.[0] || null}
       />
 
       {/* Billing Code Suggestions Modal */}
@@ -4791,6 +4792,7 @@ const ServiceFormScreen = ({ navigation }: any) => {
           setCurrentCodeForSubSelection(null);
         }}
         serviceDate={formData.serviceDate}
+        physician={physicians?.[0] || null}
       />
     </SafeAreaView>
   );

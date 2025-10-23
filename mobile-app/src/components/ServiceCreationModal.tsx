@@ -2102,6 +2102,7 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
           handleUpdateSubSelection(subSelection.codeId, subSelection);
         }}
         serviceDate={serviceDate}
+        physician={physician}
       />
 
       {/* Date Picker Modal */}
