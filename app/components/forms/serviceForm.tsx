@@ -3357,7 +3357,7 @@ export default function ServiceForm({
 
           <div className="flex justify-end space-x-2">
             <Button type="button" variant="outline" onClick={handleSave}>
-              Save
+              Save and Keep Open
             </Button>
             <Button type="button" onClick={handleApproveAndFinish}>
               Approve & Finish

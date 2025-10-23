@@ -985,7 +985,7 @@ const ServicesScreen = ({ navigation }: any) => {
                     }}
                   >
                     <Ionicons
-                      name="repeat"
+                      name="people-outline"
                       size={20}
                       color={hasPendingStatus ? "#9ca3af" : "#2563eb"}
                     />
