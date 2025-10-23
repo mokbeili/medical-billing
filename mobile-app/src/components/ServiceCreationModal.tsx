@@ -61,6 +61,7 @@ interface CodeSubSelection {
   serviceEndTime: string | null;
   numberOfUnits: number | null;
   specialCircumstances: string | null;
+  locationOfService: string | null;
 }
 
 interface ServiceCreationModalProps {
@@ -948,6 +949,7 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
           specialCircumstances: subSelection?.specialCircumstances || null,
           serviceDate: codeServiceDateUTC,
           serviceEndDate: codeServiceEndDateUTC,
+          locationOfService: subSelection?.locationOfService || "2", // Default to Hospital In-Patient
           fee_determinant: code.fee_determinant || "A",
           multiple_unit_indicator: code.multiple_unit_indicator || null,
         };
@@ -1112,6 +1114,7 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
         serviceEndTime: null,
         numberOfUnits: 1,
         specialCircumstances: null,
+        locationOfService: null,
       };
 
       setCodeSubSelections((prev) => [...prev, subSelection!]);
@@ -1680,6 +1683,7 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
                       serviceEndTime: null,
                       numberOfUnits: 1,
                       specialCircumstances: null,
+                      locationOfService: null,
                     };
                     setCodeSubSelections((prev) => [
                       ...prev,

@@ -640,7 +640,7 @@ const ServicesScreen = ({ navigation }: any) => {
       // The backend will automatically handle setting the discharge date
       // based on the last rounding log for type 57 codes
       await servicesAPI.discharge(service.id);
-      Alert.alert("Success", "Service discharged successfully!");
+      Alert.alert("Success", "Service finished successfully!");
       // Refetch the specific service to get updated data
       await refetchService(service.id);
     } catch (error) {

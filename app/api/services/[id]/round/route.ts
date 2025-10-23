@@ -396,6 +396,62 @@ export async function POST(
       newServiceCodes.push(newServiceCode);
     }
 
+    // Close out any previous type 57 codes whose max date has passed
+    // Get all existing type 57 service codes that don't have end dates
+    const existingType57Codes = service.serviceCodes.filter(
+      (sc) =>
+        sc.billingCode.billing_record_type === 57 &&
+        !sc.serviceEndDate &&
+        sc.billingCode.day_range !== null
+    );
+
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+
+    for (const serviceCode of existingType57Codes) {
+      // Calculate max possible date for this code (start date + day range - 1)
+      // Day range is inclusive, so a 10-day range means start + 9 days
+      const startDate = new Date(
+        serviceCode.serviceDate || service.serviceDate
+      );
+      startDate.setUTCHours(0, 0, 0, 0);
+
+      const maxDate = new Date(startDate);
+      maxDate.setUTCDate(
+        maxDate.getUTCDate() + (serviceCode.billingCode.day_range || 0) - 1
+      );
+      maxDate.setUTCHours(0, 0, 0, 0);
+
+      // If the max date has already passed, set the end date to the max date
+      if (today > maxDate) {
+        await prisma.serviceCodes.update({
+          where: { id: serviceCode.id },
+          data: {
+            serviceEndDate: maxDate,
+          },
+        });
+
+        // Create change log for this update
+        await prisma.serviceCodeChangeLog.create({
+          data: {
+            serviceCodeId: serviceCode.id,
+            changeType: "UPDATE",
+            previousData: JSON.stringify({
+              serviceEndDate: null,
+            }),
+            newData: JSON.stringify({
+              serviceEndDate: maxDate,
+            }),
+            changedBy: parseInt(user.id),
+            notes: `Automatically closed previous type 57 code during rounding - max date (${
+              maxDate.toISOString().split("T")[0]
+            }) has passed`,
+            roundingDate: roundingDate,
+          },
+        });
+      }
+    }
+
     // Fetch the updated service
     const updatedService = await prisma.service.findFirst({
       where: {

@@ -81,7 +81,7 @@ export async function POST(request: Request) {
           },
         },
         serviceLocation: serviceLocation || "X", // Default to Rural/Northern if not provided
-        locationOfService: billingCode.locationOfService, // Use individual code's location or default to Office
+        locationOfService: billingCode.locationOfService || "2", // Use individual code's location or default to Hospital In-Patient
         serviceStartTime: billingCode.serviceStartTime
           ? new Date(billingCode.serviceStartTime)
           : null,
@@ -515,7 +515,7 @@ export async function PUT(request: Request) {
       for (const billingCode of billingCodes) {
         const codeData = {
           serviceLocation: serviceLocation || "X",
-          locationOfService: billingCode.locationOfService, // Use individual code's location or default to Office
+          locationOfService: billingCode.locationOfService || "2", // Use individual code's location or default to Hospital In-Patient
           serviceStartTime: billingCode.serviceStartTime
             ? new Date(billingCode.serviceStartTime)
             : null,
