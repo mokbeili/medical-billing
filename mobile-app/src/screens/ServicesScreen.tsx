@@ -43,10 +43,6 @@ const ServicesScreen = ({ navigation }: any) => {
   >("lastNameAsc");
   const [showSearch, setShowSearch] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  const [showDischargeModal, setShowDischargeModal] = useState(false);
-  const [dischargeDate, setDischargeDate] = useState("");
-  const [pendingDischargeService, setPendingDischargeService] =
-    useState<Service | null>(null);
   // Rounding modal state
   const [showRoundingModal, setShowRoundingModal] = useState(false);
   const [roundingDate, setRoundingDate] = useState("");
@@ -640,40 +636,13 @@ const ServicesScreen = ({ navigation }: any) => {
   };
 
   const handleDischarge = async (service: Service) => {
-    // Check if service has type 57 codes
-    const type57Codes = service.serviceCodes.filter(
-      (code) => code.billingCode.billing_record_type === 57
-    );
-
-    // if (type57Codes.length === 0) {
-    //   Alert.alert(
-    //     "No Type 57 Codes",
-    //     "This service does not contain any type 57 codes that require discharge."
-    //   );
-    //   return;
-    // }
-
-    // Set today's date as default discharge date
-    const today = getLocalYMD(new Date());
-    setDischargeDate(today);
-    setPendingDischargeService(service);
-    setShowDischargeModal(true);
-  };
-
-  const handleConfirmDischarge = async () => {
-    if (!pendingDischargeService || !dischargeDate) {
-      Alert.alert("Error", "Missing discharge information");
-      return;
-    }
-
     try {
-      await servicesAPI.discharge(pendingDischargeService.id, dischargeDate);
+      // The backend will automatically handle setting the discharge date
+      // based on the last rounding log for type 57 codes
+      await servicesAPI.discharge(service.id);
       Alert.alert("Success", "Service discharged successfully!");
-      setShowDischargeModal(false);
-      setDischargeDate("");
-      setPendingDischargeService(null);
       // Refetch the specific service to get updated data
-      await refetchService(pendingDischargeService.id);
+      await refetchService(service.id);
     } catch (error) {
       console.error("Error discharging service:", error);
       Alert.alert("Error", "Failed to discharge service. Please try again.");
@@ -1422,76 +1391,6 @@ const ServicesScreen = ({ navigation }: any) => {
           </View>
         )}
       </ScrollView>
-
-      {/* Discharge Date Modal */}
-      <Modal
-        visible={showDischargeModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => {
-          setShowDischargeModal(false);
-          setDischargeDate("");
-          setPendingDischargeService(null);
-        }}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => {
-            setShowDischargeModal(false);
-            setDischargeDate("");
-            setPendingDischargeService(null);
-          }}
-        >
-          <TouchableOpacity
-            style={styles.modalContent}
-            activeOpacity={1}
-            onPress={() => {}} // Prevent closing when tapping inside modal
-          >
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Set Discharge Date</Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setShowDischargeModal(false);
-                  setDischargeDate("");
-                  setPendingDischargeService(null);
-                }}
-              >
-                <Ionicons name="close" size={24} color="#6b7280" />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.modalDescription}>
-              Please set the discharge date for the last type 57 code in the
-              service.
-            </Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="YYYY-MM-DD"
-              value={dischargeDate}
-              onChangeText={setDischargeDate}
-              keyboardType="default"
-            />
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => {
-                  setShowDischargeModal(false);
-                  setDischargeDate("");
-                  setPendingDischargeService(null);
-                }}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.confirmButton]}
-                onPress={handleConfirmDischarge}
-              >
-                <Text style={styles.confirmButtonText}>Confirm</Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
 
       {/* Rounding Date Modal */}
       <Modal

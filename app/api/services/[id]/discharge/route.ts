@@ -30,16 +30,7 @@ export async function POST(
       user = session.user;
     }
 
-    const { dischargeDate } = await request.json();
-
-    if (!dischargeDate) {
-      return NextResponse.json(
-        { error: "Discharge date is required" },
-        { status: 400 }
-      );
-    }
-
-    // Get the service with all its service codes
+    // Get the service with all its service codes and change logs
     const service = await prisma.service.findFirst({
       where: {
         id: parseInt(id),
@@ -53,6 +44,17 @@ export async function POST(
         serviceCodes: {
           include: {
             billingCode: true,
+            changeLogs: {
+              where: {
+                changeType: "ROUND",
+                roundingDate: {
+                  not: null,
+                },
+              },
+              orderBy: {
+                roundingDate: "desc",
+              },
+            },
           },
           orderBy: {
             serviceDate: "desc",
@@ -70,24 +72,36 @@ export async function POST(
       (code) => code.billingCode.billing_record_type === 57
     );
 
-    // if (type57Codes.length === 0) {
-    //   return NextResponse.json(
-    //     { error: "No type 57 codes found in this service" },
-    //     { status: 400 }
-    //   );
-    // }
-
     // Find the last type 57 code (the one with the latest service date)
     const lastType57Code = type57Codes[0]; // Already ordered by serviceDate desc
 
-    // Update the end date of the last type 57 code
+    // Update the end date of the last type 57 code if it exists
     if (lastType57Code) {
-      await prisma.serviceCodes.update({
-        where: { id: lastType57Code.id },
-        data: {
-          serviceEndDate: new Date(dischargeDate),
-        },
-      });
+      // Find the last rounding date from all change logs in the service
+      let lastRoundingDate: Date | null = null;
+
+      for (const serviceCode of service.serviceCodes) {
+        for (const changeLog of serviceCode.changeLogs) {
+          if (changeLog.roundingDate) {
+            if (
+              !lastRoundingDate ||
+              changeLog.roundingDate > lastRoundingDate
+            ) {
+              lastRoundingDate = changeLog.roundingDate;
+            }
+          }
+        }
+      }
+
+      // If we found a rounding date, use it as the discharge date
+      if (lastRoundingDate) {
+        await prisma.serviceCodes.update({
+          where: { id: lastType57Code.id },
+          data: {
+            serviceEndDate: lastRoundingDate,
+          },
+        });
+      }
     }
 
     // Update the service status to PENDING

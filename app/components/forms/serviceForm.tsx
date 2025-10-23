@@ -271,20 +271,8 @@ export default function ServiceForm({
     return "America/Regina"; // Default timezone
   }, [formData.physicianId, physicians]);
 
-  // Add state for discharge date modal
-  const [showDischargeDateModal, setShowDischargeDateModal] = useState(false);
-  const [dischargeDate, setDischargeDate] = useState("");
-  const [pendingApproveAndFinish, setPendingApproveAndFinish] = useState(false);
-
   // Add state for active tab
   const [activeTab, setActiveTab] = useState<"type50" | "type57">("type50");
-
-  // Update discharge date when physician timezone changes
-  useEffect(() => {
-    if (physicianTimezone && !dischargeDate) {
-      setDischargeDate(getTodayLocalDate(physicianTimezone));
-    }
-  }, [physicianTimezone]);
 
   // Load existing service data for editing
   useEffect(() => {
@@ -1304,117 +1292,10 @@ export default function ServiceForm({
       return;
     }
 
-    // Check if there are type 57 codes that need discharge date
-    const type57Codes = formData.billingCodes.filter((code) => {
-      const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
-      return selectedCode && selectedCode.billing_record_type === 57;
-    });
-
-    // For type 57 codes, we'll use the last one added since we're not using previous/next codes anymore
-    const lastType57Code = type57Codes[type57Codes.length - 1];
-
-    if (lastType57Code) {
-      // Always prompt for discharge date for the last type 57 code
-      // This allows the user to override the calculated end date if needed
-      setShowDischargeDateModal(true);
-      setPendingApproveAndFinish(true);
-      return;
-    }
-
-    // Proceed with normal approve and finish
+    // Proceed with approve and finish
+    // The backend will automatically handle setting the discharge date
+    // based on the last rounding log for type 57 codes
     await performApproveAndFinish();
-  };
-
-  const handleConfirmDischargeDate = async () => {
-    if (!dischargeDate) return;
-
-    // Find the last type 57 code and set its end date
-    const type57Codes = formData.billingCodes.filter((code) => {
-      const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
-      return selectedCode && selectedCode.billing_record_type === 57;
-    });
-
-    // For type 57 codes, we'll use the last one added since we're not using previous/next codes anymore
-    const lastType57Code = type57Codes[type57Codes.length - 1];
-
-    let updatedBillingCodes = formData.billingCodes;
-
-    if (lastType57Code) {
-      updatedBillingCodes = formData.billingCodes.map((code) => {
-        if (code.codeId === lastType57Code.codeId) {
-          // Find the selected code to get its day range
-          const selectedCode = selectedCodes.find((c) => c.id === code.codeId);
-
-          // Calculate the end date based on the code's day range or BillingCodeChain
-          let calculatedEndDate = dischargeDate;
-
-          if (
-            selectedCode?.billing_record_type === 57 &&
-            selectedCode.billingCodeChains &&
-            selectedCode.billingCodeChains.length > 0
-          ) {
-            // Use BillingCodeChain logic for type 57 codes
-            const rootChain = selectedCode.billingCodeChains[0];
-            const startDate = new Date(formData.serviceDate);
-            const dayRangeEndDate = new Date(startDate);
-            dayRangeEndDate.setDate(
-              startDate.getDate() + rootChain.cumulativeDayRange - 1
-            ); // -1 because it's inclusive
-
-            const dischargeDateObj = new Date(dischargeDate);
-
-            // Use the discharge date if it's earlier than or equal to the calculated day range end date
-            // This allows the user to set an earlier discharge date than the full day range
-            if (dischargeDateObj <= dayRangeEndDate) {
-              calculatedEndDate = dischargeDate;
-            } else {
-              // If discharge date is later than the calculated end date, use the calculated end date
-              // This prevents extending beyond the code's natural end date
-              calculatedEndDate = dayRangeEndDate.toISOString().split("T")[0];
-            }
-          } else if (selectedCode?.day_range && selectedCode.day_range > 0) {
-            // Fallback to regular day range logic
-            const startDate = new Date(
-              code.serviceDate || formData.serviceDate
-            );
-            const dayRangeEndDate = new Date(startDate);
-            dayRangeEndDate.setDate(
-              startDate.getDate() + selectedCode.day_range - 1
-            ); // -1 because it's inclusive
-
-            const dischargeDateObj = new Date(dischargeDate);
-
-            // Use the discharge date if it's earlier than or equal to the calculated day range end date
-            // This allows the user to set an earlier discharge date than the full day range
-            if (dischargeDateObj <= dayRangeEndDate) {
-              calculatedEndDate = dischargeDate;
-            } else {
-              // If discharge date is later than the calculated end date, use the calculated end date
-              // This prevents extending beyond the code's natural end date
-              calculatedEndDate = dayRangeEndDate.toISOString().split("T")[0];
-            }
-          }
-
-          return {
-            ...code,
-            serviceEndDate: calculatedEndDate,
-          };
-        }
-        return code;
-      });
-
-      setFormData({
-        ...formData,
-        billingCodes: updatedBillingCodes,
-      });
-    }
-
-    setShowDischargeDateModal(false);
-    setDischargeDate(getTodayLocalDate(physicianTimezone));
-    setPendingApproveAndFinish(false);
-
-    // Now proceed with approve and finish, passing the updated billing codes
-    await performApproveAndFinish(updatedBillingCodes);
   };
 
   const performApproveAndFinish = async (
@@ -3484,103 +3365,6 @@ export default function ServiceForm({
           </div>
         </CardContent>
       </Card>
-
-      {/* Discharge Date Modal */}
-      {showDischargeDateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4">Set Discharge Date</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Please set the discharge date for the last type 57 code in the
-              service. This will override the calculated end date if the
-              discharge date is earlier.
-            </p>
-            <div className="space-y-4">
-              {/* Show calculated end date information */}
-              {(() => {
-                const type57Codes = formData.billingCodes.filter((code) => {
-                  const selectedCode = selectedCodes.find(
-                    (c) => c.id === code.codeId
-                  );
-                  return (
-                    selectedCode && selectedCode.billing_record_type === 57
-                  );
-                });
-
-                // For type 57 codes, we'll use the last one added since we're not using previous/next codes anymore
-                const lastType57Code = type57Codes[type57Codes.length - 1];
-
-                if (lastType57Code) {
-                  const selectedCode = selectedCodes.find(
-                    (c) => c.id === lastType57Code.codeId
-                  );
-                  if (selectedCode?.day_range && selectedCode.day_range > 0) {
-                    const startDate = new Date(
-                      lastType57Code.serviceDate || formData.serviceDate
-                    );
-                    const calculatedEndDate = new Date(startDate);
-                    calculatedEndDate.setDate(
-                      startDate.getDate() + selectedCode.day_range - 1
-                    );
-
-                    return (
-                      <div className="p-3 bg-blue-50 rounded-md">
-                        <p className="text-sm text-blue-800 mb-2">
-                          <strong>Code {selectedCode.code}</strong> has a day
-                          range of {selectedCode.day_range} days.
-                        </p>
-                        <p className="text-xs text-blue-700">
-                          Calculated end date:{" "}
-                          {calculatedEndDate.toISOString().split("T")[0]}
-                          (start date + {selectedCode.day_range - 1} days)
-                        </p>
-                        <p className="text-xs text-blue-700 mt-1">
-                          Setting an earlier discharge date will override this
-                          calculation.
-                        </p>
-                      </div>
-                    );
-                  }
-                }
-                return null;
-              })()}
-
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Discharge Date
-                </label>
-                <Input
-                  type="date"
-                  value={dischargeDate}
-                  onChange={(e) => setDischargeDate(e.target.value)}
-                  min={formData.serviceDate}
-                  max={getTodayLocalDate(physicianTimezone)}
-                />
-              </div>
-              <div className="flex justify-end space-x-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setShowDischargeDateModal(false);
-                    setDischargeDate(getTodayLocalDate(physicianTimezone));
-                    setPendingApproveAndFinish(false);
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
-                  onClick={handleConfirmDischargeDate}
-                  disabled={!dischargeDate}
-                >
-                  Confirm
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* No codes selected message */}
       {selectedCodes.length === 0 && (

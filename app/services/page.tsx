@@ -104,11 +104,6 @@ export default function ServiceRecordsPage() {
   const [expandedServiceId, setExpandedServiceId] = useState<string | null>(
     null
   );
-  const [showDischargeDateModal, setShowDischargeDateModal] = useState(false);
-  const [dischargeDate, setDischargeDate] = useState(getTodayLocalDate());
-  const [pendingFinishServiceId, setPendingFinishServiceId] = useState<
-    string | null
-  >(null);
 
   useEffect(() => {
     const fetchServices = async () => {
@@ -364,39 +359,25 @@ export default function ServiceRecordsPage() {
     const service = services.find((s) => s.id === serviceId);
     if (!service) return;
 
-    // Check if there are type 57 codes that need discharge date
+    // Check if there are type 57 codes
     const type57Codes = service.serviceCodes.filter(
       (code) => code.billingCode.billing_record_type === 57
     );
 
     const lastType57Code = type57Codes[type57Codes.length - 1];
 
-    if (lastType57Code) {
-      // Show discharge date modal for type 57 codes
-      setPendingFinishServiceId(serviceId);
-      setShowDischargeDateModal(true);
-      return;
-    }
-
-    // If no type 57 codes, proceed directly
-    await performFinishService(serviceId);
-  };
-
-  const performFinishService = async (
-    serviceId: string,
-    dischargeDate?: string
-  ) => {
     try {
       let response;
 
-      // If discharge date is provided, use the discharge endpoint
-      if (dischargeDate) {
+      if (lastType57Code) {
+        // Use the discharge endpoint for services with type 57 codes
+        // The backend will automatically set the discharge date from the last rounding log
         response = await fetch(`/api/services/${serviceId}/discharge`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ dischargeDate }),
+          body: JSON.stringify({}),
         });
       } else {
         // Otherwise just update the status
@@ -423,16 +404,6 @@ export default function ServiceRecordsPage() {
     } catch (error) {
       console.error("Error finishing service:", error);
     }
-  };
-
-  const handleConfirmDischargeDate = async () => {
-    if (!dischargeDate || !pendingFinishServiceId) return;
-
-    await performFinishService(pendingFinishServiceId, dischargeDate);
-
-    setShowDischargeDateModal(false);
-    setDischargeDate(getTodayLocalDate());
-    setPendingFinishServiceId(null);
   };
 
   const handleSelectAll = () => {
@@ -973,100 +944,6 @@ export default function ServiceRecordsPage() {
             </div>
           )}
         </div>
-
-        {/* Discharge Date Modal */}
-        {showDischargeDateModal && pendingFinishServiceId && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
-              <h3 className="text-lg font-semibold mb-4">Set Discharge Date</h3>
-              <p className="text-sm text-gray-600 mb-4">
-                This service contains type 57 codes. Please set the discharge
-                date for the last type 57 code. This will override the
-                calculated end date if the discharge date is earlier.
-              </p>
-              <div className="space-y-4">
-                {/* Show calculated end date information */}
-                {(() => {
-                  const service = services.find(
-                    (s) => s.id === pendingFinishServiceId
-                  );
-                  if (!service) return null;
-
-                  const type57Codes = service.serviceCodes.filter(
-                    (code) => code.billingCode.billing_record_type === 57
-                  );
-                  const lastType57Code = type57Codes[type57Codes.length - 1];
-
-                  if (lastType57Code) {
-                    const selectedCode = lastType57Code.billingCode;
-                    if (selectedCode.day_range && selectedCode.day_range > 0) {
-                      const startDate = new Date(
-                        lastType57Code.serviceDate || service.serviceDate
-                      );
-                      const calculatedEndDate = new Date(startDate);
-                      calculatedEndDate.setDate(
-                        startDate.getDate() + selectedCode.day_range - 1
-                      );
-
-                      return (
-                        <div className="p-3 bg-blue-50 rounded-md">
-                          <p className="text-sm text-blue-800 mb-2">
-                            <strong>Code {selectedCode.code}</strong> has a day
-                            range of {selectedCode.day_range} days.
-                          </p>
-                          <p className="text-xs text-blue-700">
-                            Calculated end date:{" "}
-                            {calculatedEndDate.toISOString().split("T")[0]}
-                            (start date + {selectedCode.day_range - 1} days)
-                          </p>
-                          <p className="text-xs text-blue-700 mt-1">
-                            Setting an earlier discharge date will override this
-                            calculation.
-                          </p>
-                        </div>
-                      );
-                    }
-                  }
-                  return null;
-                })()}
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Discharge Date
-                  </label>
-                  <Input
-                    type="date"
-                    value={dischargeDate}
-                    onChange={(e) => setDischargeDate(e.target.value)}
-                    min={(() => {
-                      const service = services.find(
-                        (s) => s.id === pendingFinishServiceId
-                      );
-                      return service ? service.serviceDate.split("T")[0] : "";
-                    })()}
-                    max={getTodayLocalDate()}
-                  />
-                </div>
-                <div className="flex justify-end space-x-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setShowDischargeDateModal(false);
-                      setDischargeDate(getTodayLocalDate());
-                      setPendingFinishServiceId(null);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="button" onClick={handleConfirmDischargeDate}>
-                    Confirm
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </Layout>
   );

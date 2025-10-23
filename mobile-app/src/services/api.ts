@@ -284,13 +284,8 @@ export const servicesAPI = {
     return response.data;
   },
 
-  discharge: async (
-    serviceId: string,
-    dischargeDate: string
-  ): Promise<Service> => {
-    const response = await api.post(`/api/services/${serviceId}/discharge`, {
-      dischargeDate,
-    });
+  discharge: async (serviceId: string): Promise<Service> => {
+    const response = await api.post(`/api/services/${serviceId}/discharge`, {});
     return response.data;
   },
 };

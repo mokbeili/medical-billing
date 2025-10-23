@@ -116,11 +116,6 @@ const ServiceFormScreen = ({ navigation }: any) => {
     sex: "",
   });
 
-  // Add state for discharge date modal
-  const [showDischargeDateModal, setShowDischargeDateModal] = useState(false);
-  const [dischargeDate, setDischargeDate] = useState("");
-  const [pendingApproveAndFinish, setPendingApproveAndFinish] = useState(false);
-
   // Add state for rounding modal
   const [showRoundingModal, setShowRoundingModal] = useState(false);
   const [roundingDate, setRoundingDate] = useState("");
@@ -1601,13 +1596,6 @@ const ServiceFormScreen = ({ navigation }: any) => {
     if (selectedCalendarDate) {
       const formattedDate = formatDate(selectedCalendarDate);
 
-      // Check if this is for discharge date
-      if (showDischargeDateModal) {
-        setDischargeDate(formattedDate);
-        setShowDatePicker(false);
-        return;
-      }
-
       // Default behavior for new patient date of birth
       setNewPatient((prev) => ({ ...prev, dateOfBirth: formattedDate }));
       if (newPatientErrors.dateOfBirth) {
@@ -2178,106 +2166,9 @@ const ServiceFormScreen = ({ navigation }: any) => {
   const handleApproveAndFinish = () => {
     if (!validateForm()) return;
 
-    // Check if there are type 57 codes that need discharge date
-    const type57Codes = formData.billingCodes.filter((code) => {
-      const selectedCode = selectedCodes.find(
-        (c) => c.billingCode.id === code.codeId
-      );
-      return (
-        selectedCode && selectedCode.billingCode.billing_record_type === 57
-      );
-    });
-
-    // Find the last type 57 code (the one with no next codes present)
-    const lastType57Code = type57Codes.find((code) => {
-      const selectedCode = selectedCodes.find(
-        (c) => c.billingCode.id === code.codeId
-      );
-      if (!selectedCode) return false;
-
-      // Check if this code has any next codes that are also selected
-      const hasNextCodes = formData.billingCodes.some((nextCode) => {
-        const nextSelectedCode = selectedCodes.find(
-          (c) => c.billingCode.id === nextCode.codeId
-        );
-        return (
-          nextSelectedCode &&
-          nextSelectedCode.billingCode.previousCodes?.some(
-            (prevCode) =>
-              prevCode.previous_code.id === selectedCode.billingCode.id
-          )
-        );
-      });
-
-      return !hasNextCodes;
-    });
-
-    if (lastType57Code && !lastType57Code.serviceEndDate) {
-      // Prompt for discharge date
-      setShowDischargeDateModal(true);
-      setPendingApproveAndFinish(true);
-      return;
-    }
-
-    // Proceed with normal approve and finish
-    performApproveAndFinish();
-  };
-
-  const handleConfirmDischargeDate = () => {
-    if (!dischargeDate) return;
-
-    // Find the last type 57 code and set its end date
-    const type57Codes = formData.billingCodes.filter((code) => {
-      const selectedCode = selectedCodes.find(
-        (c) => c.billingCode.id === code.codeId
-      );
-      return (
-        selectedCode && selectedCode.billingCode.billing_record_type === 57
-      );
-    });
-
-    const lastType57Code = type57Codes.find((code) => {
-      const selectedCode = selectedCodes.find(
-        (c) => c.billingCode.id === code.codeId
-      );
-      if (!selectedCode) return false;
-
-      const hasNextCodes = formData.billingCodes.some((nextCode) => {
-        const nextSelectedCode = selectedCodes.find(
-          (c) => c.billingCode.id === nextCode.codeId
-        );
-        return (
-          nextSelectedCode &&
-          nextSelectedCode.billingCode.previousCodes?.some(
-            (prevCode) =>
-              prevCode.previous_code.id === selectedCode.billingCode.id
-          )
-        );
-      });
-
-      return !hasNextCodes;
-    });
-
-    if (lastType57Code) {
-      setFormData((prev) => ({
-        ...prev,
-        billingCodes: prev.billingCodes.map((code) => {
-          if (code.codeId === lastType57Code.codeId) {
-            return {
-              ...code,
-              serviceEndDate: dischargeDate,
-            };
-          }
-          return code;
-        }),
-      }));
-    }
-
-    setShowDischargeDateModal(false);
-    setDischargeDate("");
-    setPendingApproveAndFinish(false);
-
-    // Now proceed with approve and finish
+    // Proceed with approve and finish
+    // The backend will automatically handle setting the discharge date
+    // based on the last rounding log for type 57 codes
     performApproveAndFinish();
   };
 
@@ -4394,100 +4285,6 @@ const ServiceFormScreen = ({ navigation }: any) => {
           </Button>
         </View>
       </KeyboardAvoidingView>
-
-      {/* Discharge Date Modal */}
-      <Modal
-        visible={showDischargeDateModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => {
-          setShowDischargeDateModal(false);
-          setDischargeDate("");
-          setPendingApproveAndFinish(false);
-        }}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => {
-            setShowDischargeDateModal(false);
-            setDischargeDate("");
-            setPendingApproveAndFinish(false);
-          }}
-        >
-          <TouchableOpacity
-            style={styles.modalContent}
-            activeOpacity={1}
-            onPress={() => {}} // Prevent closing when tapping inside modal
-          >
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Set Discharge Date</Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setShowDischargeDateModal(false);
-                  setDischargeDate("");
-                  setPendingApproveAndFinish(false);
-                }}
-              >
-                <Ionicons name="close" size={24} color="#6b7280" />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.modalDescription}>
-              Please set the discharge date for the last type 57 code in the
-              service.
-            </Text>
-            <TouchableOpacity
-              style={styles.modalSearchInput}
-              onPress={() => {
-                // Use the existing date picker pattern
-                setDatePickerStep("day");
-                setShowDatePicker(true);
-                // Store the current discharge date for restoration if needed
-                if (dischargeDate) {
-                  const [year, month, day] = dischargeDate
-                    .split("-")
-                    .map(Number);
-                  setSelectedYear(year);
-                  setSelectedMonth(month - 1);
-                  // Set the calendar date directly
-                  setSelectedCalendarDate(new Date(year, month - 1, day));
-                }
-              }}
-            >
-              <Text
-                style={
-                  dischargeDate ? styles.dropdownText : styles.placeholderText
-                }
-              >
-                {dischargeDate || "Select discharge date..."}
-              </Text>
-            </TouchableOpacity>
-            <View style={styles.modalButtonContainer}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonCancel]}
-                onPress={() => {
-                  setShowDischargeDateModal(false);
-                  setDischargeDate("");
-                  setPendingApproveAndFinish(false);
-                }}
-              >
-                <Text style={styles.modalButtonCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.modalButton,
-                  styles.modalButtonConfirm,
-                  !dischargeDate && styles.modalButtonDisabled,
-                ]}
-                onPress={handleConfirmDischargeDate}
-                disabled={!dischargeDate}
-              >
-                <Text style={styles.modalButtonConfirmText}>Confirm</Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
 
       {/* Rounding Date Modal */}
       <Modal
