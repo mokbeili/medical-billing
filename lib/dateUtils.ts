@@ -613,6 +613,88 @@ export function convertLocalDateToTimezoneUTC(
 }
 
 /**
+ * Combines a date string (YYYY-MM-DD) with a time string (HH:MM) in a specific timezone
+ * and returns a UTC Date object
+ *
+ * Example: combineDateAndTimeInTimezone("2025-01-25", "07:00", "America/Regina")
+ * returns a Date object representing 7:00 AM on Jan 25, 2025 in Regina time, converted to UTC
+ *
+ * @param dateStr - Date string in YYYY-MM-DD format
+ * @param timeStr - Time string in HH:MM format (24-hour) or null
+ * @param timezone - IANA timezone string (e.g., "America/Regina")
+ * @returns Date object in UTC representing the local date/time, or null if timeStr is null
+ */
+export function combineDateAndTimeInTimezone(
+  dateStr: string,
+  timeStr: string | null,
+  timezone: string
+): Date | null {
+  if (!timeStr) return null;
+
+  try {
+    // If timeStr is already a full ISO datetime, just convert it
+    if (timeStr.includes("T") || timeStr.includes("Z")) {
+      return new Date(timeStr);
+    }
+
+    // Parse the date and time components
+    const [year, month, day] = dateStr.split("-").map(Number);
+    const [hours, minutes] = timeStr.split(":").map(Number);
+
+    // Create a string representing the local date/time in the target timezone
+    const localDateTimeString = `${year}-${String(month).padStart(
+      2,
+      "0"
+    )}-${String(day).padStart(2, "0")}T${String(hours).padStart(
+      2,
+      "0"
+    )}:${String(minutes).padStart(2, "0")}:00`;
+
+    // Use the same approach as convertLocalDateToTimezoneUTC to handle timezone conversion
+    // Start with UTC interpretation
+    const tentativeDate = new Date(`${localDateTimeString}Z`);
+
+    // Get the date/time components as they would appear in the target timezone
+    const formatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
+
+    // What does our tentative UTC date look like in the target timezone?
+    const formatted = formatter.format(tentativeDate);
+    const [datePart, timePart] = formatted.split(", ");
+
+    // Parse the parts to see the difference
+    const [fYear, fMonth, fDay] = datePart.split("-").map(Number);
+    const [fHour, fMinute, fSecond] = timePart.split(":").map(Number);
+
+    // Calculate the offset between what we want and what we got
+    const targetMillis = new Date(
+      Date.UTC(year, month - 1, day, hours, minutes, 0, 0)
+    ).getTime();
+    const actualMillis = new Date(
+      Date.UTC(fYear, fMonth - 1, fDay, fHour, fMinute, fSecond, 0)
+    ).getTime();
+
+    const offset = actualMillis - targetMillis;
+
+    // Adjust the tentative date by the offset to get the correct UTC time
+    const correctedDate = new Date(tentativeDate.getTime() - offset);
+
+    return correctedDate;
+  } catch (error) {
+    console.error("Error combining date and time in timezone:", error);
+    return null;
+  }
+}
+
+/**
  * Legacy function for backward compatibility
  * @deprecated Use formatFullDate instead
  */

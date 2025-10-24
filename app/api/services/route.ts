@@ -1,4 +1,5 @@
 import { authOptions } from "@/lib/auth";
+import { combineDateAndTimeInTimezone } from "@/lib/dateUtils";
 import { prisma } from "@/lib/prisma";
 import { decryptPatientFields } from "@/utils/patientEncryption";
 import { ServiceStatus } from "@prisma/client";
@@ -72,32 +73,58 @@ export async function POST(request: Request) {
     //   );
     // }
 
+    // Get physician's timezone for proper date/time conversion
+    const physician = await prisma.physician.findUnique({
+      where: { id: physicianId },
+      select: { timezone: true },
+    });
+
+    if (!physician) {
+      return NextResponse.json(
+        { error: "Physician not found" },
+        { status: 404 }
+      );
+    }
+
+    const physicianTimezone = physician.timezone;
+
     // Validate and prepare billing codes data
     const preparedBillingCodes =
-      billingCodes?.map((billingCode: any) => ({
-        billingCode: {
-          connect: {
-            id: billingCode.codeId,
+      billingCodes?.map((billingCode: any) => {
+        const codeServiceDate = billingCode.serviceDate || serviceDate;
+
+        // Extract just the date part (YYYY-MM-DD) for combining with time
+        const dateStr = codeServiceDate.split("T")[0];
+
+        return {
+          billingCode: {
+            connect: {
+              id: billingCode.codeId,
+            },
           },
-        },
-        serviceLocation: serviceLocation || "X", // Default to Rural/Northern if not provided
-        locationOfService: billingCode.locationOfService || "2", // Use individual code's location or default to Hospital In-Patient
-        serviceStartTime: billingCode.serviceStartTime
-          ? new Date(billingCode.serviceStartTime)
-          : null,
-        serviceEndTime: billingCode.serviceEndTime
-          ? new Date(billingCode.serviceEndTime)
-          : null,
-        numberOfUnits: billingCode.numberOfUnits || 1,
-        bilateralIndicator: billingCode.bilateralIndicator || null,
-        specialCircumstances: billingCode.specialCircumstances || null,
-        serviceDate: billingCode.serviceDate
-          ? new Date(billingCode.serviceDate)
-          : new Date(serviceDate),
-        serviceEndDate: billingCode.serviceEndDate
-          ? new Date(billingCode.serviceEndDate)
-          : null,
-      })) || [];
+          serviceLocation: serviceLocation || "X", // Default to Rural/Northern if not provided
+          locationOfService: billingCode.locationOfService || "2", // Use individual code's location or default to Hospital In-Patient
+          serviceStartTime: combineDateAndTimeInTimezone(
+            dateStr,
+            billingCode.serviceStartTime,
+            physicianTimezone
+          ),
+          serviceEndTime: combineDateAndTimeInTimezone(
+            dateStr,
+            billingCode.serviceEndTime,
+            physicianTimezone
+          ),
+          numberOfUnits: billingCode.numberOfUnits || 1,
+          bilateralIndicator: billingCode.bilateralIndicator || null,
+          specialCircumstances: billingCode.specialCircumstances || null,
+          serviceDate: billingCode.serviceDate
+            ? new Date(billingCode.serviceDate)
+            : new Date(serviceDate),
+          serviceEndDate: billingCode.serviceEndDate
+            ? new Date(billingCode.serviceEndDate)
+            : null,
+        };
+      }) || [];
 
     // Create the service
     const service = await prisma.service.create({
@@ -511,17 +538,35 @@ export async function PUT(request: Request) {
         });
       }
 
+      // Get physician's timezone for proper date/time conversion
+      const physician = await prisma.physician.findUnique({
+        where: { id: existingService.physicianId },
+        select: { timezone: true },
+      });
+
+      const physicianTimezone = physician?.timezone || "America/Regina";
+
       // Process incoming billing codes
       for (const billingCode of billingCodes) {
+        const codeServiceDate =
+          billingCode.serviceDate || serviceDate || new Date().toISOString();
+
+        // Extract just the date part (YYYY-MM-DD) for combining with time
+        const dateStr = codeServiceDate.split("T")[0];
+
         const codeData = {
           serviceLocation: serviceLocation || "X",
           locationOfService: billingCode.locationOfService || "2", // Use individual code's location or default to Hospital In-Patient
-          serviceStartTime: billingCode.serviceStartTime
-            ? new Date(billingCode.serviceStartTime)
-            : null,
-          serviceEndTime: billingCode.serviceEndTime
-            ? new Date(billingCode.serviceEndTime)
-            : null,
+          serviceStartTime: combineDateAndTimeInTimezone(
+            dateStr,
+            billingCode.serviceStartTime,
+            physicianTimezone
+          ),
+          serviceEndTime: combineDateAndTimeInTimezone(
+            dateStr,
+            billingCode.serviceEndTime,
+            physicianTimezone
+          ),
           numberOfUnits: billingCode.numberOfUnits || 1,
           bilateralIndicator: billingCode.bilateralIndicator || null,
           specialCircumstances: billingCode.specialCircumstances || null,

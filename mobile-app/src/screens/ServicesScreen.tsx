@@ -25,6 +25,10 @@ import {
   servicesAPI,
 } from "../services/api";
 import { BillingCode, Service, ServiceCodeChangeLog } from "../types";
+import {
+  splitBillingCodeByTimeAndLocation,
+  type LocationOfService,
+} from "../utils/billingCodeUtils";
 import { formatFullDate, formatRelativeDate } from "../utils/dateUtils";
 
 const ServicesScreen = ({ navigation }: any) => {
@@ -572,19 +576,87 @@ const ServicesScreen = ({ navigation }: any) => {
         return;
       }
 
-      const billingCodesData = selectedCodes.map((code) => {
+      // Fetch full physician data to get locations of service
+      const physicians = await physiciansAPI.getAll();
+      const physician = physicians.find((p) => p.id === service.physician.id);
+
+      // Convert physician locations to LocationOfService format
+      const locationsOfService: LocationOfService[] =
+        physician?.physicianLocationsOfService?.map((plos) => ({
+          id: plos.locationOfService.id,
+          code: plos.locationOfService.code,
+          name: plos.locationOfService.name,
+          startTime: plos.locationOfService.startTime || null,
+          endTime: plos.locationOfService.endTime || null,
+          holidayStartTime: plos.locationOfService.holidayStartTime || null,
+          holidayEndTime: plos.locationOfService.holidayEndTime || null,
+        })) || [];
+
+      // Prepare billing codes data and apply splitting logic
+      const billingCodesData = selectedCodes.flatMap((code) => {
         const subSelection = subSelections?.find((s) => s.codeId === code.id);
-        return {
-          codeId: code.id,
-          serviceStartTime: subSelection?.serviceStartTime || null,
-          serviceEndTime: subSelection?.serviceEndTime || null,
-          serviceDate: subSelection?.serviceDate || null,
-          serviceEndDate: subSelection?.serviceEndDate || null,
-          bilateralIndicator: subSelection?.bilateralIndicator || null,
-          numberOfUnits: subSelection?.numberOfUnits || 1,
-          specialCircumstances: subSelection?.specialCircumstances || null,
-          locationOfService: subSelection?.locationOfService || "1",
-        };
+
+        // Check if this code should be split
+        const shouldSplit =
+          code.multiple_unit_indicator === "U" &&
+          code.billing_unit_type?.includes("MINUTES") &&
+          subSelection?.serviceStartTime &&
+          subSelection?.serviceEndTime &&
+          locationsOfService.length > 0;
+
+        if (shouldSplit) {
+          // Apply splitting logic
+          const splitCodes = splitBillingCodeByTimeAndLocation(
+            {
+              codeId: code.id,
+              code: code.code,
+              title: code.title,
+              multiple_unit_indicator: code.multiple_unit_indicator,
+              billing_unit_type: code.billing_unit_type,
+              serviceStartTime: subSelection!.serviceStartTime,
+              serviceEndTime: subSelection!.serviceEndTime,
+              serviceDate: subSelection?.serviceDate || service.serviceDate,
+              numberOfUnits: subSelection?.numberOfUnits,
+              bilateralIndicator: subSelection?.bilateralIndicator,
+              specialCircumstances: subSelection?.specialCircumstances,
+              locationOfService: subSelection?.locationOfService,
+            },
+            locationsOfService,
+            physician?.timezone || "America/Regina",
+            [] // Empty holidays array for now
+          );
+
+          console.log(splitCodes);
+
+          // Convert each split code to the API format
+          return splitCodes.map((splitCode) => ({
+            codeId: code.id,
+            serviceStartTime: splitCode.serviceStartTime,
+            serviceEndTime: splitCode.serviceEndTime,
+            serviceDate:
+              splitCode.serviceDate || subSelection?.serviceDate || null,
+            serviceEndDate: subSelection?.serviceEndDate || null,
+            bilateralIndicator: splitCode.bilateralIndicator || null,
+            numberOfUnits: splitCode.numberOfUnits,
+            specialCircumstances: splitCode.specialCircumstances || null,
+            locationOfService: splitCode.locationOfService || "1",
+          }));
+        } else {
+          // Return single code without splitting
+          return [
+            {
+              codeId: code.id,
+              serviceStartTime: subSelection?.serviceStartTime || null,
+              serviceEndTime: subSelection?.serviceEndTime || null,
+              serviceDate: subSelection?.serviceDate || null,
+              serviceEndDate: subSelection?.serviceEndDate || null,
+              bilateralIndicator: subSelection?.bilateralIndicator || null,
+              numberOfUnits: subSelection?.numberOfUnits || 1,
+              specialCircumstances: subSelection?.specialCircumstances || null,
+              locationOfService: subSelection?.locationOfService || "1",
+            },
+          ];
+        }
       });
 
       await servicesAPI.addServiceCodes(service.id, billingCodesData);

@@ -35,6 +35,10 @@ import {
   ServiceFormData,
 } from "../types";
 import {
+  splitBillingCodeByTimeAndLocation,
+  type LocationOfService,
+} from "../utils/billingCodeUtils";
+import {
   convertLocalDateToTimezoneUTC,
   formatFullDate,
   formatRelativeDate,
@@ -2077,89 +2081,180 @@ const ServiceFormScreen = ({ navigation }: any) => {
     return true;
   };
 
-  const handleSave = () => {
-    if (!validateForm()) return;
+  // Helper function to apply splitting logic to billing codes
+  const processBillingCodesWithSplitting = async (codes: any[]) => {
+    // Get full physician data with locations of service
+    const physicians = await physiciansAPI.getAll();
+    const physicianData = physicians.find((p) => p.id === formData.physicianId);
 
-    // Convert service date to physician's timezone
-    const serviceDateUTC = convertLocalDateToTimezoneUTC(
-      formData.serviceDate,
-      physicianTimezone
+    // Convert physician locations to LocationOfService format
+    const locationsOfService: LocationOfService[] =
+      physicianData?.physicianLocationsOfService?.map((plos) => ({
+        id: plos.locationOfService.id,
+        code: plos.locationOfService.code,
+        name: plos.locationOfService.name,
+        startTime: plos.locationOfService.startTime || null,
+        endTime: plos.locationOfService.endTime || null,
+        holidayStartTime: plos.locationOfService.holidayStartTime || null,
+        holidayEndTime: plos.locationOfService.holidayEndTime || null,
+      })) || [];
+
+    // Get billing codes with full details
+    const billingCodesDetails = await Promise.all(
+      codes.map(async (code) => {
+        const matches = await billingCodesAPI.search(String(code.codeId));
+        return matches.find((m) => m.id === code.codeId) || null;
+      })
     );
 
-    // Ensure all billing codes have required fields
-    // Only include ID for existing service codes (not temporary IDs)
-    const validatedFormData = {
-      ...formData,
-      serviceDate: serviceDateUTC,
-      serviceStatus: "OPEN",
-      billingCodes: formData.billingCodes.map((code) => {
-        const cleanedCode: any = {
-          ...code,
-          numberOfUnits: code.numberOfUnits || 1, // Ensure numberOfUnits is set
-        };
+    // Apply splitting logic
+    return codes.flatMap((code, index) => {
+      const billingCodeDetail = billingCodesDetails[index];
 
-        // Convert billing code dates to physician's timezone
-        // Only convert if we have a valid date string
-        if (isValidDateString(code.serviceDate)) {
-          try {
-            cleanedCode.serviceDate = convertLocalDateToTimezoneUTC(
-              code.serviceDate.split("T")[0], // Ensure we only use the date part
-              physicianTimezone
-            );
-          } catch (error) {
-            console.error(
-              "Error converting serviceDate:",
+      // Check if this code should be split
+      const shouldSplit =
+        billingCodeDetail?.multiple_unit_indicator === "U" &&
+        billingCodeDetail?.billing_unit_type?.includes("MINUTES") &&
+        code.serviceStartTime &&
+        code.serviceEndTime &&
+        locationsOfService.length > 0;
+
+      if (shouldSplit) {
+        // Apply splitting logic
+        const splitCodes = splitBillingCodeByTimeAndLocation(
+          {
+            codeId: code.codeId,
+            code: billingCodeDetail!.code,
+            title: billingCodeDetail!.title,
+            multiple_unit_indicator: billingCodeDetail!.multiple_unit_indicator,
+            billing_unit_type: billingCodeDetail!.billing_unit_type,
+            serviceStartTime: code.serviceStartTime,
+            serviceEndTime: code.serviceEndTime,
+            serviceDate: code.serviceDate || formData.serviceDate,
+            numberOfUnits: code.numberOfUnits,
+            bilateralIndicator: code.bilateralIndicator,
+            specialCircumstances: code.specialCircumstances,
+            locationOfService: code.locationOfService,
+          },
+          locationsOfService,
+          physicianTimezone,
+          [] // Empty holidays array for now
+        );
+
+        // Convert each split code to the format expected by the API
+        return splitCodes.map((splitCode) => ({
+          ...code,
+          serviceStartTime: splitCode.serviceStartTime,
+          serviceEndTime: splitCode.serviceEndTime,
+          numberOfUnits: splitCode.numberOfUnits,
+          locationOfService: splitCode.locationOfService,
+          serviceDate: splitCode.serviceDate || code.serviceDate,
+          // Remove ID for new split codes (they're new entries)
+          id: undefined,
+        }));
+      } else {
+        // Return single code without splitting
+        return [code];
+      }
+    });
+  };
+
+  const handleSave = async () => {
+    if (!validateForm()) return;
+
+    try {
+      // Convert service date to physician's timezone
+      const serviceDateUTC = convertLocalDateToTimezoneUTC(
+        formData.serviceDate,
+        physicianTimezone
+      );
+
+      // Apply splitting logic to billing codes
+      const processedBillingCodes = await processBillingCodesWithSplitting(
+        formData.billingCodes
+      );
+
+      // Ensure all billing codes have required fields
+      // Only include ID for existing service codes (not temporary IDs)
+      const validatedFormData = {
+        ...formData,
+        serviceDate: serviceDateUTC,
+        serviceStatus: "OPEN",
+        billingCodes: processedBillingCodes.map((code) => {
+          const cleanedCode: any = {
+            ...code,
+            numberOfUnits: code.numberOfUnits || 1, // Ensure numberOfUnits is set
+          };
+
+          // Convert billing code dates to physician's timezone
+          // Only convert if we have a valid date string
+          if (isValidDateString(code.serviceDate)) {
+            try {
+              cleanedCode.serviceDate = convertLocalDateToTimezoneUTC(
+                code.serviceDate.split("T")[0], // Ensure we only use the date part
+                physicianTimezone
+              );
+            } catch (error) {
+              console.error(
+                "Error converting serviceDate:",
+                code.serviceDate,
+                error
+              );
+              cleanedCode.serviceDate = null;
+            }
+          } else {
+            console.log(
+              "Invalid or missing serviceDate for code:",
+              code.codeId,
+              "value:",
               code.serviceDate,
-              error
+              "type:",
+              typeof code.serviceDate
             );
+            // For codes without a service date, keep it as null
             cleanedCode.serviceDate = null;
           }
-        } else {
-          console.log(
-            "Invalid or missing serviceDate for code:",
-            code.codeId,
-            "value:",
-            code.serviceDate,
-            "type:",
-            typeof code.serviceDate
-          );
-          // For codes without a service date, keep it as null
-          cleanedCode.serviceDate = null;
-        }
-        if (isValidDateString(code.serviceEndDate)) {
-          try {
-            cleanedCode.serviceEndDate = convertLocalDateToTimezoneUTC(
-              code.serviceEndDate.split("T")[0], // Ensure we only use the date part
-              physicianTimezone
-            );
-          } catch (error) {
-            console.error(
-              "Error converting serviceEndDate:",
-              code.serviceEndDate,
-              error
-            );
+          if (isValidDateString(code.serviceEndDate)) {
+            try {
+              cleanedCode.serviceEndDate = convertLocalDateToTimezoneUTC(
+                code.serviceEndDate.split("T")[0], // Ensure we only use the date part
+                physicianTimezone
+              );
+            } catch (error) {
+              console.error(
+                "Error converting serviceEndDate:",
+                code.serviceEndDate,
+                error
+              );
+              cleanedCode.serviceEndDate = null;
+            }
+          } else {
             cleanedCode.serviceEndDate = null;
           }
-        } else {
-          cleanedCode.serviceEndDate = null;
-        }
 
-        // Only include ID if it's a valid existing service code ID
-        // (not a temporary ID like Date.now() or negative numbers)
-        if (code.id && code.id > 0 && code.id < 1000000000) {
-          cleanedCode.id = code.id;
-        } else {
-          delete cleanedCode.id;
-        }
+          // Only include ID if it's a valid existing service code ID
+          // (not a temporary ID like Date.now() or negative numbers)
+          if (code.id && code.id > 0 && code.id < 1000000000) {
+            cleanedCode.id = code.id;
+          } else {
+            delete cleanedCode.id;
+          }
 
-        return cleanedCode;
-      }),
-    };
+          return cleanedCode;
+        }),
+      };
 
-    if (isEditing) {
-      updateServiceMutation.mutate(validatedFormData);
-    } else {
-      createServiceMutation.mutate(validatedFormData);
+      if (isEditing) {
+        updateServiceMutation.mutate(validatedFormData);
+      } else {
+        createServiceMutation.mutate(validatedFormData);
+      }
+    } catch (error) {
+      console.error("Error processing billing codes:", error);
+      Alert.alert(
+        "Error",
+        "Failed to process billing codes. Please try again."
+      );
     }
   };
 
@@ -2172,87 +2267,100 @@ const ServiceFormScreen = ({ navigation }: any) => {
     performApproveAndFinish();
   };
 
-  const performApproveAndFinish = () => {
-    // Convert service date to physician's timezone
-    const serviceDateUTC = convertLocalDateToTimezoneUTC(
-      formData.serviceDate,
-      physicianTimezone
-    );
+  const performApproveAndFinish = async () => {
+    try {
+      // Convert service date to physician's timezone
+      const serviceDateUTC = convertLocalDateToTimezoneUTC(
+        formData.serviceDate,
+        physicianTimezone
+      );
 
-    // Ensure all billing codes have required fields
-    // Only include ID for existing service codes (not temporary IDs)
-    const validatedFormData = {
-      ...formData,
-      serviceDate: serviceDateUTC,
-      serviceStatus: "PENDING",
-      billingCodes: formData.billingCodes.map((code) => {
-        const cleanedCode: any = {
-          ...code,
-          numberOfUnits: code.numberOfUnits || 1, // Ensure numberOfUnits is set
-        };
+      // Apply splitting logic to billing codes
+      const processedBillingCodes = await processBillingCodesWithSplitting(
+        formData.billingCodes
+      );
 
-        // Convert billing code dates to physician's timezone
-        // Only convert if we have a valid date string
-        if (isValidDateString(code.serviceDate)) {
-          try {
-            cleanedCode.serviceDate = convertLocalDateToTimezoneUTC(
-              code.serviceDate.split("T")[0], // Ensure we only use the date part
-              physicianTimezone
-            );
-          } catch (error) {
-            console.error(
-              "Error converting serviceDate:",
+      // Ensure all billing codes have required fields
+      // Only include ID for existing service codes (not temporary IDs)
+      const validatedFormData = {
+        ...formData,
+        serviceDate: serviceDateUTC,
+        serviceStatus: "PENDING",
+        billingCodes: processedBillingCodes.map((code) => {
+          const cleanedCode: any = {
+            ...code,
+            numberOfUnits: code.numberOfUnits || 1, // Ensure numberOfUnits is set
+          };
+
+          // Convert billing code dates to physician's timezone
+          // Only convert if we have a valid date string
+          if (isValidDateString(code.serviceDate)) {
+            try {
+              cleanedCode.serviceDate = convertLocalDateToTimezoneUTC(
+                code.serviceDate.split("T")[0], // Ensure we only use the date part
+                physicianTimezone
+              );
+            } catch (error) {
+              console.error(
+                "Error converting serviceDate:",
+                code.serviceDate,
+                error
+              );
+              cleanedCode.serviceDate = null;
+            }
+          } else {
+            console.log(
+              "Invalid or missing serviceDate for code:",
+              code.codeId,
+              "value:",
               code.serviceDate,
-              error
+              "type:",
+              typeof code.serviceDate
             );
+            // For codes without a service date, keep it as null
             cleanedCode.serviceDate = null;
           }
-        } else {
-          console.log(
-            "Invalid or missing serviceDate for code:",
-            code.codeId,
-            "value:",
-            code.serviceDate,
-            "type:",
-            typeof code.serviceDate
-          );
-          // For codes without a service date, keep it as null
-          cleanedCode.serviceDate = null;
-        }
-        if (isValidDateString(code.serviceEndDate)) {
-          try {
-            cleanedCode.serviceEndDate = convertLocalDateToTimezoneUTC(
-              code.serviceEndDate.split("T")[0], // Ensure we only use the date part
-              physicianTimezone
-            );
-          } catch (error) {
-            console.error(
-              "Error converting serviceEndDate:",
-              code.serviceEndDate,
-              error
-            );
+          if (isValidDateString(code.serviceEndDate)) {
+            try {
+              cleanedCode.serviceEndDate = convertLocalDateToTimezoneUTC(
+                code.serviceEndDate.split("T")[0], // Ensure we only use the date part
+                physicianTimezone
+              );
+            } catch (error) {
+              console.error(
+                "Error converting serviceEndDate:",
+                code.serviceEndDate,
+                error
+              );
+              cleanedCode.serviceEndDate = null;
+            }
+          } else {
             cleanedCode.serviceEndDate = null;
           }
-        } else {
-          cleanedCode.serviceEndDate = null;
-        }
 
-        // Only include ID if it's a valid existing service code ID
-        // (not a temporary ID like Date.now() or negative numbers)
-        if (code.id && code.id > 0 && code.id < 1000000000) {
-          cleanedCode.id = code.id;
-        } else {
-          delete cleanedCode.id;
-        }
+          // Only include ID if it's a valid existing service code ID
+          // (not a temporary ID like Date.now() or negative numbers)
+          if (code.id && code.id > 0 && code.id < 1000000000) {
+            cleanedCode.id = code.id;
+          } else {
+            delete cleanedCode.id;
+          }
 
-        return cleanedCode;
-      }),
-    };
+          return cleanedCode;
+        }),
+      };
 
-    if (isEditing) {
-      updateServiceMutation.mutate(validatedFormData);
-    } else {
-      createServiceMutation.mutate(validatedFormData);
+      if (isEditing) {
+        updateServiceMutation.mutate(validatedFormData);
+      } else {
+        createServiceMutation.mutate(validatedFormData);
+      }
+    } catch (error) {
+      console.error("Error processing billing codes:", error);
+      Alert.alert(
+        "Error",
+        "Failed to process billing codes. Please try again."
+      );
     }
   };
 

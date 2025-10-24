@@ -1,4 +1,5 @@
 import { authOptions } from "@/lib/auth";
+import { combineDateAndTimeInTimezone } from "@/lib/dateUtils";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
@@ -147,6 +148,53 @@ export async function POST(request: Request) {
           code.serviceId
         );
 
+        // Get the physician's timezone from the service
+        const service = await prisma.service.findUnique({
+          where: { id: code.serviceId },
+          include: {
+            physician: {
+              select: { timezone: true },
+            },
+          },
+        });
+
+        if (!service) {
+          throw new Error(`Service ${code.serviceId} not found`);
+        }
+
+        const physicianTimezone = service.physician.timezone;
+
+        // Use serviceDate for combining with time
+        // Extract just the date part (YYYY-MM-DD) for combining with time
+        let dateStr: string;
+        if (code.serviceDate) {
+          if (typeof code.serviceDate === "string") {
+            // Extract YYYY-MM-DD from the string
+            dateStr = code.serviceDate.split("T")[0];
+          } else {
+            // Convert Date to YYYY-MM-DD
+            const d = code.serviceDate;
+            dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+              2,
+              "0"
+            )}-${String(d.getDate()).padStart(2, "0")}`;
+          }
+        } else {
+          // Default to today in the physician's timezone
+          const now = new Date();
+          const formatter = new Intl.DateTimeFormat("en-CA", {
+            timeZone: physicianTimezone,
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          });
+          const parts = formatter.formatToParts(now);
+          const year = parts.find((p) => p.type === "year")?.value || "";
+          const month = parts.find((p) => p.type === "month")?.value || "";
+          const day = parts.find((p) => p.type === "day")?.value || "";
+          dateStr = `${year}-${month}-${day}`;
+        }
+
         return prisma.serviceCodes.create({
           data: {
             service: {
@@ -159,12 +207,16 @@ export async function POST(request: Request) {
                 id: code.codeId,
               },
             },
-            serviceStartTime: code.serviceStartTime
-              ? new Date(code.serviceStartTime)
-              : null,
-            serviceEndTime: code.serviceEndTime
-              ? new Date(code.serviceEndTime)
-              : null,
+            serviceStartTime: combineDateAndTimeInTimezone(
+              dateStr,
+              code.serviceStartTime,
+              physicianTimezone
+            ),
+            serviceEndTime: combineDateAndTimeInTimezone(
+              dateStr,
+              code.serviceEndTime,
+              physicianTimezone
+            ),
             serviceDate: code.serviceDate ? new Date(code.serviceDate) : null,
             serviceEndDate: code.serviceEndDate
               ? new Date(code.serviceEndDate)

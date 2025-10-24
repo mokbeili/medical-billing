@@ -25,6 +25,10 @@ import {
 } from "../services/api";
 import { BillingCode, ReferringPhysician } from "../types";
 import {
+  splitBillingCodeByTimeAndLocation,
+  type LocationOfService,
+} from "../utils/billingCodeUtils";
+import {
   convertLocalDateToTimezoneUTC,
   formatFullDate,
 } from "../utils/dateUtils";
@@ -921,8 +925,20 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
         physicianTimezone
       );
 
-      // Prepare billing codes data using configured sub-selections
-      const billingCodesData = selectedBillingCodes.map((code) => {
+      // Convert physician locations to LocationOfService format
+      const locationsOfService: LocationOfService[] =
+        physician?.physicianLocationsOfService?.map((plos) => ({
+          id: plos.locationOfService.id,
+          code: plos.locationOfService.code,
+          name: plos.locationOfService.name,
+          startTime: plos.locationOfService.startTime || null,
+          endTime: plos.locationOfService.endTime || null,
+          holidayStartTime: plos.locationOfService.holidayStartTime || null,
+          holidayEndTime: plos.locationOfService.holidayEndTime || null,
+        })) || [];
+
+      // Prepare billing codes data using configured sub-selections and apply splitting logic
+      const billingCodesData = selectedBillingCodes.flatMap((code) => {
         const subSelection = getSubSelectionForCode(code.id);
 
         // Convert billing code dates to physician's timezone
@@ -938,21 +954,90 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
             )
           : null;
 
-        return {
-          codeId: code.id,
-          status: "ACTIVE",
-          billing_record_type: code.billing_record_type || 1,
-          serviceStartTime: subSelection?.serviceStartTime || null,
-          serviceEndTime: subSelection?.serviceEndTime || null,
-          numberOfUnits: subSelection?.numberOfUnits || 1,
-          bilateralIndicator: subSelection?.bilateralIndicator || null,
-          specialCircumstances: subSelection?.specialCircumstances || null,
-          serviceDate: codeServiceDateUTC,
-          serviceEndDate: codeServiceEndDateUTC,
-          locationOfService: subSelection?.locationOfService || "2", // Default to Hospital In-Patient
-          fee_determinant: code.fee_determinant || "A",
-          multiple_unit_indicator: code.multiple_unit_indicator || null,
-        };
+        // Check if this code should be split
+        const shouldSplit =
+          code.multiple_unit_indicator === "U" &&
+          code.billing_unit_type?.includes("MINUTES") &&
+          subSelection?.serviceStartTime &&
+          subSelection?.serviceEndTime &&
+          locationsOfService.length > 0;
+
+        if (shouldSplit) {
+          // Apply splitting logic
+          const splitCodes = splitBillingCodeByTimeAndLocation(
+            {
+              codeId: code.id,
+              code: code.code,
+              title: code.title,
+              multiple_unit_indicator: code.multiple_unit_indicator,
+              billing_unit_type: code.billing_unit_type,
+              serviceStartTime: subSelection!.serviceStartTime,
+              serviceEndTime: subSelection!.serviceEndTime,
+              serviceDate: codeServiceDate,
+              numberOfUnits: subSelection?.numberOfUnits,
+              bilateralIndicator: subSelection?.bilateralIndicator,
+              specialCircumstances: subSelection?.specialCircumstances,
+              locationOfService: subSelection?.locationOfService,
+            },
+            locationsOfService,
+            physicianTimezone,
+            [] // Empty holidays array for now
+          );
+
+          // Convert each split code to the API format
+          return splitCodes.map((splitCode) => {
+            const splitCodeServiceDateUTC = splitCode.serviceDate
+              ? convertLocalDateToTimezoneUTC(
+                  splitCode.serviceDate,
+                  physicianTimezone
+                )
+              : codeServiceDateUTC;
+
+            const result = {
+              codeId: code.id,
+              status: "ACTIVE",
+              billing_record_type: code.billing_record_type || 1,
+              serviceStartTime: splitCode.serviceStartTime,
+              serviceEndTime: splitCode.serviceEndTime,
+              numberOfUnits: splitCode.numberOfUnits,
+              bilateralIndicator: splitCode.bilateralIndicator || null,
+              specialCircumstances: splitCode.specialCircumstances || null,
+              serviceDate: splitCodeServiceDateUTC,
+              serviceEndDate: codeServiceEndDateUTC,
+              locationOfService: splitCode.locationOfService || "2",
+              fee_determinant: code.fee_determinant || "A",
+              multiple_unit_indicator: code.multiple_unit_indicator || null,
+            };
+
+            // Debug logging
+            console.log("Split code being sent to API:", {
+              times: `${splitCode.serviceStartTime} - ${splitCode.serviceEndTime}`,
+              serviceDate: splitCodeServiceDateUTC,
+              location: splitCode.locationOfService,
+            });
+
+            return result;
+          });
+        } else {
+          // Return single code without splitting
+          return [
+            {
+              codeId: code.id,
+              status: "ACTIVE",
+              billing_record_type: code.billing_record_type || 1,
+              serviceStartTime: subSelection?.serviceStartTime || null,
+              serviceEndTime: subSelection?.serviceEndTime || null,
+              numberOfUnits: subSelection?.numberOfUnits || 1,
+              bilateralIndicator: subSelection?.bilateralIndicator || null,
+              specialCircumstances: subSelection?.specialCircumstances || null,
+              serviceDate: codeServiceDateUTC,
+              serviceEndDate: codeServiceEndDateUTC,
+              locationOfService: subSelection?.locationOfService || "2",
+              fee_determinant: code.fee_determinant || "A",
+              multiple_unit_indicator: code.multiple_unit_indicator || null,
+            },
+          ];
+        }
       });
 
       const serviceData = {

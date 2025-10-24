@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Modal,
   ScrollView,
@@ -10,6 +10,11 @@ import {
   View,
 } from "react-native";
 import { BillingCode, Physician } from "../types";
+import {
+  splitBillingCodeByTimeAndLocation,
+  type LocationOfService,
+  type SplitBillingCode,
+} from "../utils/billingCodeUtils";
 import { formatFullDate } from "../utils/dateUtils";
 
 interface CodeSubSelection {
@@ -48,6 +53,11 @@ const BillingCodeConfigurationModal: React.FC<
   const [localSubSelection, setLocalSubSelection] =
     useState<CodeSubSelection | null>(null);
   const [showFullList, setShowFullList] = useState(false);
+  const [splitCodes, setSplitCodes] = useState<SplitBillingCode[]>([]);
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
+  const [tempHour, setTempHour] = useState(0);
+  const [tempMinute, setTempMinute] = useState(0);
 
   // Full Location of Service options
   const fullLocationOfServiceOptions = React.useMemo(
@@ -117,6 +127,69 @@ const BillingCodeConfigurationModal: React.FC<
       });
     }
   }, [visible, subSelection, billingCode, serviceDate]);
+
+  // Calculate split codes when times change
+  useEffect(() => {
+    if (
+      !billingCode ||
+      !localSubSelection ||
+      !physician?.physicianLocationsOfService
+    ) {
+      setSplitCodes([]);
+      return;
+    }
+
+    // Check if this code should be split
+    if (
+      billingCode.multiple_unit_indicator === "U" &&
+      billingCode.billing_unit_type?.includes("MINUTES") &&
+      localSubSelection.serviceStartTime &&
+      localSubSelection.serviceEndTime
+    ) {
+      // Convert physician locations to LocationOfService format
+      const locationsOfService: LocationOfService[] =
+        physician.physicianLocationsOfService.map((plos) => ({
+          id: plos.locationOfService.id,
+          code: plos.locationOfService.code,
+          name: plos.locationOfService.name,
+          startTime: plos.locationOfService.startTime || null,
+          endTime: plos.locationOfService.endTime || null,
+          holidayStartTime: plos.locationOfService.holidayStartTime || null,
+          holidayEndTime: plos.locationOfService.holidayEndTime || null,
+        }));
+
+      // Calculate split codes
+      const result = splitBillingCodeByTimeAndLocation(
+        {
+          codeId: billingCode.id,
+          code: billingCode.code,
+          title: billingCode.title,
+          multiple_unit_indicator: billingCode.multiple_unit_indicator,
+          billing_unit_type: billingCode.billing_unit_type,
+          serviceStartTime: localSubSelection.serviceStartTime,
+          serviceEndTime: localSubSelection.serviceEndTime,
+          serviceDate: localSubSelection.serviceDate,
+          numberOfUnits: localSubSelection.numberOfUnits,
+          bilateralIndicator: localSubSelection.bilateralIndicator,
+          specialCircumstances: localSubSelection.specialCircumstances,
+          locationOfService: localSubSelection.locationOfService,
+        },
+        locationsOfService,
+        physician.timezone || "America/Regina",
+        [] // Empty holidays array for now
+      );
+
+      setSplitCodes(result);
+    } else {
+      setSplitCodes([]);
+    }
+  }, [
+    billingCode,
+    localSubSelection?.serviceStartTime,
+    localSubSelection?.serviceEndTime,
+    localSubSelection?.serviceDate,
+    physician,
+  ]);
 
   if (!billingCode || !localSubSelection) return null;
 
@@ -209,6 +282,102 @@ const BillingCodeConfigurationModal: React.FC<
 
   const isHSection = (code: BillingCode) => {
     return code.section.code === "H";
+  };
+
+  // Helper to extract HH:MM from various time formats
+  const extractTimeString = (timeValue: string | null): string => {
+    if (!timeValue) return "09:00";
+
+    // If it's already in HH:MM format, return as-is (user input)
+    if (/^\d{1,2}:\d{2}$/.test(timeValue)) {
+      return timeValue;
+    }
+
+    // If it's an ISO datetime string from database, convert from UTC to local time
+    if (timeValue.includes("T") || timeValue.includes("Z")) {
+      try {
+        const date = new Date(timeValue);
+        if (!isNaN(date.getTime())) {
+          // Convert to physician's timezone
+          const physicianTimezone = physician?.timezone || "America/Regina";
+          const localTime = date.toLocaleString("en-US", {
+            timeZone: physicianTimezone,
+            hour12: false,
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+          return localTime; // Returns "HH:MM" format
+        }
+      } catch (error) {
+        console.error("Error parsing time:", error);
+      }
+    }
+
+    // Fallback
+    return "09:00";
+  };
+
+  // Time picker handlers
+  const openStartTimePicker = () => {
+    const timeString = extractTimeString(localSubSelection?.serviceStartTime);
+    const [hour, minute] = timeString.split(":").map(Number);
+    setTempHour(hour);
+    setTempMinute(minute);
+    setShowStartTimePicker(true);
+  };
+
+  const openEndTimePicker = () => {
+    const timeString = extractTimeString(localSubSelection?.serviceEndTime);
+    const [hour, minute] = timeString.split(":").map(Number);
+    setTempHour(hour);
+    setTempMinute(minute);
+    setShowEndTimePicker(true);
+  };
+
+  const confirmStartTime = () => {
+    const timeString = `${String(tempHour).padStart(2, "0")}:${String(
+      tempMinute
+    ).padStart(2, "0")}`;
+    handleUpdateSubSelection({ serviceStartTime: timeString });
+    setShowStartTimePicker(false);
+  };
+
+  const confirmEndTime = () => {
+    const timeString = `${String(tempHour).padStart(2, "0")}:${String(
+      tempMinute
+    ).padStart(2, "0")}`;
+    handleUpdateSubSelection({ serviceEndTime: timeString });
+    setShowEndTimePicker(false);
+  };
+
+  const adjustHour = (delta: number) => {
+    setTempHour((prev) => {
+      let newHour = prev + delta;
+      if (newHour < 0) newHour = 23;
+      if (newHour > 23) newHour = 0;
+      return newHour;
+    });
+  };
+
+  const adjustMinute = (delta: number) => {
+    setTempMinute((prev) => {
+      let newMinute = prev + delta;
+      if (newMinute < 0) newMinute = 55;
+      if (newMinute > 59) newMinute = 0;
+      return newMinute;
+    });
+  };
+
+  const formatTimeDisplay = (time: string | null) => {
+    if (!time) return "Select time";
+
+    // Extract HH:MM from the time string (handles both "HH:MM" and ISO datetime)
+    const timeString = extractTimeString(time);
+    const [hour, minute] = timeString.split(":");
+    const h = parseInt(hour);
+    const ampm = h >= 12 ? "PM" : "AM";
+    const displayHour = h === 0 ? 12 : h > 12 ? h - 12 : h;
+    return `${displayHour}:${minute} ${ampm}`;
   };
 
   return (
@@ -406,14 +575,27 @@ const BillingCodeConfigurationModal: React.FC<
                       billingCode.billing_unit_type?.includes("MINUTES"))) && (
                     <View style={styles.timeInputContainer}>
                       <Text style={styles.timeLabel}>Start Time</Text>
-                      <TextInput
-                        style={styles.timeInput}
-                        placeholder="HH:MM"
-                        value={localSubSelection.serviceStartTime || ""}
-                        onChangeText={(text) =>
-                          handleUpdateSubSelection({ serviceStartTime: text })
-                        }
-                      />
+                      <TouchableOpacity
+                        style={styles.timeSelector}
+                        onPress={openStartTimePicker}
+                      >
+                        <Ionicons
+                          name="time-outline"
+                          size={20}
+                          color="#6b7280"
+                        />
+                        <Text
+                          style={[
+                            styles.timeSelectorText,
+                            !localSubSelection.serviceStartTime &&
+                              styles.timeSelectorPlaceholder,
+                          ]}
+                        >
+                          {formatTimeDisplay(
+                            localSubSelection.serviceStartTime
+                          )}
+                        </Text>
+                      </TouchableOpacity>
                     </View>
                   )}
                   {(billingCode.stop_time_required === "Y" ||
@@ -421,17 +603,74 @@ const BillingCodeConfigurationModal: React.FC<
                       billingCode.billing_unit_type?.includes("MINUTES"))) && (
                     <View style={styles.timeInputContainer}>
                       <Text style={styles.timeLabel}>End Time</Text>
-                      <TextInput
-                        style={styles.timeInput}
-                        placeholder="HH:MM"
-                        value={localSubSelection.serviceEndTime || ""}
-                        onChangeText={(text) =>
-                          handleUpdateSubSelection({ serviceEndTime: text })
-                        }
-                      />
+                      <TouchableOpacity
+                        style={styles.timeSelector}
+                        onPress={openEndTimePicker}
+                      >
+                        <Ionicons
+                          name="time-outline"
+                          size={20}
+                          color="#6b7280"
+                        />
+                        <Text
+                          style={[
+                            styles.timeSelectorText,
+                            !localSubSelection.serviceEndTime &&
+                              styles.timeSelectorPlaceholder,
+                          ]}
+                        >
+                          {formatTimeDisplay(localSubSelection.serviceEndTime)}
+                        </Text>
+                      </TouchableOpacity>
                     </View>
                   )}
                 </View>
+
+                {/* Split Codes Preview */}
+                {splitCodes.length > 1 && (
+                  <View style={styles.splitCodesPreview}>
+                    <View style={styles.splitCodesHeader}>
+                      <Ionicons
+                        name="information-circle"
+                        size={20}
+                        color="#3b82f6"
+                      />
+                      <Text style={styles.splitCodesTitle}>
+                        This code will be split into {splitCodes.length} codes:
+                      </Text>
+                    </View>
+                    {splitCodes.map((code, index) => {
+                      const location = physician?.physicianLocationsOfService
+                        ?.map((plos) => plos.locationOfService)
+                        ?.find((loc) => loc.code === code.locationOfService);
+                      const locationName =
+                        location?.name || `Location ${code.locationOfService}`;
+
+                      return (
+                        <View key={index} style={styles.splitCodeItem}>
+                          <Text style={styles.splitCodeIndex}>
+                            {index + 1}.
+                          </Text>
+                          <View style={styles.splitCodeDetails}>
+                            <Text style={styles.splitCodeTime}>
+                              {code.serviceStartTime} - {code.serviceEndTime}
+                            </Text>
+                            <Text style={styles.splitCodeInfo}>
+                              {code.numberOfUnits} units at {locationName}
+                            </Text>
+                            {code.serviceDate &&
+                              code.serviceDate !==
+                                localSubSelection.serviceDate && (
+                                <Text style={styles.splitCodeDate}>
+                                  [{formatFullDate(code.serviceDate)}]
+                                </Text>
+                              )}
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
               </View>
             )}
 
@@ -697,6 +936,123 @@ const BillingCodeConfigurationModal: React.FC<
           </View>
         </View>
       </View>
+
+      {/* Time Picker Modal */}
+      <Modal
+        visible={showStartTimePicker || showEndTimePicker}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setShowStartTimePicker(false);
+          setShowEndTimePicker(false);
+        }}
+      >
+        <View style={styles.timePickerOverlay}>
+          <View style={styles.timePickerModal}>
+            <View style={styles.timePickerHeader}>
+              <Text style={styles.timePickerTitle}>
+                {showStartTimePicker ? "Select Start Time" : "Select End Time"}
+              </Text>
+            </View>
+
+            <View style={styles.timePickerContent}>
+              <View style={styles.timePickerColumn}>
+                <TouchableOpacity
+                  style={styles.timePickerArrow}
+                  onPress={() => adjustHour(1)}
+                >
+                  <Ionicons name="chevron-up" size={24} color="#3b82f6" />
+                </TouchableOpacity>
+                <View style={styles.timePickerValueContainer}>
+                  <Text style={styles.timePickerValue}>
+                    {String(tempHour).padStart(2, "0")}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.timePickerArrow}
+                  onPress={() => adjustHour(-1)}
+                >
+                  <Ionicons name="chevron-down" size={24} color="#3b82f6" />
+                </TouchableOpacity>
+                <Text style={styles.timePickerLabel}>Hour</Text>
+              </View>
+
+              <Text style={styles.timePickerSeparator}>:</Text>
+
+              <View style={styles.timePickerColumn}>
+                <TouchableOpacity
+                  style={styles.timePickerArrow}
+                  onPress={() => adjustMinute(5)}
+                >
+                  <Ionicons name="chevron-up" size={24} color="#3b82f6" />
+                </TouchableOpacity>
+                <View style={styles.timePickerValueContainer}>
+                  <Text style={styles.timePickerValue}>
+                    {String(tempMinute).padStart(2, "0")}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.timePickerArrow}
+                  onPress={() => adjustMinute(-5)}
+                >
+                  <Ionicons name="chevron-down" size={24} color="#3b82f6" />
+                </TouchableOpacity>
+                <Text style={styles.timePickerLabel}>Minute</Text>
+              </View>
+            </View>
+
+            <View style={styles.timePickerQuickButtons}>
+              <TouchableOpacity
+                style={styles.quickTimeButton}
+                onPress={() => {
+                  setTempHour(9);
+                  setTempMinute(0);
+                }}
+              >
+                <Text style={styles.quickTimeButtonText}>9:00 AM</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.quickTimeButton}
+                onPress={() => {
+                  setTempHour(12);
+                  setTempMinute(0);
+                }}
+              >
+                <Text style={styles.quickTimeButtonText}>12:00 PM</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.quickTimeButton}
+                onPress={() => {
+                  setTempHour(17);
+                  setTempMinute(0);
+                }}
+              >
+                <Text style={styles.quickTimeButtonText}>5:00 PM</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.timePickerFooter}>
+              <TouchableOpacity
+                style={styles.timePickerCancelButton}
+                onPress={() => {
+                  setShowStartTimePicker(false);
+                  setShowEndTimePicker(false);
+                }}
+              >
+                <Text style={styles.timePickerCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.timePickerConfirmButton}
+                onPress={
+                  showStartTimePicker ? confirmStartTime : confirmEndTime
+                }
+              >
+                <Text style={styles.timePickerConfirmButtonText}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </Modal>
   );
 };
@@ -854,6 +1210,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: "#fff",
   },
+  timeSelector: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: "#fff",
+    gap: 8,
+  },
+  timeSelectorText: {
+    fontSize: 16,
+    color: "#111827",
+    flex: 1,
+  },
+  timeSelectorPlaceholder: {
+    color: "#9ca3af",
+  },
   bilateralContainer: {
     flexDirection: "row",
     gap: 8,
@@ -981,6 +1355,180 @@ const styles = StyleSheet.create({
   selectedLocationOfServiceOptionText: {
     color: "#3b82f6",
     fontWeight: "600",
+  },
+  splitCodesPreview: {
+    marginTop: 16,
+    backgroundColor: "#eff6ff",
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#bfdbfe",
+  },
+  splitCodesHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+    gap: 8,
+  },
+  splitCodesTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1e40af",
+    flex: 1,
+  },
+  splitCodeItem: {
+    flexDirection: "row",
+    marginBottom: 8,
+    paddingLeft: 4,
+  },
+  splitCodeIndex: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#374151",
+    marginRight: 8,
+    minWidth: 20,
+  },
+  splitCodeDetails: {
+    flex: 1,
+  },
+  splitCodeTime: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#111827",
+    marginBottom: 2,
+  },
+  splitCodeInfo: {
+    fontSize: 12,
+    color: "#6b7280",
+  },
+  splitCodeDate: {
+    fontSize: 11,
+    color: "#9ca3af",
+    fontStyle: "italic",
+    marginTop: 2,
+  },
+  timePickerOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  timePickerModal: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    width: "90%",
+    maxWidth: 400,
+    overflow: "hidden",
+  },
+  timePickerHeader: {
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb",
+    backgroundColor: "#f9fafb",
+  },
+  timePickerTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#111827",
+    textAlign: "center",
+  },
+  timePickerContent: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 30,
+    gap: 20,
+  },
+  timePickerColumn: {
+    alignItems: "center",
+    gap: 10,
+  },
+  timePickerArrow: {
+    padding: 8,
+  },
+  timePickerValueContainer: {
+    backgroundColor: "#f3f4f6",
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    minWidth: 80,
+    alignItems: "center",
+  },
+  timePickerValue: {
+    fontSize: 32,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  timePickerLabel: {
+    fontSize: 12,
+    color: "#6b7280",
+    fontWeight: "500",
+    textTransform: "uppercase",
+  },
+  timePickerSeparator: {
+    fontSize: 32,
+    fontWeight: "700",
+    color: "#6b7280",
+    marginTop: -20,
+  },
+  timePickerQuickButtons: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    gap: 8,
+  },
+  quickTimeButton: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: "#eff6ff",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#bfdbfe",
+  },
+  quickTimeButtonText: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#3b82f6",
+    textAlign: "center",
+  },
+  timePickerFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: "#e5e7eb",
+    gap: 12,
+  },
+  timePickerCancelButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    backgroundColor: "#fff",
+  },
+  timePickerCancelButtonText: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#374151",
+    textAlign: "center",
+  },
+  timePickerConfirmButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    backgroundColor: "#3b82f6",
+  },
+  timePickerConfirmButtonText: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#fff",
+    textAlign: "center",
   },
 });
 
