@@ -9,6 +9,8 @@ export interface LocationOfService {
   name: string;
   startTime: Date | string | null;
   endTime: Date | string | null;
+  holidayStartTime?: Date | string | null;
+  holidayEndTime?: Date | string | null;
 }
 
 export interface ProviderHoliday {
@@ -143,7 +145,8 @@ function createTimeRanges(
   startTime: string,
   endTime: string,
   locationsOfService: LocationOfService[],
-  billingUnitType?: string | null
+  billingUnitType?: string | null,
+  isWeekendOrHoliday: boolean = false
 ): Array<{
   startTime: string;
   endTime: string;
@@ -152,11 +155,30 @@ function createTimeRanges(
   units: number;
   isNextDay: boolean;
 }> {
-  // If no locations of service or they don't have time boundaries, return single range
-  if (
-    !locationsOfService.length ||
-    !locationsOfService.some((loc) => loc.startTime && loc.endTime)
-  ) {
+  // Helper to get appropriate time fields based on whether it's a weekend/holiday
+  const getStartTime = (loc: LocationOfService) => {
+    if (isWeekendOrHoliday && loc.holidayStartTime) {
+      return loc.holidayStartTime;
+    }
+    return loc.startTime;
+  };
+
+  const getEndTime = (loc: LocationOfService) => {
+    if (isWeekendOrHoliday && loc.holidayEndTime) {
+      return loc.holidayEndTime;
+    }
+    return loc.endTime;
+  };
+
+  // Filter locations: on weekends/holidays, only use locations with holiday times defined
+  const effectiveLocations = isWeekendOrHoliday
+    ? locationsOfService.filter(
+        (loc) => loc.holidayStartTime && loc.holidayEndTime
+      )
+    : locationsOfService.filter((loc) => loc.startTime && loc.endTime);
+
+  // If no effective locations, return single range
+  if (!effectiveLocations.length) {
     const minutes = calculateMinutes(startTime, endTime);
     return [
       {
@@ -206,14 +228,16 @@ function createTimeRanges(
   };
 
   // Sort locations by start time and handle midnight crossings
-  let sortedLocations = [...locationsOfService]
-    .filter((loc) => loc.startTime && loc.endTime)
+  let sortedLocations = [...effectiveLocations]
     .map((loc) => {
-      const startMins = loc.startTime
-        ? timeToMinutes(getTimeString(loc.startTime))
+      const locStartTime = getStartTime(loc);
+      const locEndTime = getEndTime(loc);
+
+      const startMins = locStartTime
+        ? timeToMinutes(getTimeString(locStartTime))
         : 0;
-      let endMins = loc.endTime
-        ? timeToMinutes(getTimeString(loc.endTime))
+      let endMins = locEndTime
+        ? timeToMinutes(getTimeString(locEndTime))
         : 1440;
 
       // Handle location times that cross midnight (e.g., Night Shift: 20:00-06:00)
@@ -303,7 +327,8 @@ function createTimeRanges(
 export function splitBillingCodeByTimeAndLocation(
   billingCode: BillingCodeToSplit,
   locationsOfService: LocationOfService[],
-  physicianTimezone: string = "America/Regina"
+  physicianTimezone: string = "America/Regina",
+  holidays: ProviderHoliday[] = []
 ): SplitBillingCode[] {
   // Check if this billing code should be split
   if (
@@ -321,12 +346,20 @@ export function splitBillingCodeByTimeAndLocation(
     return [billingCode as SplitBillingCode];
   }
 
+  // Determine if service date is a weekend or holiday
+  let isWeekendOrHolidayDate = false;
+  if (billingCode.serviceDate) {
+    const serviceDate = new Date(billingCode.serviceDate);
+    isWeekendOrHolidayDate = isWeekendOrHoliday(serviceDate, holidays);
+  }
+
   // Create time ranges based on locations of service
   const timeRanges = createTimeRanges(
     billingCode.serviceStartTime,
     billingCode.serviceEndTime,
     locationsOfService,
-    billingCode.billing_unit_type
+    billingCode.billing_unit_type,
+    isWeekendOrHolidayDate
   );
 
   // Create a billing code for each time range

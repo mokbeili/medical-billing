@@ -1231,7 +1231,8 @@ export default function ServiceForm({
               locationOfService: code.locationOfService ?? undefined,
             },
             locationsOfService,
-            physicianTimezone
+            physicianTimezone,
+            providerHolidays
           );
 
           if (splitCodes.length > 1) {
@@ -1272,6 +1273,10 @@ export default function ServiceForm({
           locationsOfService.length > 0
         ) {
           // Split the code
+          console.log(code);
+          console.log(locationsOfService);
+          console.log(physicianTimezone);
+          console.log(providerHolidays);
           const splitCodes = splitBillingCodeByTimeAndLocation(
             {
               ...code,
@@ -1284,7 +1289,8 @@ export default function ServiceForm({
               locationOfService: code.locationOfService ?? undefined,
             },
             locationsOfService,
-            physicianTimezone
+            physicianTimezone,
+            providerHolidays
           );
 
           // Add all split codes

@@ -97,6 +97,8 @@ export async function GET(request: Request) {
                 name: true,
                 startTime: true,
                 endTime: true,
+                holidayStartTime: true,
+                holidayEndTime: true,
               },
             },
           },

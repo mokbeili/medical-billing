@@ -553,6 +553,8 @@ model LocationOfService {
   name                        String                       @db.VarChar(255)
   startTime                   DateTime?                    @map("start_time") @db.Time
   endTime                     DateTime?                    @map("end_time") @db.Time
+  holidayStartTime            DateTime?                    @map("holiday_start_time") @db.Time
+  holidayEndTime              DateTime?                    @map("holiday_end_time") @db.Time
   providerId                  Int                          @map("provider_id")
   createdAt                   DateTime                     @default(now()) @map("created_at")
   updatedAt                   DateTime                     @updatedAt @map("updated_at")

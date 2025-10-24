@@ -169,6 +169,8 @@ export interface LocationOfService {
   name: string;
   startTime?: string | null;
   endTime?: string | null;
+  holidayStartTime?: string | null;
+  holidayEndTime?: string | null;
 }
 
 export interface PhysicianLocationOfService {
