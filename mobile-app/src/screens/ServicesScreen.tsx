@@ -16,6 +16,7 @@ import {
 import { ActivityIndicator, Button, Card } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import BillingCodeConfigurationModal from "../components/BillingCodeConfigurationModal";
+import RoundingIcon from "../components/RoundingIcon";
 import ServiceCreationModal from "../components/ServiceCreationModal";
 import {
   billingCodesAPI,
@@ -984,9 +985,8 @@ const ServicesScreen = ({ navigation }: any) => {
                       setShowRoundingModal(true);
                     }}
                   >
-                    <Ionicons
-                      name="people-outline"
-                      size={20}
+                    <RoundingIcon
+                      size={26}
                       color={hasPendingStatus ? "#9ca3af" : "#2563eb"}
                     />
                   </TouchableOpacity>
@@ -1003,7 +1003,7 @@ const ServicesScreen = ({ navigation }: any) => {
                   >
                     <Ionicons
                       name="add"
-                      size={20}
+                      size={26}
                       color={hasPendingStatus ? "#9ca3af" : "#059669"}
                     />
                   </TouchableOpacity>
@@ -1020,7 +1020,7 @@ const ServicesScreen = ({ navigation }: any) => {
                   >
                     <Ionicons
                       name="exit-outline"
-                      size={20}
+                      size={26}
                       color={hasPendingStatus ? "#9ca3af" : "#dc2626"}
                     />
                   </TouchableOpacity>
@@ -2054,12 +2054,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    marginTop: 12,
-    gap: 16,
+    marginTop: 8,
+    gap: 12,
   },
   actionButton: {
     backgroundColor: "#f8fafc",
-    borderRadius: 20,
+    borderRadius: 26,
     padding: 8,
     borderWidth: 1,
     borderColor: "#e2e8f0",
