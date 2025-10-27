@@ -103,14 +103,14 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         projectId: "f9c07c7d-ab5b-4f93-9a4a-5c8b5b4472fb",
       },
       // AWS Textract environment variables
-      awsAccessKeyId: awsAccessKeyId,
-      awsSecretAccessKey: awsSecretAccessKey,
-      awsRegion: awsRegion,
+      awsAccessKeyId: awsAccessKeyId || "",
+      awsSecretAccessKey: awsSecretAccessKey || "",
+      awsRegion: awsRegion || "ca-central-1",
       awsConfigured: !!(awsAccessKeyId && awsSecretAccessKey),
       // API Configuration
-      apiBaseUrl: apiBaseUrl,
+      apiBaseUrl: apiBaseUrl || "https://www.myonhealth.ca",
       // App Environment
-      appEnv: appEnv,
+      appEnv: appEnv || "development",
     },
   };
 };
