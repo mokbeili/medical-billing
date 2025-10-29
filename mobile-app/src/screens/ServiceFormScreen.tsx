@@ -1465,7 +1465,6 @@ const ServiceFormScreen = ({ navigation }: any) => {
       handleSaveEditedCode(subSelection);
       return;
     }
-    console.log(subSelection);
     // This is a new instance, add it to selectedCodes
     const newCode: ServiceCode = {
       id: editingCode.id, // Keep the temporary negative ID
