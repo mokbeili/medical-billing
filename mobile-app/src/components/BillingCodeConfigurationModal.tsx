@@ -58,6 +58,7 @@ const BillingCodeConfigurationModal: React.FC<
   const [showEndTimePicker, setShowEndTimePicker] = useState(false);
   const [tempHour, setTempHour] = useState(0);
   const [tempMinute, setTempMinute] = useState(0);
+  const [dataEntryMode, setDataEntryMode] = useState<"time" | "units">("time");
 
   // Full Location of Service options
   const fullLocationOfServiceOptions = React.useMemo(
@@ -292,6 +293,13 @@ const BillingCodeConfigurationModal: React.FC<
     return code.section.code === "H";
   };
 
+  const hasTimeOrUnitsOption = (code: BillingCode) => {
+    return (
+      code.multiple_unit_indicator === "U" &&
+      code.billing_unit_type?.includes("MINUTES")
+    );
+  };
+
   // Helper to extract HH:MM from various time formats
   const extractTimeString = (timeValue: string | null): string => {
     if (!timeValue) return "09:00";
@@ -490,19 +498,66 @@ const BillingCodeConfigurationModal: React.FC<
               </View>
             )}
 
+            {/* Data Entry Mode Toggle */}
+            {hasTimeOrUnitsOption(billingCode) && (
+              <View style={styles.subSelectionSection}>
+                <Text style={styles.subSelectionSectionTitle}>
+                  Data Entry Mode
+                </Text>
+                <View style={styles.dataEntryModeContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.dataEntryModeButton,
+                      dataEntryMode === "time" &&
+                        styles.selectedDataEntryModeButton,
+                    ]}
+                    onPress={() => setDataEntryMode("time")}
+                  >
+                    <Text
+                      style={[
+                        styles.dataEntryModeButtonText,
+                        dataEntryMode === "time" &&
+                          styles.selectedDataEntryModeButtonText,
+                      ]}
+                    >
+                      By Time
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.dataEntryModeButton,
+                      dataEntryMode === "units" &&
+                        styles.selectedDataEntryModeButton,
+                    ]}
+                    onPress={() => setDataEntryMode("units")}
+                  >
+                    <Text
+                      style={[
+                        styles.dataEntryModeButtonText,
+                        dataEntryMode === "units" &&
+                          styles.selectedDataEntryModeButtonText,
+                      ]}
+                    >
+                      By Units
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
             {/* Service Start/End Time */}
             {(billingCode.start_time_required === "Y" ||
               billingCode.stop_time_required === "Y" ||
-              (billingCode.multiple_unit_indicator === "U" &&
-                billingCode.billing_unit_type?.includes("MINUTES"))) && (
+              (hasTimeOrUnitsOption(billingCode) &&
+                dataEntryMode === "time")) && (
               <View style={styles.subSelectionSection}>
                 <Text style={styles.subSelectionSectionTitle}>
                   Service Times
                 </Text>
                 <View style={styles.timeRow}>
                   {(billingCode.start_time_required === "Y" ||
-                    (billingCode.multiple_unit_indicator === "U" &&
-                      billingCode.billing_unit_type?.includes("MINUTES"))) && (
+                    (hasTimeOrUnitsOption(billingCode) &&
+                      dataEntryMode === "time")) && (
                     <View style={styles.timeInputContainer}>
                       <Text style={styles.timeLabel}>Start Time</Text>
                       <TouchableOpacity
@@ -529,8 +584,8 @@ const BillingCodeConfigurationModal: React.FC<
                     </View>
                   )}
                   {(billingCode.stop_time_required === "Y" ||
-                    (billingCode.multiple_unit_indicator === "U" &&
-                      billingCode.billing_unit_type?.includes("MINUTES"))) && (
+                    (hasTimeOrUnitsOption(billingCode) &&
+                      dataEntryMode === "time")) && (
                     <View style={styles.timeInputContainer}>
                       <Text style={styles.timeLabel}>End Time</Text>
                       <TouchableOpacity
@@ -559,7 +614,7 @@ const BillingCodeConfigurationModal: React.FC<
             )}
 
             {/* Split Codes Preview */}
-            {splitCodes.length > 1 && (
+            {splitCodes.length > 1 && dataEntryMode === "time" && (
               <View style={styles.splitCodesPreview}>
                 <View style={styles.splitCodesHeader}>
                   <Ionicons
@@ -603,82 +658,84 @@ const BillingCodeConfigurationModal: React.FC<
             )}
 
             {/* Units - Only for codes with multiple_unit_indicator === "U" */}
-            {billingCode.multiple_unit_indicator === "U" && (
-              <View style={styles.subSelectionSection}>
-                <Text style={styles.subSelectionSectionTitle}>
-                  Number of Units
-                  {billingCode.max_units && (
-                    <Text style={styles.maxUnitsText}>
-                      {" "}
-                      (Max: {billingCode.max_units})
-                    </Text>
-                  )}
-                </Text>
-                <View style={styles.unitsContainer}>
-                  <TouchableOpacity
-                    style={[
-                      styles.unitButton,
-                      (localSubSelection.numberOfUnits || 1) <= 1
-                        ? styles.disabledButton
-                        : null,
-                    ]}
-                    onPress={() => {
-                      if ((localSubSelection.numberOfUnits || 1) > 1) {
+            {billingCode.multiple_unit_indicator === "U" &&
+              (!hasTimeOrUnitsOption(billingCode) ||
+                dataEntryMode === "units") && (
+                <View style={styles.subSelectionSection}>
+                  <Text style={styles.subSelectionSectionTitle}>
+                    Number of Units
+                    {billingCode.max_units && (
+                      <Text style={styles.maxUnitsText}>
+                        {" "}
+                        (Max: {billingCode.max_units})
+                      </Text>
+                    )}
+                  </Text>
+                  <View style={styles.unitsContainer}>
+                    <TouchableOpacity
+                      style={[
+                        styles.unitButton,
+                        (localSubSelection.numberOfUnits || 1) <= 1
+                          ? styles.disabledButton
+                          : null,
+                      ]}
+                      onPress={() => {
+                        if ((localSubSelection.numberOfUnits || 1) > 1) {
+                          handleUpdateSubSelection({
+                            numberOfUnits:
+                              (localSubSelection.numberOfUnits || 1) - 1,
+                          });
+                        }
+                      }}
+                      disabled={(localSubSelection.numberOfUnits || 1) <= 1}
+                    >
+                      <Text style={styles.unitButtonText}>-</Text>
+                    </TouchableOpacity>
+                    <TextInput
+                      style={styles.unitsInput}
+                      value={(localSubSelection.numberOfUnits || 1).toString()}
+                      onChangeText={(text) => {
+                        const value = parseInt(text) || 1;
+                        const maxUnits = billingCode.max_units || value;
                         handleUpdateSubSelection({
-                          numberOfUnits:
-                            (localSubSelection.numberOfUnits || 1) - 1,
+                          numberOfUnits: Math.min(value, maxUnits),
                         });
-                      }
-                    }}
-                    disabled={(localSubSelection.numberOfUnits || 1) <= 1}
-                  >
-                    <Text style={styles.unitButtonText}>-</Text>
-                  </TouchableOpacity>
-                  <TextInput
-                    style={styles.unitsInput}
-                    value={(localSubSelection.numberOfUnits || 1).toString()}
-                    onChangeText={(text) => {
-                      const value = parseInt(text) || 1;
-                      const maxUnits = billingCode.max_units || value;
-                      handleUpdateSubSelection({
-                        numberOfUnits: Math.min(value, maxUnits),
-                      });
-                    }}
-                    keyboardType="numeric"
-                  />
-                  <TouchableOpacity
-                    style={[
-                      styles.unitButton,
-                      billingCode.max_units &&
-                      (localSubSelection.numberOfUnits || 1) >=
-                        billingCode.max_units
-                        ? styles.disabledButton
-                        : null,
-                    ]}
-                    onPress={() => {
-                      const maxUnits =
-                        billingCode.max_units ||
-                        (localSubSelection.numberOfUnits || 1) + 1;
-                      handleUpdateSubSelection({
-                        numberOfUnits: Math.min(
-                          (localSubSelection.numberOfUnits || 1) + 1,
-                          maxUnits
-                        ),
-                      });
-                    }}
-                    disabled={
-                      !!(
+                      }}
+                      keyboardType="numeric"
+                    />
+                    <TouchableOpacity
+                      style={[
+                        styles.unitButton,
                         billingCode.max_units &&
                         (localSubSelection.numberOfUnits || 1) >=
                           billingCode.max_units
-                      )
-                    }
-                  >
-                    <Text style={styles.unitButtonText}>+</Text>
-                  </TouchableOpacity>
+                          ? styles.disabledButton
+                          : null,
+                      ]}
+                      onPress={() => {
+                        const maxUnits =
+                          billingCode.max_units ||
+                          (localSubSelection.numberOfUnits || 1) + 1;
+                        handleUpdateSubSelection({
+                          numberOfUnits: Math.min(
+                            (localSubSelection.numberOfUnits || 1) + 1,
+                            maxUnits
+                          ),
+                        });
+                      }}
+                      disabled={
+                        !!(
+                          billingCode.max_units &&
+                          (localSubSelection.numberOfUnits || 1) >=
+                            billingCode.max_units
+                        )
+                      }
+                    >
+                      <Text style={styles.unitButtonText}>+</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              </View>
-            )}
+              )}
 
             {/* Bilateral Indicator - Only for codes with "Bilateral" in title */}
             {billingCode.title.includes("Bilateral") && (
@@ -881,55 +938,60 @@ const BillingCodeConfigurationModal: React.FC<
             )}
 
             {/* Location of Service - Required for all codes */}
-            <View style={styles.subSelectionSection}>
-              <View style={styles.locationOfServiceHeader}>
-                <Text style={styles.subSelectionSectionTitle}>
-                  Location of Service <Text style={styles.requiredText}>*</Text>
-                </Text>
-                {physicianLocationOptions.length > 0 && (
-                  <TouchableOpacity
-                    style={styles.toggleButton}
-                    onPress={() => setShowFullList(!showFullList)}
-                  >
-                    <Text style={styles.toggleButtonText}>
-                      {showFullList
-                        ? "Show My Locations"
-                        : "Show All Locations"}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-              <ScrollView
-                style={styles.locationOfServiceScrollView}
-                nestedScrollEnabled={true}
-              >
-                {locationOfServiceOptions.map((option) => (
-                  <TouchableOpacity
-                    key={option.value}
-                    style={[
-                      styles.locationOfServiceOption,
-                      localSubSelection.locationOfService === option.value &&
-                        styles.selectedLocationOfServiceOption,
-                    ]}
-                    onPress={() =>
-                      handleUpdateSubSelection({
-                        locationOfService: option.value,
-                      })
-                    }
-                  >
-                    <Text
-                      style={[
-                        styles.locationOfServiceOptionText,
-                        localSubSelection.locationOfService === option.value &&
-                          styles.selectedLocationOfServiceOptionText,
-                      ]}
+            {(!hasTimeOrUnitsOption(billingCode) ||
+              dataEntryMode === "units") && (
+              <View style={styles.subSelectionSection}>
+                <View style={styles.locationOfServiceHeader}>
+                  <Text style={styles.subSelectionSectionTitle}>
+                    Location of Service{" "}
+                    <Text style={styles.requiredText}>*</Text>
+                  </Text>
+                  {physicianLocationOptions.length > 0 && (
+                    <TouchableOpacity
+                      style={styles.toggleButton}
+                      onPress={() => setShowFullList(!showFullList)}
                     >
-                      {option.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
+                      <Text style={styles.toggleButtonText}>
+                        {showFullList
+                          ? "Show My Locations"
+                          : "Show All Locations"}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+                <ScrollView
+                  style={styles.locationOfServiceScrollView}
+                  nestedScrollEnabled={true}
+                >
+                  {locationOfServiceOptions.map((option) => (
+                    <TouchableOpacity
+                      key={option.value}
+                      style={[
+                        styles.locationOfServiceOption,
+                        localSubSelection.locationOfService === option.value &&
+                          styles.selectedLocationOfServiceOption,
+                      ]}
+                      onPress={() =>
+                        handleUpdateSubSelection({
+                          locationOfService: option.value,
+                        })
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.locationOfServiceOptionText,
+                          localSubSelection.locationOfService ===
+                            option.value &&
+                            styles.selectedLocationOfServiceOptionText,
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
           </ScrollView>
 
           <View style={styles.modalFooter}>
@@ -1535,6 +1597,32 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: "#fff",
     textAlign: "center",
+  },
+  dataEntryModeContainer: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  dataEntryModeButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    backgroundColor: "#fff",
+    alignItems: "center",
+  },
+  selectedDataEntryModeButton: {
+    backgroundColor: "#3b82f6",
+    borderColor: "#3b82f6",
+  },
+  dataEntryModeButtonText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#374151",
+  },
+  selectedDataEntryModeButtonText: {
+    color: "#fff",
   },
 });
 
