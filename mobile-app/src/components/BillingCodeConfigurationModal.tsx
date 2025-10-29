@@ -113,9 +113,21 @@ const BillingCodeConfigurationModal: React.FC<
         serviceDate ||
         new Date().toISOString().split("T")[0];
 
-      // Initialize time fields with default values if null
-      const effectiveStartTime = subSelection.serviceStartTime || "07:00";
-      const effectiveEndTime = subSelection.serviceEndTime || "12:00";
+      // Check if this billing code requires time fields
+      const requiresTime =
+        billingCode &&
+        (billingCode.start_time_required === "Y" ||
+          billingCode.stop_time_required === "Y" ||
+          (billingCode.multiple_unit_indicator === "U" &&
+            billingCode.billing_unit_type?.includes("MINUTES")));
+
+      // Initialize time fields with default values only if times are required and currently null
+      const effectiveStartTime = requiresTime
+        ? subSelection.serviceStartTime || "07:00"
+        : subSelection.serviceStartTime;
+      const effectiveEndTime = requiresTime
+        ? subSelection.serviceEndTime || "12:00"
+        : subSelection.serviceEndTime;
 
       setLocalSubSelection({
         ...subSelection,
@@ -127,6 +139,14 @@ const BillingCodeConfigurationModal: React.FC<
       // Clear any previous errors when modal opens
       setLocationError(null);
 
+      // Check if this billing code requires time fields
+      const requiresTime =
+        billingCode &&
+        (billingCode.start_time_required === "Y" ||
+          billingCode.stop_time_required === "Y" ||
+          (billingCode.multiple_unit_indicator === "U" &&
+            billingCode.billing_unit_type?.includes("MINUTES")));
+
       // If no subSelection provided, create default
       const defaultDate = serviceDate || new Date().toISOString().split("T")[0];
       setLocalSubSelection({
@@ -134,8 +154,8 @@ const BillingCodeConfigurationModal: React.FC<
         serviceDate: defaultDate,
         serviceEndDate: null,
         bilateralIndicator: null,
-        serviceStartTime: "07:00",
-        serviceEndTime: "12:00",
+        serviceStartTime: requiresTime ? "07:00" : null,
+        serviceEndTime: requiresTime ? "12:00" : null,
         numberOfUnits: 1,
         specialCircumstances: null,
         locationOfService: null, // User must select

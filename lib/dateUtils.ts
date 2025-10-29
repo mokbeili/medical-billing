@@ -629,7 +629,8 @@ export function combineDateAndTimeInTimezone(
   timeStr: string | null,
   timezone: string
 ): Date | null {
-  if (!timeStr) return null;
+  // Return null if timeStr is null, undefined, or empty string
+  if (!timeStr || timeStr.trim() === "") return null;
 
   try {
     // If timeStr is already a full ISO datetime, just convert it
@@ -637,9 +638,21 @@ export function combineDateAndTimeInTimezone(
       return new Date(timeStr);
     }
 
+    // Validate timeStr is in HH:MM format
+    if (!/^\d{1,2}:\d{2}$/.test(timeStr.trim())) {
+      console.warn(`Invalid time format: ${timeStr}, expected HH:MM format`);
+      return null;
+    }
+
     // Parse the date and time components
     const [year, month, day] = dateStr.split("-").map(Number);
     const [hours, minutes] = timeStr.split(":").map(Number);
+
+    // Validate parsed values
+    if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+      console.warn(`Invalid time values: hours=${hours}, minutes=${minutes}`);
+      return null;
+    }
 
     // Create a string representing the local date/time in the target timezone
     const localDateTimeString = `${year}-${String(month).padStart(
