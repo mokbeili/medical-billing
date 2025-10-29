@@ -59,6 +59,7 @@ const BillingCodeConfigurationModal: React.FC<
   const [tempHour, setTempHour] = useState(0);
   const [tempMinute, setTempMinute] = useState(0);
   const [dataEntryMode, setDataEntryMode] = useState<"time" | "units">("time");
+  const [locationError, setLocationError] = useState<string | null>(null);
 
   // Full Location of Service options
   const fullLocationOfServiceOptions = React.useMemo(
@@ -103,6 +104,9 @@ const BillingCodeConfigurationModal: React.FC<
   // Initialize local state when modal opens
   React.useEffect(() => {
     if (visible && subSelection) {
+      // Clear any previous errors when modal opens
+      setLocationError(null);
+
       // Use the provided subSelection, but use serviceDate prop as fallback if null
       const effectiveServiceDate =
         subSelection.serviceDate ||
@@ -120,6 +124,9 @@ const BillingCodeConfigurationModal: React.FC<
         serviceEndTime: effectiveEndTime,
       });
     } else if (visible && !subSelection) {
+      // Clear any previous errors when modal opens
+      setLocationError(null);
+
       // If no subSelection provided, create default
       const defaultDate = serviceDate || new Date().toISOString().split("T")[0];
       setLocalSubSelection({
@@ -204,15 +211,17 @@ const BillingCodeConfigurationModal: React.FC<
 
   const handleUpdateSubSelection = (updates: Partial<CodeSubSelection>) => {
     setLocalSubSelection((prev) => (prev ? { ...prev, ...updates } : null));
+    // Clear location error when location is selected
+    if (updates.locationOfService) {
+      setLocationError(null);
+    }
   };
 
   const handleSave = () => {
     if (localSubSelection) {
       // Validate that locationOfService is selected
       if (!localSubSelection.locationOfService) {
-        // You can use Alert from react-native if imported, or just prevent save
-        // For now, we'll just prevent the save
-        console.warn("Location of Service must be selected");
+        setLocationError("Please select a Location of Service before saving");
         return;
       }
       onSave(localSubSelection);
@@ -990,6 +999,9 @@ const BillingCodeConfigurationModal: React.FC<
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
+                {locationError && (
+                  <Text style={styles.errorText}>{locationError}</Text>
+                )}
               </View>
             )}
           </ScrollView>
@@ -1623,6 +1635,12 @@ const styles = StyleSheet.create({
   },
   selectedDataEntryModeButtonText: {
     color: "#fff",
+  },
+  errorText: {
+    color: "#dc2626",
+    fontSize: 14,
+    marginTop: 8,
+    fontWeight: "500",
   },
 });
 
