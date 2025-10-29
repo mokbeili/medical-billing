@@ -552,6 +552,34 @@ const ServicesScreen = ({ navigation }: any) => {
     }
   };
 
+  // Helper to extract HH:MM from various time formats
+  const extractTimeString = (timeValue: string | null): string => {
+    if (!timeValue) return "09:00";
+
+    // If it's already in HH:MM format, return as-is
+    if (/^\d{1,2}:\d{2}$/.test(timeValue)) {
+      return timeValue;
+    }
+
+    // If it's an ISO datetime string, extract time portion
+    if (timeValue.includes("T") || timeValue.includes("Z")) {
+      try {
+        const date = new Date(timeValue);
+        if (!isNaN(date.getTime())) {
+          // Get UTC hours and minutes
+          const hours = date.getUTCHours().toString().padStart(2, "0");
+          const minutes = date.getUTCMinutes().toString().padStart(2, "0");
+          return `${hours}:${minutes}`;
+        }
+      } catch (error) {
+        console.error("Error parsing time:", error);
+      }
+    }
+
+    // Fallback
+    return "09:00";
+  };
+
   const addCodesToService = async (
     service: Service,
     selectedCodes: BillingCode[],
@@ -605,6 +633,10 @@ const ServicesScreen = ({ navigation }: any) => {
           locationsOfService.length > 0;
 
         if (shouldSplit) {
+          // Extract time strings from potentially ISO datetime values
+          const startTime = extractTimeString(subSelection!.serviceStartTime);
+          const endTime = extractTimeString(subSelection!.serviceEndTime);
+
           // Apply splitting logic
           const splitCodes = splitBillingCodeByTimeAndLocation(
             {
@@ -613,8 +645,8 @@ const ServicesScreen = ({ navigation }: any) => {
               title: code.title,
               multiple_unit_indicator: code.multiple_unit_indicator,
               billing_unit_type: code.billing_unit_type,
-              serviceStartTime: subSelection!.serviceStartTime,
-              serviceEndTime: subSelection!.serviceEndTime,
+              serviceStartTime: startTime,
+              serviceEndTime: endTime,
               serviceDate: subSelection?.serviceDate || service.serviceDate,
               numberOfUnits: subSelection?.numberOfUnits,
               bilateralIndicator: subSelection?.bilateralIndicator,
@@ -625,8 +657,6 @@ const ServicesScreen = ({ navigation }: any) => {
             physician?.timezone || "America/Regina",
             [] // Empty holidays array for now
           );
-
-          console.log(splitCodes);
 
           // Convert each split code to the API format
           return splitCodes.map((splitCode) => ({

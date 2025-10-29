@@ -272,7 +272,7 @@ export const servicesAPI = {
       bilateralIndicator: string | null;
       numberOfUnits: number | null;
       specialCircumstances: string | null;
-      // serviceLocation and locationOfService are determined by the backend
+      locationOfService: string | null;
     }>
   ): Promise<any[]> => {
     const serviceCodesData = billingCodes.map((code) => ({

@@ -1272,11 +1272,6 @@ export default function ServiceForm({
           code.serviceEndTime &&
           locationsOfService.length > 0
         ) {
-          // Split the code
-          console.log(code);
-          console.log(locationsOfService);
-          console.log(physicianTimezone);
-          console.log(providerHolidays);
           const splitCodes = splitBillingCodeByTimeAndLocation(
             {
               ...code,

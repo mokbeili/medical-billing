@@ -1009,13 +1009,6 @@ const ServiceCreationModal: React.FC<ServiceCreationModalProps> = ({
               multiple_unit_indicator: code.multiple_unit_indicator || null,
             };
 
-            // Debug logging
-            console.log("Split code being sent to API:", {
-              times: `${splitCode.serviceStartTime} - ${splitCode.serviceEndTime}`,
-              serviceDate: splitCodeServiceDateUTC,
-              location: splitCode.locationOfService,
-            });
-
             return result;
           });
         } else {

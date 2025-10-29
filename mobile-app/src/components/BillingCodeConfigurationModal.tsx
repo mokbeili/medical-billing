@@ -107,9 +107,16 @@ const BillingCodeConfigurationModal: React.FC<
         subSelection.serviceDate ||
         serviceDate ||
         new Date().toISOString().split("T")[0];
+
+      // Initialize time fields with default values if null
+      const effectiveStartTime = subSelection.serviceStartTime || "07:00";
+      const effectiveEndTime = subSelection.serviceEndTime || "12:00";
+
       setLocalSubSelection({
         ...subSelection,
         serviceDate: effectiveServiceDate,
+        serviceStartTime: effectiveStartTime,
+        serviceEndTime: effectiveEndTime,
       });
     } else if (visible && !subSelection) {
       // If no subSelection provided, create default
@@ -119,8 +126,8 @@ const BillingCodeConfigurationModal: React.FC<
         serviceDate: defaultDate,
         serviceEndDate: null,
         bilateralIndicator: null,
-        serviceStartTime: null,
-        serviceEndTime: null,
+        serviceStartTime: "07:00",
+        serviceEndTime: "12:00",
         numberOfUnits: 1,
         specialCircumstances: null,
         locationOfService: null, // User must select
@@ -139,7 +146,6 @@ const BillingCodeConfigurationModal: React.FC<
       return;
     }
 
-    // Check if this code should be split
     if (
       billingCode.multiple_unit_indicator === "U" &&
       billingCode.billing_unit_type?.includes("MINUTES") &&
@@ -166,8 +172,10 @@ const BillingCodeConfigurationModal: React.FC<
           title: billingCode.title,
           multiple_unit_indicator: billingCode.multiple_unit_indicator,
           billing_unit_type: billingCode.billing_unit_type,
-          serviceStartTime: localSubSelection.serviceStartTime,
-          serviceEndTime: localSubSelection.serviceEndTime,
+          serviceStartTime: extractTimeString(
+            localSubSelection.serviceStartTime
+          ),
+          serviceEndTime: extractTimeString(localSubSelection.serviceEndTime),
           serviceDate: localSubSelection.serviceDate,
           numberOfUnits: localSubSelection.numberOfUnits,
           bilateralIndicator: localSubSelection.bilateralIndicator,
@@ -482,6 +490,118 @@ const BillingCodeConfigurationModal: React.FC<
               </View>
             )}
 
+            {/* Service Start/End Time */}
+            {(billingCode.start_time_required === "Y" ||
+              billingCode.stop_time_required === "Y" ||
+              (billingCode.multiple_unit_indicator === "U" &&
+                billingCode.billing_unit_type?.includes("MINUTES"))) && (
+              <View style={styles.subSelectionSection}>
+                <Text style={styles.subSelectionSectionTitle}>
+                  Service Times
+                </Text>
+                <View style={styles.timeRow}>
+                  {(billingCode.start_time_required === "Y" ||
+                    (billingCode.multiple_unit_indicator === "U" &&
+                      billingCode.billing_unit_type?.includes("MINUTES"))) && (
+                    <View style={styles.timeInputContainer}>
+                      <Text style={styles.timeLabel}>Start Time</Text>
+                      <TouchableOpacity
+                        style={styles.timeSelector}
+                        onPress={openStartTimePicker}
+                      >
+                        <Ionicons
+                          name="time-outline"
+                          size={20}
+                          color="#6b7280"
+                        />
+                        <Text
+                          style={[
+                            styles.timeSelectorText,
+                            !localSubSelection.serviceStartTime &&
+                              styles.timeSelectorPlaceholder,
+                          ]}
+                        >
+                          {formatTimeDisplay(
+                            localSubSelection.serviceStartTime
+                          )}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                  {(billingCode.stop_time_required === "Y" ||
+                    (billingCode.multiple_unit_indicator === "U" &&
+                      billingCode.billing_unit_type?.includes("MINUTES"))) && (
+                    <View style={styles.timeInputContainer}>
+                      <Text style={styles.timeLabel}>End Time</Text>
+                      <TouchableOpacity
+                        style={styles.timeSelector}
+                        onPress={openEndTimePicker}
+                      >
+                        <Ionicons
+                          name="time-outline"
+                          size={20}
+                          color="#6b7280"
+                        />
+                        <Text
+                          style={[
+                            styles.timeSelectorText,
+                            !localSubSelection.serviceEndTime &&
+                              styles.timeSelectorPlaceholder,
+                          ]}
+                        >
+                          {formatTimeDisplay(localSubSelection.serviceEndTime)}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              </View>
+            )}
+
+            {/* Split Codes Preview */}
+            {splitCodes.length > 1 && (
+              <View style={styles.splitCodesPreview}>
+                <View style={styles.splitCodesHeader}>
+                  <Ionicons
+                    name="information-circle"
+                    size={20}
+                    color="#3b82f6"
+                  />
+                  <Text style={styles.splitCodesTitle}>
+                    This code will be split into {splitCodes.length} codes:
+                  </Text>
+                </View>
+                {splitCodes.map((code, index) => {
+                  const location = physician?.physicianLocationsOfService
+                    ?.map((plos) => plos.locationOfService)
+                    ?.find((loc) => loc.code === code.locationOfService);
+                  const locationName =
+                    location?.name || `Location ${code.locationOfService}`;
+
+                  return (
+                    <View key={index} style={styles.splitCodeItem}>
+                      <Text style={styles.splitCodeIndex}>{index + 1}.</Text>
+                      <View style={styles.splitCodeDetails}>
+                        <Text style={styles.splitCodeTime}>
+                          {code.serviceStartTime} - {code.serviceEndTime}
+                        </Text>
+                        <Text style={styles.splitCodeInfo}>
+                          {code.numberOfUnits} units at {locationName}
+                        </Text>
+                        {code.serviceDate &&
+                          code.serviceDate !==
+                            localSubSelection.serviceDate && (
+                            <Text style={styles.splitCodeDate}>
+                              [{formatFullDate(code.serviceDate)}]
+                            </Text>
+                          )}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+
             {/* Units - Only for codes with multiple_unit_indicator === "U" */}
             {billingCode.multiple_unit_indicator === "U" && (
               <View style={styles.subSelectionSection}>
@@ -557,120 +677,6 @@ const BillingCodeConfigurationModal: React.FC<
                     <Text style={styles.unitButtonText}>+</Text>
                   </TouchableOpacity>
                 </View>
-              </View>
-            )}
-
-            {/* Service Start/End Time */}
-            {(billingCode.start_time_required === "Y" ||
-              billingCode.stop_time_required === "Y" ||
-              (billingCode.multiple_unit_indicator === "U" &&
-                billingCode.billing_unit_type?.includes("MINUTES"))) && (
-              <View style={styles.subSelectionSection}>
-                <Text style={styles.subSelectionSectionTitle}>
-                  Service Times
-                </Text>
-                <View style={styles.timeRow}>
-                  {(billingCode.start_time_required === "Y" ||
-                    (billingCode.multiple_unit_indicator === "U" &&
-                      billingCode.billing_unit_type?.includes("MINUTES"))) && (
-                    <View style={styles.timeInputContainer}>
-                      <Text style={styles.timeLabel}>Start Time</Text>
-                      <TouchableOpacity
-                        style={styles.timeSelector}
-                        onPress={openStartTimePicker}
-                      >
-                        <Ionicons
-                          name="time-outline"
-                          size={20}
-                          color="#6b7280"
-                        />
-                        <Text
-                          style={[
-                            styles.timeSelectorText,
-                            !localSubSelection.serviceStartTime &&
-                              styles.timeSelectorPlaceholder,
-                          ]}
-                        >
-                          {formatTimeDisplay(
-                            localSubSelection.serviceStartTime
-                          )}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                  {(billingCode.stop_time_required === "Y" ||
-                    (billingCode.multiple_unit_indicator === "U" &&
-                      billingCode.billing_unit_type?.includes("MINUTES"))) && (
-                    <View style={styles.timeInputContainer}>
-                      <Text style={styles.timeLabel}>End Time</Text>
-                      <TouchableOpacity
-                        style={styles.timeSelector}
-                        onPress={openEndTimePicker}
-                      >
-                        <Ionicons
-                          name="time-outline"
-                          size={20}
-                          color="#6b7280"
-                        />
-                        <Text
-                          style={[
-                            styles.timeSelectorText,
-                            !localSubSelection.serviceEndTime &&
-                              styles.timeSelectorPlaceholder,
-                          ]}
-                        >
-                          {formatTimeDisplay(localSubSelection.serviceEndTime)}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                </View>
-
-                {/* Split Codes Preview */}
-                {splitCodes.length > 1 && (
-                  <View style={styles.splitCodesPreview}>
-                    <View style={styles.splitCodesHeader}>
-                      <Ionicons
-                        name="information-circle"
-                        size={20}
-                        color="#3b82f6"
-                      />
-                      <Text style={styles.splitCodesTitle}>
-                        This code will be split into {splitCodes.length} codes:
-                      </Text>
-                    </View>
-                    {splitCodes.map((code, index) => {
-                      const location = physician?.physicianLocationsOfService
-                        ?.map((plos) => plos.locationOfService)
-                        ?.find((loc) => loc.code === code.locationOfService);
-                      const locationName =
-                        location?.name || `Location ${code.locationOfService}`;
-
-                      return (
-                        <View key={index} style={styles.splitCodeItem}>
-                          <Text style={styles.splitCodeIndex}>
-                            {index + 1}.
-                          </Text>
-                          <View style={styles.splitCodeDetails}>
-                            <Text style={styles.splitCodeTime}>
-                              {code.serviceStartTime} - {code.serviceEndTime}
-                            </Text>
-                            <Text style={styles.splitCodeInfo}>
-                              {code.numberOfUnits} units at {locationName}
-                            </Text>
-                            {code.serviceDate &&
-                              code.serviceDate !==
-                                localSubSelection.serviceDate && (
-                                <Text style={styles.splitCodeDate}>
-                                  [{formatFullDate(code.serviceDate)}]
-                                </Text>
-                              )}
-                          </View>
-                        </View>
-                      );
-                    })}
-                  </View>
-                )}
               </View>
             )}
 

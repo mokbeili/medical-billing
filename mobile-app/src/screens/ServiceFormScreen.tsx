@@ -1065,13 +1065,6 @@ const ServiceFormScreen = ({ navigation }: any) => {
           subSelection?.serviceDate || formData.serviceDate;
         let serviceEndDate = subSelection?.serviceEndDate || null;
 
-        // Debug logging
-        console.log("Adding code:", serviceCode.billingCode.code, {
-          subSelectionDate: subSelection?.serviceDate,
-          formServiceDate: formData.serviceDate,
-          finalStartDate: serviceStartDate,
-        });
-
         if (serviceCode.billingCode.billing_record_type === 57) {
           // Check if this code has previous codes defined and if any of them are already selected
           if (
