@@ -2216,12 +2216,11 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   modalButton: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 8,
     paddingVertical: 8,
     borderRadius: 8,
     minWidth: 80,
     width: "100%",
-    alignItems: "center",
   },
   cancelButton: {
     backgroundColor: "#f3f4f6",
