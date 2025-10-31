@@ -1,6 +1,12 @@
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { encrypt } from "@/utils/encryption";
+import { decrypt, encrypt } from "@/utils/encryption";
+import {
+  parseBiweeklyReturnFile,
+  parseDailyReturnFile,
+  storeBiweeklyReturnFileRecords,
+  storeDailyReturnFileRecords,
+} from "@/utils/returnFileParser";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
@@ -93,14 +99,10 @@ export async function GET(request: Request) {
       where: { id: parseInt(session.user.id) },
       include: {
         physicians: true,
-        roles: true,
       },
     });
 
-    if (
-      !user?.physicians.length &&
-      !user?.roles.some((r) => r.role === "ADMIN")
-    ) {
+    if (!user?.physicians.length && !user?.roles.includes("ADMIN")) {
       return NextResponse.json(
         { error: "User is not associated with a physician" },
         { status: 400 }
@@ -113,11 +115,11 @@ export async function GET(request: Request) {
     let whereClause: any = {};
 
     // If admin and physicianId provided, filter by that physician
-    if (user?.roles.some((r) => r.role === "ADMIN") && physicianId) {
+    if (user?.roles.includes("ADMIN") && physicianId) {
       whereClause.physicianId = physicianId;
-    } else if (user?.physician) {
+    } else if (user?.physicians?.length) {
       // Non-admin users can only see their own files
-      whereClause.physicianId = user.physician.id;
+      whereClause.physicianId = user.physicians[0].id;
     }
 
     const returnFiles = await prisma.returnFile.findMany({
@@ -147,6 +149,116 @@ export async function GET(request: Request) {
     console.error("Error fetching return files:", error);
     return NextResponse.json(
       { error: "Failed to fetch return files" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(request: Request) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const data = await request.json();
+    const { returnFileId } = data;
+
+    if (!returnFileId) {
+      return NextResponse.json(
+        { error: "Return file ID is required" },
+        { status: 400 }
+      );
+    }
+
+    // Get the return file
+    const returnFile = await prisma.returnFile.findUnique({
+      where: { id: returnFileId },
+      include: {
+        physician: {
+          include: {
+            jurisdiction: {
+              include: {
+                provider: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!returnFile) {
+      return NextResponse.json(
+        { error: "Return file not found" },
+        { status: 404 }
+      );
+    }
+
+    // Check authorization - only the file owner or admin can process
+    const user = await prisma.user.findUnique({
+      where: { id: parseInt(session.user.id) },
+      include: {
+        physicians: true,
+      },
+    });
+
+    const isOwner = user?.physicians.some(
+      (p) => p.id === returnFile.physicianId
+    );
+    const isAdmin = user?.roles.includes("ADMIN");
+
+    if (!isOwner && !isAdmin) {
+      return NextResponse.json(
+        { error: "Unauthorized to process this file" },
+        { status: 403 }
+      );
+    }
+
+    // Decrypt the file content
+    if (!returnFile.fileText) {
+      return NextResponse.json(
+        { error: "File content is empty" },
+        { status: 400 }
+      );
+    }
+
+    const decryptedContent = decrypt(returnFile.fileText);
+
+    if (!decryptedContent) {
+      return NextResponse.json(
+        { error: "Failed to decrypt file content" },
+        { status: 500 }
+      );
+    }
+
+    // Parse the file based on type
+    let result;
+    if (returnFile.fileType === "BIWEEKLY") {
+      const records = parseBiweeklyReturnFile(decryptedContent);
+      result = await storeBiweeklyReturnFileRecords(
+        records,
+        returnFile.physicianId,
+        returnFile.physician.jurisdiction.providerId
+      );
+    } else if (returnFile.fileType === "DAILY") {
+      const records = parseDailyReturnFile(decryptedContent);
+      result = await storeDailyReturnFileRecords(
+        records,
+        returnFile.physicianId,
+        returnFile.physician.jurisdiction.providerId
+      );
+    } else {
+      return NextResponse.json({ error: "Invalid file type" }, { status: 400 });
+    }
+
+    return NextResponse.json({
+      message: "Return file processed successfully",
+      result,
+    });
+  } catch (error) {
+    console.error("Error processing return file:", error);
+    return NextResponse.json(
+      { error: "Failed to process return file", details: String(error) },
       { status: 500 }
     );
   }

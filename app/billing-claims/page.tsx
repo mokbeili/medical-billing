@@ -75,6 +75,14 @@ export default function BillingClaimsSearchPage() {
   const [selectedFileType, setSelectedFileType] = useState<string>("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processingResult, setProcessingResult] = useState<{
+    paidCount?: number;
+    rejectedCount?: number;
+    pendedCount?: number;
+    totalCount?: number;
+    errors?: string[];
+  } | null>(null);
 
   useEffect(() => {
     const checkUserRole = async () => {
@@ -316,11 +324,12 @@ export default function BillingClaimsSearchPage() {
 
     try {
       setIsUploading(true);
+      setProcessingResult(null);
 
-      // Read the file content
+      // Step 1: Read and upload the file
       const fileContent = await selectedFile.text();
 
-      const response = await fetch("/api/return-files", {
+      const uploadResponse = await fetch("/api/return-files", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -332,26 +341,82 @@ export default function BillingClaimsSearchPage() {
         }),
       });
 
-      if (response.ok) {
-        alert("File uploaded successfully");
-        setSelectedFile(null);
-        setSelectedFileType("");
-        // Reset the file input
-        const fileInput = document.getElementById(
-          "file-input"
-        ) as HTMLInputElement;
-        if (fileInput) {
-          fileInput.value = "";
-        }
-      } else {
-        const error = await response.json();
+      if (!uploadResponse.ok) {
+        const error = await uploadResponse.json();
         alert(error.error || "Failed to upload file");
+        return;
+      }
+
+      const { id } = await uploadResponse.json();
+
+      // Step 2: Automatically process the uploaded file
+      setIsUploading(false);
+      setIsProcessing(true);
+
+      const processResponse = await fetch("/api/return-files", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          returnFileId: id,
+        }),
+      });
+
+      if (!processResponse.ok) {
+        const error = await processResponse.json();
+        alert(error.error || "Failed to process file");
+        return;
+      }
+
+      const { result } = await processResponse.json();
+      setProcessingResult(result);
+
+      // Show success message
+      let message = "✅ File uploaded and processed successfully!\n\n";
+      if (selectedFileType === "BIWEEKLY") {
+        message += `📊 Results:\n`;
+        message += `  • Paid claims: ${result.paidCount}\n`;
+        message += `  • Rejected claims: ${result.rejectedCount}\n`;
+        message += `  • Pended claims: ${result.pendedCount}\n`;
+        message += `  • Total records: ${result.totalCount}\n`;
+      } else {
+        message += `📊 Results:\n`;
+        message += `  • Rejected claims: ${result.rejectedCount}\n`;
+      }
+
+      if (result.errors && result.errors.length > 0) {
+        message += `\n⚠️ ${result.errors.length} error(s) encountered during processing.`;
+      }
+
+      alert(message);
+
+      // Reset form
+      setSelectedFile(null);
+      setSelectedFileType("");
+      const fileInput = document.getElementById(
+        "file-input"
+      ) as HTMLInputElement;
+      if (fileInput) {
+        fileInput.value = "";
+      }
+
+      // Refresh claims to show updated data
+      const refreshResponse = await fetch(
+        isAdmin && selectedPhysicianId
+          ? `/api/billing-claims?physicianId=${selectedPhysicianId}`
+          : "/api/billing-claims"
+      );
+      if (refreshResponse.ok) {
+        const data = await refreshResponse.json();
+        setClaims(data);
       }
     } catch (error) {
-      console.error("Error uploading file:", error);
-      alert("Failed to upload file");
+      console.error("Error uploading/processing file:", error);
+      alert("Failed to upload or process file");
     } finally {
       setIsUploading(false);
+      setIsProcessing(false);
     }
   };
 
@@ -376,7 +441,7 @@ export default function BillingClaimsSearchPage() {
     <Layout>
       <div className="min-h-screen bg-gray-50">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Submissionsas</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Submissions</h1>
           {isAdmin && selectedPhysicianId && (
             <p className="mt-2 text-sm text-gray-600">
               Viewing submissions for:{" "}
@@ -504,9 +569,18 @@ export default function BillingClaimsSearchPage() {
                 <div className="flex items-end">
                   <Button
                     onClick={handleFileUpload}
-                    disabled={!selectedFile || !selectedFileType || isUploading}
+                    disabled={
+                      !selectedFile ||
+                      !selectedFileType ||
+                      isUploading ||
+                      isProcessing
+                    }
                   >
-                    {isUploading ? "Uploading..." : "Upload File"}
+                    {isUploading
+                      ? "Uploading..."
+                      : isProcessing
+                      ? "Processing..."
+                      : "Upload & Process File"}
                   </Button>
                 </div>
               </div>
@@ -515,6 +589,74 @@ export default function BillingClaimsSearchPage() {
                 <div className="text-sm text-gray-600">
                   Selected file: {selectedFile.name} (
                   {(selectedFile.size / 1024).toFixed(2)} KB)
+                </div>
+              )}
+
+              {processingResult && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <h4 className="text-sm font-semibold text-blue-900 mb-2">
+                    ✅ Last Processing Results
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    {processingResult.paidCount !== undefined && (
+                      <div className="flex justify-between">
+                        <span className="text-blue-700">Paid Claims:</span>
+                        <span className="font-medium text-blue-900">
+                          {processingResult.paidCount}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="text-blue-700">Rejected Claims:</span>
+                      <span className="font-medium text-blue-900">
+                        {processingResult.rejectedCount}
+                      </span>
+                    </div>
+                    {processingResult.pendedCount !== undefined && (
+                      <div className="flex justify-between">
+                        <span className="text-blue-700">Pended Claims:</span>
+                        <span className="font-medium text-blue-900">
+                          {processingResult.pendedCount}
+                        </span>
+                      </div>
+                    )}
+                    {processingResult.totalCount !== undefined && (
+                      <div className="flex justify-between">
+                        <span className="text-blue-700">Total Records:</span>
+                        <span className="font-medium text-blue-900">
+                          {processingResult.totalCount}
+                        </span>
+                      </div>
+                    )}
+                    {processingResult.errors &&
+                      processingResult.errors.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-blue-200">
+                          <div className="flex items-start gap-2">
+                            <span className="text-orange-700 font-medium">
+                              ⚠️ {processingResult.errors.length} Error(s):
+                            </span>
+                          </div>
+                          <ul className="mt-2 space-y-1 ml-4">
+                            {processingResult.errors
+                              .slice(0, 5)
+                              .map((error, index) => (
+                                <li
+                                  key={index}
+                                  className="text-xs text-orange-800"
+                                >
+                                  {error}
+                                </li>
+                              ))}
+                            {processingResult.errors.length > 5 && (
+                              <li className="text-xs text-orange-700 italic">
+                                ... and {processingResult.errors.length - 5}{" "}
+                                more
+                              </li>
+                            )}
+                          </ul>
+                        </div>
+                      )}
+                  </div>
                 </div>
               )}
             </div>
