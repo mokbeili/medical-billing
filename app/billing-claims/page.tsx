@@ -72,6 +72,9 @@ export default function BillingClaimsSearchPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [selectedFileType, setSelectedFileType] = useState<string>("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
     const checkUserRole = async () => {
@@ -298,6 +301,60 @@ export default function BillingClaimsSearchPage() {
     }
   };
 
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+    }
+  };
+
+  const handleFileUpload = async () => {
+    if (!selectedFile || !selectedFileType) {
+      alert("Please select a file type and a file");
+      return;
+    }
+
+    try {
+      setIsUploading(true);
+
+      // Read the file content
+      const fileContent = await selectedFile.text();
+
+      const response = await fetch("/api/return-files", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fileType: selectedFileType,
+          fileContent,
+          fileName: selectedFile.name,
+        }),
+      });
+
+      if (response.ok) {
+        alert("File uploaded successfully");
+        setSelectedFile(null);
+        setSelectedFileType("");
+        // Reset the file input
+        const fileInput = document.getElementById(
+          "file-input"
+        ) as HTMLInputElement;
+        if (fileInput) {
+          fileInput.value = "";
+        }
+      } else {
+        const error = await response.json();
+        alert(error.error || "Failed to upload file");
+      }
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      alert("Failed to upload file");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   if (status === "loading" || isLoading) {
     return (
       <Layout>
@@ -319,7 +376,7 @@ export default function BillingClaimsSearchPage() {
     <Layout>
       <div className="min-h-screen bg-gray-50">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Submissions</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Submissionsas</h1>
           {isAdmin && selectedPhysicianId && (
             <p className="mt-2 text-sm text-gray-600">
               Viewing submissions for:{" "}
@@ -404,6 +461,65 @@ export default function BillingClaimsSearchPage() {
             )}
           </div>
         </div>
+
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Upload Return File</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center gap-4">
+                <div className="flex-1">
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">
+                    File Type
+                  </label>
+                  <Select
+                    value={selectedFileType}
+                    onValueChange={setSelectedFileType}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select file type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="DAILY">Daily Return File</SelectItem>
+                      <SelectItem value="BIWEEKLY">
+                        BiWeekly Return File
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex-1">
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">
+                    Select File
+                  </label>
+                  <Input
+                    id="file-input"
+                    type="file"
+                    onChange={handleFileChange}
+                    accept=".txt,.csv"
+                  />
+                </div>
+
+                <div className="flex items-end">
+                  <Button
+                    onClick={handleFileUpload}
+                    disabled={!selectedFile || !selectedFileType || isUploading}
+                  >
+                    {isUploading ? "Uploading..." : "Upload File"}
+                  </Button>
+                </div>
+              </div>
+
+              {selectedFile && (
+                <div className="text-sm text-gray-600">
+                  Selected file: {selectedFile.name} (
+                  {(selectedFile.size / 1024).toFixed(2)} KB)
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
         <div className="grid gap-6">
           {filteredClaims.length === 0 ? (

@@ -51,6 +51,7 @@ model Jurisdiction {
   referringPhysicians ReferringPhysician[]
   SearchQueryLog      SearchQueryLog[]
   sections            Section[]
+  returnFiles         ReturnFile[]
 
   @@map("jurisdictions")
 }
@@ -117,6 +118,7 @@ model BillingCode {
   section                         Section                  @relation(fields: [section_id], references: [id])
   frequentlyUsedCodes             FrequentlyUsedCode[]
   serviceCodes                    ServiceCodes[]
+  approvedServiceCodes            ServiceCodes[]           @relation("ApprovedBillingCode")
   billingCodeChains               BillingCodeChain[]
 
   @@index([section_id])
@@ -273,6 +275,7 @@ model Physician {
   referringPhysicians         ReferringPhysician[]
   SearchQueryLog              SearchQueryLog[]
   Service                     Service[]
+  returnFiles                 ReturnFile[]
 
   @@map("physicians")
 }
@@ -401,15 +404,48 @@ model ServiceCodes {
   locationOfService           String                       @map("location_of_service")
   claimNumber                 Int?                         @map("claim_number")
   sequence                    Int?                         @map("sequence")
+  approved                    Boolean?
+  paymentRunCode              String?                      @map("payment_run_code")
+  cpsClaimNumber              Int?                         @map("cps_claim_number")
+  feeSubmitted                Float?                       @map("fee_submitted")
+  approvedBillingCodeId       Int?                         @map("approved_billing_code_id")
+  feeApproved                 Float?                       @map("fee_approved")
+  totalPremiumAmount          Float?                       @map("total_premium_amount")
+  programPayment              Float?                       @map("program_payment")
+  totalPaidAmount             Float?                       @map("total_paid_amount")
+  paidNumberOfUnits           Int?                         @map("paid_number_of_units")
+  paidLocationOfService       String?                      @map("paid_location_of_service")
   changeLogs                  ServiceCodeChangeLog[]
+  serviceCodesTotals          ServiceCodesTotals[]
   billingCode                 BillingCode                  @relation(fields: [codeId], references: [id])
   service                     Service                      @relation(fields: [serviceId], references: [id])
   serviceCodeExplanatoryCodes ServiceCodeExplanatoryCode[]
+  approvedBillingCode         BillingCode?                 @relation("ApprovedBillingCode", fields: [approvedBillingCodeId], references: [id])
 
   @@index([serviceId])
   @@index([codeId])
   @@index([claimNumber])
+  @@index([approvedBillingCodeId])
   @@map("service_codes")
+}
+
+model ServiceCodesTotals {
+  id                  Int          @id @default(autoincrement())
+  serviceCodeId       Int          @map("service_code_id")
+  mode                String?
+  totalLineType       String?      @map("total_line_type")
+  feeSubmitted        Float?       @map("fee_submitted")
+  feeApproved         Float?       @map("fee_approved")
+  totalPremiumAmount  Float?       @map("total_premium_amount")
+  totalProgramPayment Float?       @map("total_program_payment")
+  totalPaidAmount     Float?       @map("total_paid_amount")
+  runCode             String?      @map("run_code")
+  createdAt           DateTime     @default(now()) @map("created_at")
+  updatedAt           DateTime     @updatedAt @map("updated_at")
+  serviceCode         ServiceCodes @relation(fields: [serviceCodeId], references: [id], onDelete: Cascade)
+
+  @@index([serviceCodeId])
+  @@map("service_codes_totals")
 }
 
 model ExplanatoryCode {
@@ -592,6 +628,7 @@ model LocationOfService {
   updatedAt                   DateTime                     @updatedAt @map("updated_at")
   provider                    Provider                     @relation(fields: [providerId], references: [id], onDelete: Cascade)
   physicianLocationsOfService PhysicianLocationOfService[]
+  premium                     Float?                       @map("premium")
 
   @@index([providerId])
   @@map("locations_of_service")
@@ -610,4 +647,21 @@ model PhysicianLocationOfService {
   @@index([physicianId])
   @@index([locationOfServiceId])
   @@map("physician_locations_of_service")
+}
+
+model ReturnFile {
+  id             String       @id
+  fileName       String       @map("file_name")
+  physicianId    String       @map("physician_id")
+  jurisdictionId Int          @map("jurisdiction_id")
+  fileText       String?      @map("file_text")
+  fileType       String       @map("file_type")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  physician      Physician    @relation(fields: [physicianId], references: [id], onDelete: Restrict)
+  jurisdiction   Jurisdiction @relation(fields: [jurisdictionId], references: [id], onDelete: Restrict)
+
+  @@index([physicianId])
+  @@index([jurisdictionId])
+  @@map("return_files")
 }
