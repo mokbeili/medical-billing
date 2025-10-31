@@ -598,7 +598,10 @@ export async function storeBiweeklyReturnFileRecords(
             await storeRejectedRecord(record, physicianId, providerId);
             rejectedCount++;
           } else if (record.status === "P") {
-            await storePendedRecord(record, physicianId);
+            await storePendedRecord(
+              record as PendedVisitProcedureRecord | PendedHospitalCareRecord,
+              physicianId
+            );
             pendedCount++;
           }
         } else {
