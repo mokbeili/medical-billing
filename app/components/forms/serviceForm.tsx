@@ -254,6 +254,7 @@ export default function ServiceForm({
     serviceLocation: null as string | null,
     status: "OPEN",
     billingCodes: [] as Array<{
+      id?: number;
       codeId: number;
       status: string;
       billing_record_type: number;
@@ -265,6 +266,12 @@ export default function ServiceForm({
       serviceDate: string | null;
       serviceEndDate: string | null;
       locationOfService: string | null;
+      changeLogs?: Array<{
+        id: number;
+        roundingDate: string | null;
+        changedAt: string;
+        changeType: string;
+      }>;
     }>,
   });
   const [serviceErrors, setServiceErrors] = useState<ServiceErrors>({
@@ -321,6 +328,7 @@ export default function ServiceForm({
                 .split("T")[0],
               serviceLocation: service.serviceCodes[0]?.serviceLocation || null,
               billingCodes: service.serviceCodes.map((sc: any) => ({
+                id: sc.id, // Include service code ID
                 codeId: sc.codeId,
                 status: sc.status,
                 billing_record_type: sc.billingCode.billing_record_type,
@@ -340,6 +348,7 @@ export default function ServiceForm({
                   ? new Date(sc.serviceEndDate).toISOString().split("T")[0]
                   : null,
                 locationOfService: sc.locationOfService || "1", // Keep from service code
+                changeLogs: sc.changeLogs || [], // Include changeLogs
               })),
             });
 
@@ -1055,6 +1064,37 @@ export default function ServiceForm({
       ...formData,
       billingCodes: updatedBillingCodes,
     });
+  };
+
+  const handleDeleteChangeLog = (
+    billingCodeIndex: number,
+    changeLogId: number
+  ) => {
+    // Get the billing code
+    const billingCode = formData.billingCodes[billingCodeIndex];
+    if (!billingCode || !billingCode.changeLogs) return;
+    // Remove the change log
+    const updatedChangeLogs = billingCode.changeLogs.filter(
+      (log: any) => log.id !== changeLogId
+    );
+
+    // Calculate new units based on remaining change logs
+    const newUnits = updatedChangeLogs.length;
+
+    // Update the billing code with the new changeLogs and units
+    const updatedBillingCodes = [...formData.billingCodes];
+    updatedBillingCodes[billingCodeIndex] = {
+      ...billingCode,
+      changeLogs: updatedChangeLogs,
+      numberOfUnits: newUnits,
+    };
+
+    // If units go to 0, remove the entire billing code
+    if (newUnits <= 0) {
+      handleRemoveCode(billingCodeIndex);
+    } else {
+      setFormData({ ...formData, billingCodes: updatedBillingCodes });
+    }
   };
 
   const handleSelectIcdCode = (icdCode: ICDCode) => {
@@ -3152,6 +3192,80 @@ export default function ServiceForm({
                                       </Select>
                                     </div>
                                   </div>
+
+                                  {/* Change Logs Display */}
+                                  {billingCode.changeLogs &&
+                                    billingCode.changeLogs.length > 0 && (
+                                      <div className="mt-4 pt-4 border-t border-gray-200">
+                                        <h5 className="text-sm font-medium text-gray-700 mb-2">
+                                          Rounding Logs (
+                                          {billingCode.changeLogs.length})
+                                        </h5>
+                                        <div className="space-y-2">
+                                          {billingCode.changeLogs
+                                            .sort((a: any, b: any) => {
+                                              const dateA =
+                                                a.roundingDate || a.changedAt;
+                                              const dateB =
+                                                b.roundingDate || b.changedAt;
+                                              return (
+                                                new Date(dateB).getTime() -
+                                                new Date(dateA).getTime()
+                                              );
+                                            })
+                                            .map((log: any) => (
+                                              <div
+                                                key={log.id}
+                                                className="flex items-center justify-between p-2 bg-white rounded border border-gray-200 hover:border-gray-300"
+                                              >
+                                                <div className="flex-1">
+                                                  <p className="text-sm font-medium text-gray-700">
+                                                    {log.roundingDate &&
+                                                      new Date(
+                                                        log.roundingDate
+                                                      ).toLocaleDateString()}
+                                                  </p>
+                                                  <p className="text-xs text-gray-500">
+                                                    Entered on{" "}
+                                                    {new Date(
+                                                      log.changedAt
+                                                    ).toLocaleDateString()}{" "}
+                                                    at{" "}
+                                                    {new Date(
+                                                      log.changedAt
+                                                    ).toLocaleTimeString()}
+                                                  </p>
+                                                </div>
+                                                <Button
+                                                  type="button"
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  onClick={() => {
+                                                    if (
+                                                      confirm(
+                                                        "Are you sure you want to delete this log entry? This will reduce the number of units by 1."
+                                                      )
+                                                    ) {
+                                                      handleDeleteChangeLog(
+                                                        billingCodeIndex,
+                                                        log.id
+                                                      );
+                                                    }
+                                                  }}
+                                                  className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                                                >
+                                                  <span className="sm:hidden">
+                                                    ✕
+                                                  </span>
+                                                  <span className="hidden sm:inline">
+                                                    Delete
+                                                  </span>
+                                                </Button>
+                                              </div>
+                                            ))}
+                                        </div>
+                                      </div>
+                                    )}
                                 </div>
                               );
                             }

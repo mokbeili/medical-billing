@@ -354,45 +354,50 @@ const CameraScanScreen: React.FC<CameraScanScreenProps> = ({
       <View style={styles.cameraContainer}>
         {!hasSubmitted ? (
           <Camera
-            style={StyleSheet.absoluteFill}
+            style={styles.camera}
             device={device}
             isActive={true}
             frameProcessor={isScanningEnabled ? frameProcessor : undefined}
             pixelFormat="yuv"
+            resizeMode="contain"
           />
         ) : (
-          <View
-            style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }]}
-          />
+          <View style={[styles.camera, { backgroundColor: "#000" }]} />
         )}
 
         {/* Overlay for scanning guidance */}
         {!isClosing && (
           <View style={styles.overlay}>
-            <View style={styles.scanFrame}>
-              <View style={styles.corner} />
-              <View style={[styles.corner, styles.cornerTopRight]} />
-              <View style={[styles.corner, styles.cornerBottomLeft]} />
-              <View style={[styles.corner, styles.cornerBottomRight]} />
+            {/* Darkened overlay with transparent scanning area */}
+            {/* <View style={styles.overlayTop} />
+            <View style={styles.overlayMiddle}>
+              <View style={styles.overlaySide} />
+              <View style={styles.scanFrame} />
+              <View style={styles.overlaySide} />
             </View>
-            {isScanningEnabled ? (
-              <View style={styles.scanningContainer}>
-                <ActivityIndicator size="large" color="#00ff88" />
-                <Text style={styles.scanText}>Scanning...</Text>
-              </View>
-            ) : (
-              <Text style={styles.scanText}>Position document then scan</Text>
-            )}
-            {!isScanningEnabled && (
-              <Button
-                mode="contained"
-                onPress={handleStartScanning}
-                style={styles.startScanButton}
-                icon="camera"
-              >
-                Start Scan
-              </Button>
-            )}
+            <View style={styles.overlayBottom} /> */}
+
+            {/* Scanning UI elements */}
+            <View style={styles.scanningUIContainer}>
+              {isScanningEnabled ? (
+                <View style={styles.scanningContainer}>
+                  <ActivityIndicator size="large" color="#00ff88" />
+                  <Text style={styles.scanText}>Scanning...</Text>
+                </View>
+              ) : (
+                <Text style={styles.scanText}>Position document then scan</Text>
+              )}
+              {!isScanningEnabled && (
+                <Button
+                  mode="contained"
+                  onPress={handleStartScanning}
+                  style={styles.startScanButton}
+                  icon="camera"
+                >
+                  Start Scan
+                </Button>
+              )}
+            </View>
           </View>
         )}
       </View>
@@ -442,8 +447,46 @@ const styles = StyleSheet.create({
   cameraContainer: {
     flex: 1,
     position: "relative",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#000000",
+  },
+  camera: {
+    width: "90%",
+    aspectRatio: 4 / 3, // Changed to 4:3 which is more common for camera sensors
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "#000000",
   },
   overlay: {
+    position: "absolute",
+    width: "90%",
+    aspectRatio: 4 / 3, // Match camera aspect ratio
+    alignSelf: "center",
+  },
+  overlayTop: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+  },
+  overlayMiddle: {
+    flexDirection: "row",
+  },
+  overlaySide: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+  },
+  overlayBottom: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+  },
+  scanFrame: {
+    width: 280,
+    height: 200,
+    borderWidth: 2,
+    borderColor: "#00ff88",
+    backgroundColor: "transparent",
+  },
+  scanningUIContainer: {
     position: "absolute",
     top: 0,
     left: 0,
@@ -451,37 +494,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: "center",
     alignItems: "center",
-  },
-  scanFrame: {
-    width: 280,
-    height: 200,
-    borderWidth: 2,
-    borderColor: "transparent",
-    position: "relative",
-  },
-  corner: {
-    position: "absolute",
-    width: 20,
-    height: 20,
-    borderColor: "#00ff00",
-    borderWidth: 3,
-    top: -2,
-    left: -2,
-  },
-  cornerTopRight: {
-    top: -2,
-    right: -2,
-    left: "auto",
-  },
-  cornerBottomLeft: {
-    bottom: -2,
-    top: "auto",
-  },
-  cornerBottomRight: {
-    bottom: -2,
-    right: -2,
-    top: "auto",
-    left: "auto",
+    pointerEvents: "box-none",
   },
   scanningContainer: {
     alignItems: "center",

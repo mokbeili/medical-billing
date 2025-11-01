@@ -23,22 +23,6 @@ export async function exampleParseDailyReturnFile() {
 
   const records = parseDailyReturnFile(sampleDailyFile);
 
-  console.log("Daily Return File Records:");
-  records.forEach((record: any) => {
-    console.log(`  Record Type: ${record.recordType}`);
-    if (record.recordType === "10") {
-      console.log(`    Practitioner: ${record.practitionerNumber}`);
-      console.log(`    Clinic: ${record.clinicNumber}`);
-    } else if (record.recordType === "50" || record.recordType === "57") {
-      console.log(`    Claim: ${record.claimNumber}`);
-      console.log(`    HSN: ${record.healthServicesNumber}`);
-      console.log(`    Status: ${record.status}`);
-    } else if (record.recordType === "90") {
-      console.log(`    Records Submitted: ${record.numberOfRecordsSubmitted}`);
-      console.log(`    Total Amount: $${record.totalDollarAmountSubmitted}`);
-    }
-  });
-
   return records;
 }
 
@@ -51,32 +35,6 @@ export async function exampleParseBiweeklyReturnFile() {
   `.trim();
 
   const records = parseBiweeklyReturnFile(sampleBiweeklyFile);
-
-  console.log("Biweekly Return File Records:");
-  records.forEach((record: any) => {
-    if (record.recordType === "P") {
-      console.log("  Paid Line Record:");
-      console.log(`    Claim: ${record.claimNumber}`);
-      console.log(`    Fee Submitted: $${record.feeSubmitted}`);
-      console.log(`    Fee Approved: $${record.feeApproved}`);
-      console.log(`    Total Paid: $${record.totalPaidAmount}`);
-    } else if (record.recordType === "T") {
-      console.log("  Total Line Record:");
-      console.log(`    Type: ${record.totalLineType}`);
-      console.log(`    Total Approved: $${record.feeApproved}`);
-      console.log(`    Total Paid: $${record.totalPaidAmount}`);
-    } else if (record.recordType === "M") {
-      console.log("  Message:");
-      console.log(`    ${record.message}`);
-    } else if (record.recordType === "50" || record.recordType === "57") {
-      console.log(`  Service Record (Type ${record.recordType}):`);
-      console.log(`    Claim: ${record.claimNumber}`);
-      console.log(`    Status: ${record.status}`);
-      if ("explanatoryCode" in record) {
-        console.log(`    Explanatory Code: ${record.explanatoryCode}`);
-      }
-    }
-  });
 
   return records;
 }
@@ -91,25 +49,12 @@ export async function exampleStoreDailyReturnFile(
   // Step 1: Parse the file
   const records = parseDailyReturnFile(fileContent);
 
-  console.log(`Parsed ${records.length} records from daily return file`);
-
   // Step 2: Store the records in the database
   const result = await storeDailyReturnFileRecords(
     records,
     physicianId,
     providerId
   );
-
-  console.log("Daily Return File Processing Results:");
-  console.log(`  Rejected Claims: ${result.rejectedCount}`);
-  console.log(`  Errors: ${result.errors.length}`);
-
-  if (result.errors.length > 0) {
-    console.log("\nErrors encountered:");
-    result.errors.forEach((error: string, index: number) => {
-      console.log(`  ${index + 1}. ${error}`);
-    });
-  }
 
   return result;
 }
@@ -124,28 +69,12 @@ export async function exampleStoreBiweeklyReturnFile(
   // Step 1: Parse the file
   const records = parseBiweeklyReturnFile(fileContent);
 
-  console.log(`Parsed ${records.length} records from biweekly return file`);
-
   // Step 2: Store the records in the database
   const result = await storeBiweeklyReturnFileRecords(
     records,
     physicianId,
     providerId
   );
-
-  console.log("Biweekly Return File Processing Results:");
-  console.log(`  Paid Claims: ${result.paidCount}`);
-  console.log(`  Rejected Claims: ${result.rejectedCount}`);
-  console.log(`  Pended Claims: ${result.pendedCount}`);
-  console.log(`  Total Records: ${result.totalCount}`);
-  console.log(`  Errors: ${result.errors.length}`);
-
-  if (result.errors.length > 0) {
-    console.log("\nErrors encountered:");
-    result.errors.forEach((error: string, index: number) => {
-      console.log(`  ${index + 1}. ${error}`);
-    });
-  }
 
   return result;
 }
@@ -156,10 +85,7 @@ export async function exampleFullWorkflow(
   fileContent: string,
   fileType: "DAILY" | "BIWEEKLY"
 ) {
-  console.log("=== Full Return File Processing Workflow ===\n");
-
   // Step 1: Upload the file
-  console.log("Step 1: Uploading return file...");
   const uploadResponse = await fetch("/api/return-files", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -174,12 +100,9 @@ export async function exampleFullWorkflow(
     throw new Error(`Upload failed: ${uploadResponse.statusText}`);
   }
 
-  const { id, message } = await uploadResponse.json();
-  console.log(`✓ ${message}`);
-  console.log(`  File ID: ${id}\n`);
+  const { id } = await uploadResponse.json();
 
   // Step 2: Process the file
-  console.log("Step 2: Processing return file...");
   const processResponse = await fetch("/api/return-files", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
@@ -191,27 +114,6 @@ export async function exampleFullWorkflow(
   }
 
   const { result } = await processResponse.json();
-  console.log("✓ Processing complete\n");
-
-  // Step 3: Display results
-  console.log("Step 3: Results Summary:");
-  if (fileType === "BIWEEKLY") {
-    console.log(`  Paid Claims: ${result.paidCount}`);
-    console.log(`  Rejected Claims: ${result.rejectedCount}`);
-    console.log(`  Pended Claims: ${result.pendedCount}`);
-    console.log(`  Total Records: ${result.totalCount}`);
-  } else {
-    console.log(`  Rejected Claims: ${result.rejectedCount}`);
-  }
-
-  if (result.errors.length > 0) {
-    console.log(`\n⚠ ${result.errors.length} error(s) encountered:`);
-    result.errors.forEach((error: string, index: number) => {
-      console.log(`  ${index + 1}. ${error}`);
-    });
-  } else {
-    console.log("\n✓ No errors");
-  }
 
   return result;
 }
@@ -219,8 +121,6 @@ export async function exampleFullWorkflow(
 // ==================== EXAMPLE 6: List Return Files ====================
 
 export async function exampleListReturnFiles() {
-  console.log("Fetching return files...\n");
-
   const response = await fetch("/api/return-files");
 
   if (!response.ok) {
@@ -228,20 +128,6 @@ export async function exampleListReturnFiles() {
   }
 
   const files = await response.json();
-
-  console.log(`Found ${files.length} return file(s):\n`);
-
-  files.forEach((file: any, index: number) => {
-    console.log(`${index + 1}. ${file.fileName}`);
-    console.log(`   Type: ${file.fileType}`);
-    console.log(
-      `   Physician: ${file.physician.firstName} ${file.physician.lastName}`
-    );
-    console.log(`   Uploaded: ${new Date(file.createdAt).toLocaleString()}`);
-    console.log(
-      `   Jurisdiction: ${file.jurisdiction.region}, ${file.jurisdiction.country}\n`
-    );
-  });
 
   return files;
 }
@@ -253,8 +139,6 @@ export async function exampleErrorHandling(fileContent: string) {
     // Attempt to parse the file
     const records = parseBiweeklyReturnFile(fileContent);
 
-    console.log(`Successfully parsed ${records.length} records`);
-
     // Attempt to process with dummy IDs (will likely cause errors)
     const result = await storeBiweeklyReturnFileRecords(
       records,
@@ -262,32 +146,8 @@ export async function exampleErrorHandling(fileContent: string) {
       999999
     );
 
-    // Check for errors
-    if (result.errors.length > 0) {
-      console.log("\n⚠ Processing completed with errors:");
-      console.log(
-        `  Successful: ${
-          result.paidCount + result.rejectedCount + result.pendedCount
-        }`
-      );
-      console.log(`  Failed: ${result.errors.length}`);
-
-      // Log first few errors
-      const errorsToShow = result.errors.slice(0, 3);
-      errorsToShow.forEach((error: string, index: number) => {
-        console.log(`\n  Error ${index + 1}:`);
-        console.log(`    ${error}`);
-      });
-
-      if (result.errors.length > 3) {
-        console.log(`\n  ... and ${result.errors.length - 3} more error(s)`);
-      }
-    }
-
     return result;
   } catch (error) {
-    console.error("Fatal error during processing:");
-    console.error(error);
     throw error;
   }
 }
