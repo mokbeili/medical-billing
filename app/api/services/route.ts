@@ -579,7 +579,7 @@ export async function PUT(request: Request) {
         };
 
         if (billingCode.id && existingCodesMap.has(billingCode.id)) {
-          // Update existing service code
+          // Update existing service code and sync change logs
           await prisma.serviceCodes.update({
             where: {
               id: billingCode.id,
@@ -589,6 +589,38 @@ export async function PUT(request: Request) {
               codeId: billingCode.codeId,
             },
           });
+
+          // Sync changeLogs if provided
+          if (billingCode.changeLogs && Array.isArray(billingCode.changeLogs)) {
+            // Get existing changeLogs for this service code
+            const existingChangeLogs = await prisma.serviceCodeChangeLog.findMany({
+              where: {
+                serviceCodeId: billingCode.id,
+              },
+            });
+
+            // Build a map of incoming changeLog IDs
+            const incomingChangeLogIds = new Set(
+              billingCode.changeLogs
+                .filter((log: any) => log.id)
+                .map((log: any) => log.id)
+            );
+
+            // Delete changeLogs that exist in DB but not in incoming array
+            const changeLogsToDelete = existingChangeLogs.filter(
+              (log) => !incomingChangeLogIds.has(log.id)
+            );
+
+            if (changeLogsToDelete.length > 0) {
+              await prisma.serviceCodeChangeLog.deleteMany({
+                where: {
+                  id: {
+                    in: changeLogsToDelete.map((log) => log.id),
+                  },
+                },
+              });
+            }
+          }
         } else {
           // Create new service code
           await prisma.serviceCodes.create({
