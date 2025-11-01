@@ -26,6 +26,7 @@ interface CodeSubSelection {
   serviceEndTime: string | null;
   numberOfUnits: number | null;
   specialCircumstances: string | null;
+  locationOfService: string | null;
 }
 
 const BillingCodeSearchScreen = ({ navigation }: any) => {
@@ -35,6 +36,7 @@ const BillingCodeSearchScreen = ({ navigation }: any) => {
     existingCodes = [],
     serviceDate,
     presetBillingCodeIds,
+    physician,
   } = route.params as {
     onSelect: (
       codes: BillingCode[],
@@ -43,6 +45,7 @@ const BillingCodeSearchScreen = ({ navigation }: any) => {
     existingCodes?: BillingCode[];
     serviceDate?: string;
     presetBillingCodeIds?: number[];
+    physician?: any;
   };
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCodes, setSelectedCodes] = useState<BillingCode[]>([]);
@@ -94,6 +97,7 @@ const BillingCodeSearchScreen = ({ navigation }: any) => {
               serviceEndTime: null,
               numberOfUnits: 1,
               specialCircumstances: null,
+              locationOfService: null,
             });
           } else {
             const defaultServiceDate = !isType57Code(code)
@@ -108,6 +112,7 @@ const BillingCodeSearchScreen = ({ navigation }: any) => {
               serviceEndTime: null,
               numberOfUnits: 1,
               specialCircumstances: null,
+              locationOfService: null,
             });
           }
         });
@@ -165,6 +170,7 @@ const BillingCodeSearchScreen = ({ navigation }: any) => {
               serviceEndTime: null,
               numberOfUnits: 1,
               specialCircumstances: null,
+              locationOfService: null,
             },
           ]);
         }
@@ -193,6 +199,7 @@ const BillingCodeSearchScreen = ({ navigation }: any) => {
               serviceEndTime: null,
               numberOfUnits: 1,
               specialCircumstances: null,
+              locationOfService: null,
             },
           ]);
         }
@@ -485,7 +492,7 @@ const BillingCodeSearchScreen = ({ navigation }: any) => {
         onClose={() => setShowSubSelectionModal(false)}
         onSave={handleSaveSubSelection}
         serviceDate={serviceDate}
-        physician={null}
+        physician={physician || null}
       />
     </SafeAreaView>
   );

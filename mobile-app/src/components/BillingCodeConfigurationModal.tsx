@@ -988,37 +988,71 @@ const BillingCodeConfigurationModal: React.FC<
                     </TouchableOpacity>
                   )}
                 </View>
-                <ScrollView
-                  style={styles.locationOfServiceScrollView}
-                  nestedScrollEnabled={true}
-                >
-                  {locationOfServiceOptions.map((option) => (
-                    <TouchableOpacity
-                      key={option.value}
-                      style={[
-                        styles.locationOfServiceOption,
-                        localSubSelection.locationOfService === option.value &&
-                          styles.selectedLocationOfServiceOption,
-                      ]}
-                      onPress={() =>
-                        handleUpdateSubSelection({
-                          locationOfService: option.value,
-                        })
-                      }
-                    >
-                      <Text
+
+                {/* Show compact buttons when displaying physician locations */}
+                {!showFullList && physicianLocationOptions.length > 0 ? (
+                  <View style={styles.locationButtonsContainer}>
+                    {locationOfServiceOptions.map((option) => (
+                      <TouchableOpacity
+                        key={option.value}
                         style={[
-                          styles.locationOfServiceOptionText,
+                          styles.locationButton,
+                          localSubSelection.locationOfService ===
+                            option.value && styles.selectedLocationButton,
+                        ]}
+                        onPress={() =>
+                          handleUpdateSubSelection({
+                            locationOfService: option.value,
+                          })
+                        }
+                      >
+                        <Text
+                          style={[
+                            styles.locationButtonText,
+                            localSubSelection.locationOfService ===
+                              option.value && styles.selectedLocationButtonText,
+                          ]}
+                        >
+                          {option.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ) : (
+                  // Show scrollable list when showing full list
+                  <ScrollView
+                    style={styles.locationOfServiceScrollView}
+                    nestedScrollEnabled={true}
+                  >
+                    {locationOfServiceOptions.map((option) => (
+                      <TouchableOpacity
+                        key={option.value}
+                        style={[
+                          styles.locationOfServiceOption,
                           localSubSelection.locationOfService ===
                             option.value &&
-                            styles.selectedLocationOfServiceOptionText,
+                            styles.selectedLocationOfServiceOption,
                         ]}
+                        onPress={() =>
+                          handleUpdateSubSelection({
+                            locationOfService: option.value,
+                          })
+                        }
                       >
-                        {option.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
+                        <Text
+                          style={[
+                            styles.locationOfServiceOptionText,
+                            localSubSelection.locationOfService ===
+                              option.value &&
+                              styles.selectedLocationOfServiceOptionText,
+                          ]}
+                        >
+                          {option.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                )}
                 {locationError && (
                   <Text style={styles.errorText}>{locationError}</Text>
                 )}
@@ -1454,6 +1488,34 @@ const styles = StyleSheet.create({
   },
   selectedLocationOfServiceOptionText: {
     color: "#3b82f6",
+    fontWeight: "600",
+  },
+  locationButtonsContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  locationButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    backgroundColor: "#fff",
+    minWidth: "30%",
+    alignItems: "center",
+  },
+  selectedLocationButton: {
+    backgroundColor: "#3b82f6",
+    borderColor: "#3b82f6",
+  },
+  locationButtonText: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#374151",
+  },
+  selectedLocationButtonText: {
+    color: "#fff",
     fontWeight: "600",
   },
   splitCodesPreview: {

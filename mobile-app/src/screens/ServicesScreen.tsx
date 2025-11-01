@@ -1787,6 +1787,10 @@ const ServicesScreen = ({ navigation }: any) => {
                             : null;
                           return codeDate === today;
                         });
+                      // Get full physician data
+                      const fullPhysician = physicians?.find(
+                        (p) => p.id === suggestionsForService.physician.id
+                      );
                       navigation.navigate("BillingCodeSearch", {
                         onSelect: async (
                           selectedCodes: BillingCode[],
@@ -1810,6 +1814,7 @@ const ServicesScreen = ({ navigation }: any) => {
                           (code) => code.billingCode
                         ),
                         serviceDate: today,
+                        physician: fullPhysician,
                       });
                     }
                   }}

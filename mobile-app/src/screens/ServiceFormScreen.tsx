@@ -4632,10 +4632,15 @@ const ServiceFormScreen = ({ navigation }: any) => {
                   style={[styles.modalButton, styles.cancelButton]}
                   onPress={() => {
                     setShowBillingCodeSuggestionsModal(false);
+                    // Get full physician data
+                    const fullPhysician = physicians?.find(
+                      (p: any) => p.id === formData.physicianId
+                    );
                     navigation.navigate("BillingCodeSearch", {
                       onSelect: handleAddCodes,
                       existingCodes: selectedCodes.map((c) => c.billingCode),
                       serviceDate: formData.serviceDate,
+                      physician: fullPhysician,
                     });
                   }}
                 >
